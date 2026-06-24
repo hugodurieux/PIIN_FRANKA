@@ -39,8 +39,15 @@ from trajectory_msgs.msg import JointTrajectory
 
 from pinn_franka_controller.trajectory_interpolator import TrajectoryInterpolator
 
-# Number of Franka Panda joints (matches network/constants.py N_JOINTS = 7).
-_N_JOINTS = 7
+try:
+    from network.constants import N_JOINTS as _N_JOINTS
+    from network.constants import TORQUE_LIMITS as _TORQUE_LIMITS_TENSOR
+    _TORQUE_LIMITS_NP = _TORQUE_LIMITS_TENSOR.numpy()
+except ImportError:
+    # Fallback when network package is not on the ROS2 Python path.
+    # Values must match network/constants.py exactly: [87,87,87,87,12,12,12] Nm.
+    _N_JOINTS = 7
+    _TORQUE_LIMITS_NP = np.array([87.0, 87.0, 87.0, 87.0, 12.0, 12.0, 12.0])
 
 # Maximum age (seconds) for a joint-state message before it is considered stale.
 _JOINT_STATE_TIMEOUT_SEC = 0.1
@@ -313,6 +320,7 @@ class PinnControllerNode(Node):
 
     def _publish_torques(self, torques: np.ndarray) -> None:
         """Publish a Float64MultiArray with the 7 joint torques."""
+        torques = np.clip(torques, -_TORQUE_LIMITS_NP, _TORQUE_LIMITS_NP)
         msg = Float64MultiArray()
         msg.data = torques.tolist()
         self._pub_torques.publish(msg)
