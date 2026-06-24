@@ -1,0 +1,34 @@
+# ---------------------------------------------------------------
+# Default parameters for pinn_franka_controller node
+# ---------------------------------------------------------------
+# Override via launch argument or --ros-args --params-file.
+#
+# Usage with ros2 run:
+#   ros2 run pinn_franka_controller pinn_controller_node \
+#       --ros-args --params-file config/controller_params.yaml
+# ---------------------------------------------------------------
+
+pinn_franka_controller:
+  ros__parameters:
+    # Path to the Franka Panda URDF file.
+    # Must be set by the user before launching.
+    urdf_path: ""
+
+    # Path to the trained PINN checkpoint (.pt file from Stage 1).
+    # Must be set by the user after Stage 1 training completes.
+    checkpoint_path: ""
+
+    # Payload conditioning parameter delta in [0, 1].
+    #   0.0 = no payload (0 kg)
+    #   Intermediate values map linearly to PAYLOADS in constants.py.
+    delta: 0.0
+
+    # Control loop frequency [Hz].
+    # Default 1000 Hz matches the Franka Panda's command rate and
+    # goal.md objective #2 (high-frequency real-time control).
+    control_rate_hz: 1000
+
+    # Whether to use Lyapunov-based gain tuning from Stage 3.
+    # When true, the controller will compute PD gains that satisfy
+    # a Lyapunov stability certificate.
+    use_lyapunov_gains: true
