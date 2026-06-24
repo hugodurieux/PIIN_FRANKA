@@ -1,0 +1,7 @@
+# Stage 1 — PINN grey-box dynamics
+torch>=2.2
+numpy>=1.24
+h5py>=3.8
+# White-box baseline (install separately, conda recommended for pinocchio):
+#   pip install pin            # Pinocchio
+# or: conda install pinocchio -c conda-forge
