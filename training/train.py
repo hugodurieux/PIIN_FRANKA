@@ -8,6 +8,12 @@ Run a smoke test on synthetic data (no pinocchio / no real data needed):
 
 Run on a real HDF5 dataset:
     python -m training.train --data data/dataset_1kg_xxx.h5 --epochs 200
+
+Data-efficiency ablation (novelty N4 from Liu et al. 2024):
+    python -m training.train --data data/dataset.h5 --max_samples 5000 --epochs 200
+    Truncates the dataset to N random samples (seed=42) before splitting
+    into train/val, enabling direct comparison against Liu et al.'s
+    25 000-sample benchmark.
 """
 
 from __future__ import annotations
@@ -26,10 +32,23 @@ from training.dataset import SyntheticDataset, FrankaDynamicsDataset
 
 
 def build_loaders(args):
+    """Build train and validation DataLoaders.
+
+    When ``args.max_samples`` is set (novelty N4), the dataset is truncated
+    to that many samples *before* the 90/10 train/val split, so both
+    partitions see only the reduced data budget.
+    """
+    max_samples = getattr(args, "max_samples", None)
+
     if args.synthetic or not args.data:
-        full = SyntheticDataset(n=args.synthetic_n)
+        full = SyntheticDataset(n=args.synthetic_n, max_samples=max_samples)
     else:
-        full = FrankaDynamicsDataset(args.data)
+        full = FrankaDynamicsDataset(args.data, max_samples=max_samples)
+
+    if max_samples is not None:
+        print(f"[N4] Dataset truncated to {len(full)} samples "
+              f"(max_samples={max_samples})")
+
     n_val = max(1, int(0.1 * len(full)))
     n_train = len(full) - n_val
     train_ds, val_ds = torch.utils.data.random_split(
@@ -61,6 +80,10 @@ def main():
     p.add_argument("--data", type=str, default="")
     p.add_argument("--synthetic", action="store_true")
     p.add_argument("--synthetic_n", type=int, default=4096)
+    p.add_argument("--max_samples", type=int, default=None,
+                   help="Truncate dataset to N random samples (seed=42) before "
+                        "train/val split. Enables data-efficiency ablation "
+                        "(novelty N4, Liu et al. 2024). Default: None (use all).")
     p.add_argument("--epochs", type=int, default=100)
     p.add_argument("--batch_size", type=int, default=256)
     p.add_argument("--lr", type=float, default=1e-3)
