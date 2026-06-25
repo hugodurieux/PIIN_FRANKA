@@ -3,7 +3,7 @@
 **Hugo Durieux** — Master's Internship, 2026
 
 _Working draft — updated automatically at the end of each session._
-_Last updated: 2026-06-25_
+_Last updated: 2026-06-25 (evening)_
 
 ---
 

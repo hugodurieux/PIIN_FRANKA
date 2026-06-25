@@ -41,7 +41,7 @@
 | N/A | N/A | N/A | No training runs executed yet; Stage 1 pipeline ready, awaiting GPU access |
 
 ## Current milestone
-Stage 1 (PINN) — architecture finalized; N2-Liu FrictionNet diagonal design IMPLEMENTED and MERGED to main (ebc2ba3); N3-Duong sim-to-real fine-tuning IMPLEMENTED and MERGED to main (0aa4fdc); all implemented novelties (N2-Liu, N3-Liu, N4-Liu, N3-Duong) MERGED; awaiting GPU access for Stage 1 training.
+Stage 1 (PINN) — architecture finalized; N2-Liu FrictionNet diagonal design IMPLEMENTED and MERGED to main (ebc2ba3); N3-Duong sim-to-real fine-tuning IMPLEMENTED and MERGED to main (0aa4fdc); PAPER_DRAFT.md created and committed to main (living paper draft with all 5 processed papers cited); all implemented novelties (N2-Liu, N3-Liu, N4-Liu, N3-Duong) MERGED; awaiting GPU access for Stage 1 training.
 
 ## Open questions / blockers
 - **GPU access blocker:** Stage 1 training cannot execute without GPU. Waiting for GPU allocation.
