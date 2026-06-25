@@ -16,9 +16,10 @@ one left off. You are Haiku because this task is mechanical — do not over-thin
 ## What you read first
 
 1. The current SESSION.md
-2. tracking/papers_tracker.xlsx (or its CSV equivalent) if it exists
-3. tracking/experiments_log.xlsx if it exists
-4. The conversation history of this session (you have access to it)
+2. PAPER_DRAFT.md (the living paper draft — you must also update this)
+3. tracking/papers_tracker.xlsx (or its CSV equivalent) if it exists
+4. tracking/experiments_log.xlsx if it exists
+5. The conversation history of this session (you have access to it)
 
 ## What you write to SESSION.md
 
@@ -61,6 +62,20 @@ Rewrite SESSION.md completely with this exact structure:
 <be specific: "Run paper-extractor on Lutter_2019.pdf" not "read more papers">
 ```
 
+## What you also update: PAPER_DRAFT.md
+
+After writing SESSION.md, update `PAPER_DRAFT.md` to reflect this session's work:
+
+- Update "Last updated" date at the top.
+- Section 3 (Method): if a new novelty was implemented and merged, add or expand
+  its sub-section with the implementation details and the formal reference.
+- Section 4 (Experiments): if any training run was logged, add results to the
+  table. If none, leave the placeholder.
+- Appendix A (Novelty Tracking): update the Status column for any novelty whose
+  status changed this session (INVESTIGATE -> MERGED, etc.).
+- References: add any new paper that was processed and cited this session.
+- Do NOT rewrite sections that have not changed. Only touch what is new.
+
 ## Rules
 
 - Carry forward ALL rows from the previous SESSION.md — never delete history.
@@ -68,4 +83,4 @@ Rewrite SESSION.md completely with this exact structure:
 - "What to do next session" must have at most 3 items. If more are open, pick the most important.
 - Never truncate or summarize rows — full detail matters for continuity.
 - If you cannot read a tracker file, note it in Open questions.
-- Write SESSION.md in one shot. Do not ask for confirmation.
+- Write SESSION.md in one shot and update PAPER_DRAFT.md in one shot. Do not ask for confirmation.
