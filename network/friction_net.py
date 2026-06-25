@@ -1,12 +1,7 @@
 """
 FrictionNet sub-module: structurally dissipative friction torque predictor.
 
-Plan (3 sentences):
-  This module implements the Cholesky-diagonal FrictionNet from Liu et al. (2024),
-  adapted to our RNEA grey-box architecture (novelty N2-Liu). It outputs a friction
-  torque tau_friction = -diag(Softplus(d)) * qdot that is dissipative by construction,
-  serving goal.md objective #3 (scaling to 7-DoF with physics-informed constraints).
-  The module is additive to GreyBoxNet's tau_res and never modifies grey_box_net.py.
+Novelty N2-Liu (goal.md Objective 3 -- Scaling to 7-DoF with enforced physics).
 
 Architecture:
     Input:  x = [sin(q), cos(q), qdot, delta] in R^22  (same encoding as GreyBoxNet)
@@ -20,6 +15,30 @@ Dissipativity guarantee (by construction):
 
 Activation constraint: Mish only in hidden layers. Softplus on output diagonal
 is not an activation but a positivity transform -- allowed by project rules.
+
+Design synthesises three sources:
+
+  [N2-Liu] The Cholesky positive-definiteness idea originates in:
+    Liu, Borja, Della Santina (2024). "Physics-Informed Neural Networks to Model
+    and Control Robots: A Theoretical and Experimental Investigation."
+    Advanced Intelligent Systems (Wiley), vol. 6, no. 5.
+    Borrowed: the principle of enforcing positive-definiteness on the dissipation
+    sub-network via a factored parameterisation (Section III-B, D-NN sub-network).
+
+  [N1-Duong] The L L^T + eps*I algebraic kernel comes from:
+    Duong, Altawaitan, Stanley, Atanasov (2024). "Port-Hamiltonian Neural ODE
+    Networks on Lie Groups For Robot Dynamics Learning and Control."
+    IEEE Transactions on Robotics.
+    Borrowed: Cholesky-factored dissipation matrix L_v L_v^T (Section II-C),
+    adapted here to joint space as diag(Softplus(d)) instead of full L L^T.
+
+  [N1-SPEL] The diagonal sparsity mask (7 params instead of 28) comes from:
+    Wang, Chen, Ding (2025). "Symplectic Physics-Embedded Learning via Lie Groups
+    Hamiltonian Formulation for Serial Manipulator Dynamics Prediction."
+    Scientific Reports (Nature), vol. 15, art. 33179.
+    Borrowed: geometric argument that revolute joints rotating about a single axis
+    produce a rank-1 per-link dissipation matrix (Section II-B), which collapses
+    to a per-joint scalar in joint space for Franka's serial independent-motor chain.
 """
 
 import torch

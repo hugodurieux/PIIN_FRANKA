@@ -1,18 +1,32 @@
 """
-Physics constraints enforced via an Augmented Lagrangian (Djeumou et al. 2022 style).
+Physics constraints enforced via an Augmented Lagrangian.
+
+Novelties N2-Djeumou and N2-Liu (goal.md Objectives 3 and 4).
 
 Two constraints:
 
-  1. Torque limits  — |tau_pred| <= TORQUE_LIMITS  (safety; mostly inactive in-distribution)
-  2. Dissipativity  — tau_res . qdot <= 0           (the informative one)
+  1. Torque limits  -- |tau_pred| <= TORQUE_LIMITS  (safety; mostly inactive in-distribution)
+  2. Dissipativity  -- tau_res . qdot <= 0           (the informative one)
 
-The dissipativity constraint is the bridge between the two reference papers:
-  - It uses Djeumou's augmented-Lagrangian machinery to enforce a hard physical
-    property on the LEARNED residual.
-  - The property it enforces — that the residual dissipates energy rather than
-    injecting it — is exactly what Liu et al. (2024) rely on for closed-loop
-    stability (their dissipation term in the energy network). Here we obtain the
-    same guarantee for a residual-on-RNEA model, which neither paper does.
+References:
+
+  [N2-Djeumou] Augmented Lagrangian training algorithm (Algorithm 1):
+    Djeumou, Neary, Goubault, Putot, Topcu (2022). "Neural Networks with
+    Physics-Informed Architectures and Constraints for Dynamical Systems Modeling."
+    L4DC 2022, PMLR vol. 168.
+    Borrowed: augmented Lagrangian penalty form with dual-ascent multiplier updates
+    (lambda <- max(0, lambda + rho * g_mean)), applied here to torque-limit and
+    dissipativity constraints on the learned residual.
+
+  [N2-Liu] Dissipativity constraint motivation:
+    Liu, Borja, Della Santina (2024). "Physics-Informed Neural Networks to Model
+    and Control Robots: A Theoretical and Experimental Investigation."
+    Advanced Intelligent Systems (Wiley), vol. 6, no. 5.
+    Borrowed: the physical requirement that the residual friction/damping term must
+    dissipate energy (tau_res . qdot <= 0), which Liu et al. enforce via their
+    D-NN sub-network structure. Here we enforce the same property as a soft
+    AL constraint on the plain MLP residual, bridging their energy-network
+    formulation with our RNEA grey-box architecture.
 
 Sign convention: friction opposes motion, so friction power tau_friction . qdot <= 0.
 If tau_res models friction + unmodeled effects, we penalise the positive part

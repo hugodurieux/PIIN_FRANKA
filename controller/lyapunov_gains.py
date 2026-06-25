@@ -8,9 +8,16 @@ Plan:
   3. Expose a function so gains can be recomputed after Stage 1 training produces
      real validation error statistics.
 
-This serves goal.md Objective 2 (1000 Hz real-time control) -- the gains are
-derived from Liu et al. (2024) Proposition 1, ensuring that the PD correction
-dominates the model error for provable asymptotic stability.
+Novelty N3-Liu (goal.md Objective 2 -- High-Frequency Real-Time Control).
+
+Reference:
+  Liu, Borja, Della Santina (2024). "Physics-Informed Neural Networks to Model
+  and Control Robots: A Theoretical and Experimental Investigation."
+  Advanced Intelligent Systems (Wiley), vol. 6, no. 5.
+  Borrowed: Proposition 1 (Section III-C) -- Lyapunov stability condition for a
+  computed-torque + PD controller under bounded model error, yielding the
+  critical-damping gain formula Kp = Kd^2 / 4 and minimum Kd = safety_margin
+  * error_bound.
 
 Background (Liu et al. 2024, Proposition 1):
   For a computed-torque controller  tau = M_hat(q) qddot_des + h_hat(q,qdot)

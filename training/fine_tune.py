@@ -2,14 +2,17 @@
 Sim-to-real fine-tuning for a pre-trained GreyBoxNet checkpoint.
 
 Plan (3 sentences):
-  This module implements the fine-tuning protocol from Duong et al. (IEEE T-RO
-  2024, "Port-Hamiltonian Neural ODE Networks on Lie Groups"), which demonstrated
-  that freezing all but the last two linear layers and running ~100 gradient steps
-  on real hardware data recovers tracking accuracy after payload/mass changes.
-  Only the layer-freezing strategy and step budget are borrowed -- no
-  port-Hamiltonian, ODE rollout, or Lie-group components are used.
-  This directly serves goal.md Objective #4 (standardised sim-to-real gap
-  resolution via physics-constrained fine-tuning).
+  Novelty N3-Duong (goal.md Objective 4 -- Standardised Sim-to-Real Gap Resolution).
+
+  Reference:
+    Duong, Altawaitan, Stanley, Atanasov (2024). "Port-Hamiltonian Neural ODE
+    Networks on Lie Groups For Robot Dynamics Learning and Control."
+    IEEE Transactions on Robotics.
+    Borrowed: the empirical finding (Section IV-D, Table III) that freezing all
+    but the last layers of a pretrained physics-informed model and running ~100
+    gradient steps on real hardware data recovers tracking accuracy after a
+    payload/mass change. Only the layer-freezing strategy and step budget are
+    borrowed -- no port-Hamiltonian, ODE rollout, or Lie-group components are used.
 
 Usage:
     python -m training.fine_tune \\

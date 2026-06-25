@@ -1,20 +1,31 @@
 """
 Grey-box residual network for the Franka Panda.
 
+Novelty N1-Djeumou (goal.md Objectives 1 and 3 -- pre-existing architecture).
+
 Architecture (project's own grey-box formulation, NOT Liu's energy network):
 
     tau_pred(q, qdot, qddot, delta) = RNEA(q, qdot, qddot)        [white box]
                                     + tau_res(q, qdot, delta)     [this network]
 
-Design choices grounded in Liu et al. (2024):
-  - Smooth activations (Mish/Softplus): Liu's energy network must be differentiated
-    twice, so it requires smooth activations. We keep smooth activations here too,
-    but for a control-specific reason: non-smooth (ReLU) outputs create torque
-    discontinuities that jerk the motors. ReLU is therefore FORBIDDEN.
-  - The residual is a function of (q, qdot, delta) only, NOT qddot: friction and
-    transmission effects are acceleration-independent (Coulomb/viscous depend on
-    qdot and sign(qdot)). The known payload mass delta is also fed to RNEA, so the
-    residual only learns the genuinely unmodeled part + load-dependent friction.
+References:
+
+  [N1-Djeumou] Compositional grey-box structure (known analytical terms + neural residual):
+    Djeumou, Neary, Goubault, Putot, Topcu (2022). "Neural Networks with
+    Physics-Informed Architectures and Constraints for Dynamical Systems Modeling."
+    L4DC 2022, PMLR vol. 168.
+    Borrowed: the compositional architecture principle of composing a known
+    analytical term (here RNEA) with a neural residual (Section II, Eq. 1-2).
+    The grey-box decomposition corroborates and validates this project's core design.
+
+  [Liu et al. 2024] Smooth activations and input encoding:
+    Liu, Borja, Della Santina (2024). "Physics-Informed Neural Networks to Model
+    and Control Robots: A Theoretical and Experimental Investigation."
+    Advanced Intelligent Systems (Wiley), vol. 6, no. 5.
+    Borrowed: the requirement for smooth (twice-differentiable) activations from
+    their energy-network formulation; adapted here for motor-torque smoothness
+    (non-smooth ReLU outputs create torque discontinuities that jerk the motors).
+    The [sin(q), cos(q)] input encoding prevents angle-wrapping singularities.
 
 Input encoding: X = [sin(q), cos(q), qdot, delta] in R^22
 Output: tau_res in R^7

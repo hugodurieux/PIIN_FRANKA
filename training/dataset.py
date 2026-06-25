@@ -7,13 +7,18 @@ Each file holds: q, qdot, qddot, tau_real, tau_theo, tau_res, delta.
 A synthetic generator is included so the training pipeline can be smoke-tested
 end-to-end BEFORE any real data exists.
 
-Novelty N4 (Liu et al. 2024 -- data-efficiency ablation):
-  Both dataset classes accept an optional ``max_samples`` argument.  When set,
-  the dataset is truncated to at most that many samples via a reproducible
-  random subsample (seed=42).  This enables controlled ablation studies that
-  compare against Liu et al.'s 25 000-sample benchmark, directly serving
-  goal.md objective #4 (sim-to-real) by quantifying how few real-world
-  samples are needed to close the residual gap.
+Novelty N4-Liu (goal.md Objective 1 -- Automated URDF-to-Model Pipeline,
+data-efficiency sub-claim):
+
+  Reference:
+    Liu, Borja, Della Santina (2024). "Physics-Informed Neural Networks to Model
+    and Control Robots: A Theoretical and Experimental Investigation."
+    Advanced Intelligent Systems (Wiley), vol. 6, no. 5.
+    Borrowed: the 25 000-sample training benchmark reported for the Franka Panda
+    (Section IV-B, Table I). The ``max_samples`` flag enables ablation studies
+    that quantify how few samples our URDF-seeded grey-box approach needs versus
+    Liu et al.'s 25 000-sample black-box baseline, directly proving Goal 1's
+    data-efficiency claim. Subsampling uses seed=42 for reproducibility.
 """
 
 from __future__ import annotations
