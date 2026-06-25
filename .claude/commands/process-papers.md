@@ -18,10 +18,19 @@ Before starting, read these files to understand the project and its objectives:
 
 ## Procedure (main loop)
 
-### Step 0 — Inventory
+### Step 0 — Inventory and duplicate check
 List every `.pdf` and `.md` file in `papers/inbox/`.
 Announce: "Found N papers to process: [list]".
 If the folder is empty, say so and stop.
+
+**Duplicate detection (before processing any paper):** Read `tracking/papers_review.csv`
+and extract the `title` and `authors` columns of every already-processed row.
+For each inbox paper, open it just enough to extract its title and first author, then
+compare against the CSV records. If the title OR the (first author + year) combination
+matches an existing row — even if the filename is different — skip that paper entirely:
+print "SKIPPED [filename] — duplicate of [matched title] (already in papers_review.csv)",
+move it to `papers/processed/` with a `_DUPLICATE` suffix, and continue to the next paper.
+Do NOT run the extractor, supervisor, or implementer on duplicates.
 
 ### For EACH paper (alphabetical order), run this sequence:
 
@@ -43,8 +52,14 @@ If the folder is empty, say so and stop.
 **5. Progress update** — Launch the `project-tracker` subagent to update
    `tracking/PROJECT_STATE.md` with what was just added.
 
-**6. Archiving** — Move the paper from `papers/inbox/` to `papers/processed/`
-   with: `mv papers/inbox/<file> papers/processed/`
+**6. Archiving** — Rename and move the paper to `papers/processed/` using the
+   metadata from the extractor's YAML:
+   - first_author = last name of the first author listed in `authors`
+   - year = `year` field from the YAML
+   - title = `title` field from the YAML
+   - new_name = `"<first_author> et al.(<year>) <title>.md"`
+   - Run: `mv "papers/inbox/<original_file>" "papers/processed/<new_name>"`
+   - If a file with that name already exists in processed/, append `_2` before `.md`.
 
 **7. Announce** — Print one summary line:
    "[paper] processed — N KEEP novelties, M implemented, moved to processed/"

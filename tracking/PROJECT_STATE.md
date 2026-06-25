@@ -69,6 +69,18 @@ Not started.
 | N1-SPEL | Wang et al. (Scientific Reports 2025) | Physics-driven sparsity masks on friction matrix — geometry-derived argument that for revolute Franka joints, the off-diagonal entries of the 7x7 friction matrix are structurally zero; diagonal D suffices. INVESTIGATE — folds into N2-Liu FrictionNet; sparsity conclusion used: diagonal D (not full 28-entry Cholesky) selected for FrictionNet, saving parameters. | Goal 3 | folds into N2-Liu | folded into N2-Liu PASSED | not separate |
 | N2-SPEL | Wang et al. (Scientific Reports 2025) | URDF inertia constants as trainable scalar parameters — make Pinocchio URDF link inertias learnable during training. REJECT — violates RNEA-intact invariant; making them learnable weakens the white-box guarantee that is central to Goal 1. | — | rejected | — | — |
 | N3-SPEL | Wang et al. (Scientific Reports 2025) | KAN (Kolmogorov-Arnold Network) activations replacing MLP layers. REJECT — violates Mish/Softplus-only activation constraint; also demonstrates 14% overfitting on real hardware data. | — | rejected | — | — |
+| N1-E2NN | Deng et al. (Applied Soft Computing 2024) | Structural sub-term embedding — explicitly decompose inverse dynamics into inertia, Coriolis, gravity terms, each with a dedicated sub-network, per-joint. REJECT — E2NN validated on a single 1-DoF joint only; manual per-robot derivation of sub-term structure conflicts directly with Goal 1 (automated URDF-to-model pipeline). | — | rejected | — | — |
+| N2-E2NN | Deng et al. (Applied Soft Computing 2024) | Liquid gating mechanism — recurrent hidden state modulates sub-network activations via tanh/sigmoid gates. REJECT — (1) recurrent state is incompatible with the stateless 1 kHz control loop; (2) tanh and sigmoid activations violate the Mish/Softplus-only constraint. | — | rejected | — | — |
+| N1-CMP | Ni & Qureshi (ICRA 2024) | Eikonal PDE planner (C-NTFields) — solve the Eikonal equation on a constraint manifold to produce smooth planning-space cost fields. REJECT — CLAUDE.md mandates simple MoveIt2 for Stage 2; a custom PDE-based planner replaces rather than extends MoveIt2 and is out of scope. | — | rejected | — | — |
+| N2-CMP | Ni & Qureshi (ICRA 2024) | Negative-exponential speed model inside the Eikonal solver. REJECT — planning-domain detail that has no link to the dynamics loss or Stage 1 architecture. | — | rejected | — | — |
+| N1-NTF | Liu, Ni & Qureshi (IEEE T-RO/RA-L 2024) | Active NTFields extension — active sensing integrated into Eikonal planner for unknown environments. REJECT — same reasons as N1-CMP; incremental extension of C-NTFields, Stage 2 uses standard MoveIt2. | — | rejected | — | — |
+| N2-NTF | Liu, Ni & Qureshi (IEEE T-RO/RA-L 2024) | Uncertainty-weighted replanning in active NTFields. REJECT — same reasons as N2-CMP; no link to dynamics loss. | — | rejected | — | — |
+| N1-AdaKineNet | Fang et al. (2026) | Adaptive loss weighting (per-term scale factors adjusted during training) for multi-term IK loss balancing. REJECT — project's augmented Lagrangian dual-ascent in `training/constraints.py` already handles multi-term loss balancing; also paper domain is inverse kinematics (not dynamics) on a 10-DoF mobile platform with ReLU activations — full domain mismatch. | — | rejected | — | — |
+| N2-AdaKineNet | Fang et al. (2026) | Jacobian consistency loss — auxiliary loss penalising deviation between the network Jacobian and the analytical kinematic Jacobian. REJECT — RNEA white-box term already encodes all kinematic structure analytically in grey-box architecture; redundant and domain-mismatched (kinematics vs. dynamics). | — | rejected | — | — |
+| N1-WhenPhysics | Prabhakar et al. (ICLR 2026) | Equality/inequality constraint scheduling — annealing the strength of physics constraints over training epochs. REJECT — already the exact structure in `training/constraints.py` (dual-ascent augmented Lagrangian). | — | rejected | — | — |
+| N2-WhenPhysics | Prabhakar et al. (ICLR 2026) | EMA momentum-smoothed per-residual loss balancing (beta=0.95) — exponential moving average of per-joint loss magnitude used to re-weight joint contributions in each training step, targeting the 87 Nm vs. 12 Nm torque scale imbalance across Franka joints 1–4 vs. 5–7. INVESTIGATE — relevant to Franka's torque scale mismatch; needs first training run diagnostic. See open item in section 5. | Goal 3 | not started | not validated | not merged |
+| N3-WhenPhysics | Prabhakar et al. (ICLR 2026) | UDE frozen-backbone fine-tuning — Universal Differential Equation approach with frozen physics backbone. REJECT — duplicate of N3-Duong already implemented in `training/fine_tune.py`. | — | rejected | — | — |
+| N1-Feizi | Feizi et al. (arXiv 2025) | Few-shot PINN adaptation for Cosserat rod BVP (continuum surgical robot shape reconstruction). REJECT — full domain mismatch: Cosserat rod PDE, tanh activations, no torques, no URDF, no rigid-body chain; zero applicability to Franka 7-DoF inverse dynamics. | — | rejected | — | — |
 
 ## 3a. Primary baseline — Liu et al. (2024) competitive gaps
 Liu et al. (2024): "Physics-Informed Neural Networks to Model and Control Robots:
@@ -89,6 +101,7 @@ A Theoretical and Experimental Investigation" — the primary state-of-the-art r
 3. N3-Liu (Stage 3) — DEFAULT_KP/DEFAULT_KD are placeholders computed from `DEFAULT_ERROR_BOUND = [5,5,5,5,2,2,2]` Nm. Gains must be recomputed via `compute_lyapunov_gains(real_error_bound)` once Stage 1 produces validation error statistics.
 4. N3-Duong (`training/fine_tune.py`) — freeze logic uses `named_modules()` to select "last 2" nn.Linear modules. If a future architecture revision adds skip-connection Linear layers outside `self.net`, the count could shift. Document this assumption when the architecture evolves.
 5. N2-Liu FrictionNet — `lambda_dissip` in AugmentedLagrangian will grow more slowly when `--use_friction_net` is active, because FrictionNet structurally absorbs part of the dissipativity constraint. This is intended and correct behaviour; document in ablation comparison between runs with and without the flag.
+6. Prabhakar et al. (ICLR 2026) key negative result: physics constraints HURT temporal extrapolation beyond the training window (+6-10% error increase). Scope project claims to in-distribution trajectory following accordingly; do not claim out-of-distribution extrapolation without evidence.
 
 ## 4. Current repository structure
 ```
@@ -152,6 +165,14 @@ pinn_franka/
 |       |-- Duong et al. (2024)...   (processed)
 |       |-- Wang et al. (CAC 2024)   (processed — Trajectory Control / NMPC)
 |       |-- Wang et al. (2025)...    (processed — SPEL)
+|       |-- Deng et al. (2024)...    (processed — E2NN, Applied Soft Computing; all REJECTed)
+|       |-- Ni & Qureshi (2024)...   (processed — C-NTFields, ICRA 2024; all REJECTed)
+|       |-- Liu Ni Qureshi (2024)... (processed — Active NTFields, IEEE T-RO/RA-L; all REJECTed)
+|       |-- Jiang et al. (2025)...   (processed — PhysTwin CVPR 2025; relevance 0, no novelties)
+|       |-- Deng et al. (2023)...    (DUPLICATE of Deng et al. 2024 SSRN preprint; no novelties)
+|       |-- Fang et al. (2026)...    (processed — AdaKineNet, Robotics & Autonomous Systems; relevance 0, all REJECTed)
+|       |-- Prabhakar et al. (2026). (processed — "When Does Physics Help?", ICLR 2026; relevance 1; N2-WhenPhysics INVESTIGATE)
+|       |-- Feizi et al. (2025)...   (processed — Few-shot PINN for CTR shape, arXiv 2605.12790; relevance 0, all REJECTed)
 |
 |-- docs/
 |   |-- HOW_TO_USE.md
@@ -172,6 +193,7 @@ pinn_franka/
 - Human review and merge of `stage2/moveit2-ros2-humble` into main (merge Stage 3 first — Stage 2 depends on it via `TODO(stage3)` hook).
 - After Stage 3 merge: resolve `TODO(stage3)` markers in `pinn_controller_node.py` (`_compute_torques()` and `_try_load_controller()`) to wire in `ComputedTorquePDController`.
 - After Stage 1 first training run: recompute Lyapunov gains via `controller/lyapunov_gains.py::compute_lyapunov_gains(real_error_bound)` using real validation error statistics; replace `DEFAULT_ERROR_BOUND` placeholder.
+- N2-WhenPhysics (EMA per-residual loss balancing): run first synthetic training diagnostic (`python -m training.train --synthetic --epochs 5`), inspect per-joint val MSE for joints 5-7 (12 Nm). If outer joints show systematically higher error vs inner joints (87 Nm), implement EMA weight scaling (beta=0.95, clamp [0.1, 10.0]) inside `step_loss()` in `training/train.py`.
 - N1-WangCAC (Sobol quasi-random sampling) — revisit when building the Isaac Sim / Fourier excitation trajectory generator (HDF5 dataset pipeline). A low-discrepancy Sobol sequence over joint space may improve coverage compared to uniform random. No action until the data pipeline is designed.
 - N3-Djeumou (semi-supervised dissipativity): design and run ablation study comparing with vs. without enforcement on off-trajectory unlabeled points; needs an implementation branch.
 - Build data pipeline: Isaac Sim excitation trajectories -> HDF5 dataset (q, qdot, qddot, delta, tau_real). Consider N1-WangCAC Sobol sampling at this stage.
@@ -181,3 +203,4 @@ pinn_franka/
 - Address physics-validator advisory 2: document under-sampling risk for max_samples < 2000 in ablation study methodology.
 - Address physics-validator advisory 4 (N3-Duong): document freeze-logic assumption (last 2 nn.Linear via `named_modules()`) if architecture gains skip-connection Linear layers outside `self.net`.
 - Address physics-validator advisory 5 (N2-Liu): document slower lambda_dissip growth when `--use_friction_net` active; include in ablation comparison.
+- Address physics-validator advisory 6 (Prabhakar 2026 negative result): scope project claims to in-distribution trajectory following; do not claim temporal extrapolation without empirical evidence.

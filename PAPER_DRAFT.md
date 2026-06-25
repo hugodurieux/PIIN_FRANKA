@@ -3,7 +3,7 @@
 **Hugo Durieux** — Master's Internship, 2026
 
 _Working draft — updated automatically at the end of each session._
-_Last updated: 2026-06-25 (evening)_
+_Last updated: 2026-06-25 (late evening)_
 
 ---
 
@@ -233,6 +233,20 @@ _To be written after experiments._
 
 5. **Wang, Xia, Jin, Xu, Zhang (2024).** "Trajectory Control of Multi-Axis Robotic Arms Based on Physics-Informed Neural Networks and Nonlinear Model Predictive Control." _2024 China Automation Congress (CAC)_, IEEE. — Sobol sampling idea (N1-WangCAC, future data pipeline).
 
+6. **Deng, Wang, Feng (2024).** "Physics informed machine learning model for inverse dynamics in robotic manipulators." _Applied Soft Computing_, vol. 163, art. 111978. — Sub-term embedding (N1-E2NN); Liquid gating mechanism (N2-E2NN).
+
+7. **Ni, Qureshi (2024).** "Physics-informed Neural Motion Planning on Constraint Manifolds." _IEEE Int. Conf. Robotics & Automation (ICRA)_. — Eikonal PDE planner on constraint manifold (N1-CMP); negative-exponential speed model (N2-CMP).
+
+8. **Liu, Ni, Qureshi (2024).** "Physics-informed Neural Mapping and Motion Planning in Unknown Environments." _IEEE Transactions on Robotics and Automation Letters (RA-L)_. — Active sensing Eikonal planner (N1-NTF); log-squared arrival-time factorization (N2-NTF).
+
+9. **Jiang, Hsu, Zhang, Yu, Wang, Li (2025).** "PhysTwin: Physics-Informed Reconstruction and Simulation of Deformable Objects from Videos." _IEEE/CVF Conf. Computer Vision & Pattern Recognition (CVPR 2025)_. — Deformable-object reconstruction via spring-mass physics. REJECTED: domain mismatch (deformable bodies, not rigid-body dynamics).
+
+10. **Fang, Chen, Chen, Wang, Wu, Zhang, Lim (2026).** "AdaKineNet: Adaptive Kinematic Neural Network for Inverse Kinematics of Redundant Mobile Manipulators." _Robotics & Autonomous Systems_, vol. 202, art. 105494. — Inverse kinematics via learnable loss weighting (N1-AdaKineNet, N2-AdaKineNet). REJECTED: domain mismatch (IK not dynamics); ReLU forbidden; 10-DoF mobile manipulator.
+
+11. **Prabhakar, Joshi, Dandekar, Dandekar, Panat (2026).** "When Does Physics Help? A Systematic Study of Physics-Guided Learning for Robotic Contact Dynamics." _Proceedings of the International Conference on Learning Representations (ICLR 2026)_. — Soft contact dynamics via LuGre ODE (N1-WhenPhysics); EMA adaptive loss balancing (N2-WhenPhysics); physics-aware trajectory sampling (N3-WhenPhysics). INVESTIGATE: N2-WhenPhysics EMA loss balancing for 87/12 Nm joint scale imbalance.
+
+12. **Feizi, Pedrosa, Patel, Jayender (2025).** "Few-Shot Physics-Informed Neural Network for Shape Reconstruction of Concentric-Tube Robots." _arXiv preprint 2605.12790_. — Few-shot PINN for Cosserat rod BVP in surgical robots. REJECTED: domain mismatch (continuum robot, not rigid-body manipulator).
+
 ---
 
 ## Appendix A — Novelty Tracking
@@ -250,3 +264,15 @@ _To be written after experiments._
 | N3-Duong | 100-step frozen-backbone sim-to-real fine-tuning | Duong et al. 2024, Sec. IV-D | 4 | **MERGED** — `training/fine_tune.py` |
 | N1-SPEL | Revolute-joint sparsity mask → diagonal D | Wang et al. 2025, Sec. II-B | 3 | Folded into N2-Liu FrictionNet |
 | N1-WangCAC | Sobol sampling for excitation trajectories | Wang et al. 2024 | 1 | INVESTIGATE — needs data pipeline |
+| N1-E2NN | Structural sub-term embedding (inertia, Coriolis, gravity) | Deng et al. 2024, Sec. 3 | — | REJECT — 1-DoF only; manual per-robot derivation conflicts Goal 1 automation |
+| N2-E2NN | Liquid gating mechanism (recurrent state modulation) | Deng et al. 2024, Sec. 2.3 | — | REJECT — recurrent incompatible with 1 kHz loop; tanh/sigmoid forbidden |
+| N1-CMP | Eikonal PDE planner on constraint manifold | Ni & Qureshi 2024, Sec. III | — | REJECT — custom planner incompatible with MoveIt2 mandate (Stage 2) |
+| N2-CMP | Negative-exponential speed model in Eikonal solver | Ni & Qureshi 2024, Sec. II | — | REJECT — planning-domain detail; no link to dynamics loss |
+| N1-NTF | Active sensing integrated into Eikonal planner | Liu, Ni & Qureshi 2024, Sec. IV | — | REJECT — incremental C-NTFields extension; Stage 2 uses standard MoveIt2 |
+| N2-NTF | Uncertainty-weighted replanning in active NTFields | Liu, Ni & Qureshi 2024, Sec. V | — | REJECT — no link to dynamics loss |
+| N1-PhysTwin | Digital twin reconstruction of deformable objects via spring-mass physics | Jiang et al. 2025, Sec. III | — | REJECT — domain mismatch (deformable bodies, not rigid-body dynamics) |
+| N1-AdaKineNet | Adaptive kinematic network with learnable loss weighting for IK | Fang et al. 2026 | — | REJECT — inverse kinematics problem; dynamics-independent |
+| N2-AdaKineNet | ReLU-based deep architecture on 10-DoF mobile manipulator | Fang et al. 2026 | — | REJECT — ReLU forbidden; mobile platform domain mismatch |
+| N1-WhenPhysics | Soft contact dynamics via LuGre friction ODE | Prabhakar et al. 2026 | — | REJECT — equivalent to τ_friction in constraints.py |
+| N2-WhenPhysics | EMA loss balancing (β=0.95) per residual magnitude for 87/12 Nm scale imbalance | Prabhakar et al. 2026 | 3 | INVESTIGATE — gated on first training run |
+| N3-WhenPhysics | Physics-aware trajectory sampling for sim-to-real | Prabhakar et al. 2026 | — | REJECT — duplicate of N3-Duong |

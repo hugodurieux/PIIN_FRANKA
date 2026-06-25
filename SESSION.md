@@ -3,7 +3,7 @@
      Do not edit by hand. CLAUDE.md imports it at every startup. -->
 
 ## Last updated
-2026-06-25 (evening)
+2026-06-25 (late evening)
 
 ## Papers processed
 | Status | File | Relevance | Novelties kept |
@@ -14,6 +14,14 @@
 | Processed | Duong et al. (2024) Port-Hamiltonian Neural ODE Networks on Lie.md | 1 (Low-Medium — validates phys. structures) | N1-Duong (INVESTIGATE — Cholesky L L^T + eps*I algebraic kernel, considered in N2-Liu FrictionNet design); N2-Duong (REJECT — duplicate of N1-Duong); N3-Duong (KEEP — IMPLEMENTED sim-to-real fine-tuning, MERGED to main, commit 0aa4fdc) |
 | Processed | Wang et al. (2024) Trajectory_Control_of_Multi-Axis_Robotic_Arms....md | 1 (Low-Medium — standard baseline) | N1-WangCAC (INVESTIGATE — Sobol sampling for excitation, revisit when data pipeline exists); N2-WangCAC (REJECT — trapezoidal residual, same conflict as N1-Liu); N3-WangCAC (REJECT — EKF, latency incompatible with 1 kHz control) |
 | Processed | Wang et al. (2025) - Symplectic Physics-Embedded Learning (SPEL).md | 1 (Low-Medium — physics-driven design) | N1-SPEL (INVESTIGATE — sparsity mask on Cholesky friction matrix for revolute joints, considered in N2-Liu FrictionNet design); N2-SPEL (REJECT — trainable URDF constants, violates RNEA-intact invariant); N3-SPEL (REJECT — KAN activations, violates Mish/Softplus constraint) |
+| Processed | Deng et al. (2024) E2NN (Applied Soft Computing).md | 1 (Low-Medium) | N1-E2NN (REJECT — 1-DoF only, manual per-robot sub-term structure conflicts with Goal 1 automation); N2-E2NN (REJECT — recurrent Liquid gating + forbidden tanh/sigmoid activations) |
+| Processed | Ni & Qureshi (2024) C-NTFields (ICRA 2024).md | 1 (Low-Medium) | N1-CMP (REJECT — custom Eikonal PDE planner incompatible with Stage 2 MoveIt2 mandate); N2-CMP (REJECT — planning-domain detail, no dynamics link) |
+| Processed | Liu, Ni & Qureshi (2024) Active NTFields (IEEE T-RO/RA-L).md | 1 (Low-Medium) | N1-NTF (REJECT — incremental extension of C-NTFields, Stage 2 stays simple MoveIt2); N2-NTF (REJECT — uncertainty-weighted replanning, no dynamics link) |
+| Processed | Jiang et al. (2025) PhysTwin (CVPR 2025).md | 0 (None — deformable bodies domain mismatch) | N/A (no applicable novelties) |
+| Processed | Deng et al. (2023) SSRN preprint.md | 0 (Duplicate) | DUPLICATE of Deng et al. (2024); no new novelties |
+| Processed | Fang et al. (2026) AdaKineNet (Robotics & Autonomous Systems).md | 0 (None — inverse kinematics, not dynamics) | N1-AdaKineNet (REJECT — inverse kinematics problem, dynamics-independent); N2-AdaKineNet (REJECT — ReLU forbidden, 10-DoF mobile manipulator domain mismatch) |
+| Processed | Prabhakar et al. (2026) "When Does Physics Help?" (ICLR 2026).md | 1 (Low-Medium — negative result on temporal extrapolation) | N1-WhenPhysics (REJECT — soft contact dynamics (LuGre ODE), already in constraints.py); N2-WhenPhysics (INVESTIGATE — EMA per-residual loss balancing for 87/12 Nm torque scale imbalance, gated on first training run); N3-WhenPhysics (REJECT — duplicate of N3-Duong sim-to-real fine-tuning) |
+| Processed | Feizi et al. (2025) Few-Shot PINN for Concentric-Tube Robots (arXiv 2605.12790).md | 0 (None — Cosserat rod BVP, surgical robot domain) | N/A (no applicable novelties) |
 
 ## Novelties pipeline
 | ID | Description | Supervisor verdict | Implementation status |
@@ -34,6 +42,17 @@
 | N1-SPEL | Physics-driven sparsity mask on Cholesky friction matrix: structurally-zero entries for revolute joints in 7x7 symmetric matrix | INVESTIGATE — considered and rejected in favor of diagonal D for N2-Liu FrictionNet; Pinocchio pass deferred | pending |
 | N2-SPEL | Trainable URDF constants (link masses, inertias, friction coefficients) in neural augmentation | REJECT — violates RNEA-intact white-box invariant in grey-box architecture | rejected |
 | N3-SPEL | KAN (Kolmogorov-Arnold Networks) activations for physics-informed learning | REJECT — violates Mish/Softplus smoothness constraint from CLAUDE.md | rejected |
+| N1-E2NN | Structural sub-term embedding (Deng et al. 2024): explicitly decompose inverse dynamics into inertia, Coriolis, gravity terms per-joint | REJECT — E2NN validated on 1-DoF only; manual per-robot sub-term derivation conflicts with Goal 1 automation | rejected |
+| N2-E2NN | Liquid gating mechanism (recurrent hidden state modulation) | REJECT — recurrent incompatible with stateless 1 kHz control; tanh/sigmoid forbidden activations | rejected |
+| N1-CMP | Eikonal PDE planner on constraint manifold (C-NTFields, Ni & Qureshi 2024) | REJECT — custom planner incompatible with Stage 2 MoveIt2 mandate in CLAUDE.md | rejected |
+| N2-CMP | Negative-exponential speed model in Eikonal solver | REJECT — planning-domain detail, no link to dynamics loss | rejected |
+| N1-NTF | Active sensing in Eikonal planner (Liu, Ni & Qureshi 2024) | REJECT — incremental extension of C-NTFields; Stage 2 uses standard MoveIt2 | rejected |
+| N2-NTF | Uncertainty-weighted replanning in active NTFields | REJECT — no link to dynamics loss | rejected |
+| N1-AdaKineNet | Adaptive kinematic network with attention mechanism for inverse kinematics (Fang et al. 2026) | REJECT — inverse kinematics problem; dynamics-independent of torque learning | rejected |
+| N2-AdaKineNet | ReLU-based deep IK architecture on 10-DoF mobile manipulator | REJECT — ReLU forbidden; mobile manipulator domain incompatible with fixed Franka 7-DoF | rejected |
+| N1-WhenPhysics | Soft contact dynamics via LuGre friction ODE for prediction accuracy on unknown payloads | REJECT — equivalent to τ_friction in constraints.py augmented Lagrangian | rejected |
+| N2-WhenPhysics | EMA loss balancing (β=0.95) per residual magnitude to mitigate 87/12 Nm torque scale imbalance across joints | INVESTIGATE — diagnostic: after first synthetic training run, if outer joints (5-7, 12 Nm) show higher val MSE than inner joints (1-4, 87 Nm), implement in training/train.py | pending |
+| N3-WhenPhysics | Physics-aware trajectory sampling for sim-to-real transfer (Prabhakar et al. 2026) | REJECT — duplicate of N3-Duong 100-step frozen-backbone fine-tuning | rejected |
 
 ## Experiments logged
 | Run ID | Date | Val loss | Notes |
@@ -41,17 +60,19 @@
 | N/A | N/A | N/A | No training runs executed yet; Stage 1 pipeline ready, awaiting GPU access |
 
 ## Current milestone
-Stage 1 (PINN) — architecture finalized; N2-Liu FrictionNet diagonal design IMPLEMENTED and MERGED to main (ebc2ba3); N3-Duong sim-to-real fine-tuning IMPLEMENTED and MERGED to main (0aa4fdc); PAPER_DRAFT.md created and committed to main (living paper draft with all 5 processed papers cited); all implemented novelties (N2-Liu, N3-Liu, N4-Liu, N3-Duong) MERGED; awaiting GPU access for Stage 1 training.
+Stage 1 (PINN) — 15 papers processed across 3 sessions (Batch 1: 6 papers; Batch 2: 5 papers; Batch 3: 4 papers from today + duplicate). All N2-Liu (FrictionNet), N3-Liu (Lyapunov gains), N4-Liu (max_samples), and N3-Duong (sim-to-real fine-tuning) IMPLEMENTED and MERGED to main. papers_review.csv reformatted today with concise 2-3-sentence summaries and consistent quoting. /process-papers command updated to enforce "MAIN_CONTRIBUTOR et al. (YEAR) TITLE.md" naming convention on archive and skip duplicates by first-author + year. papers/inbox/ now empty. Awaiting GPU access for Stage 1 training runs.
 
 ## Open questions / blockers
 - **GPU access blocker:** Stage 1 training cannot execute without GPU. Waiting for GPU allocation.
-- **Pinocchio install failed (network error):** `pip install pin` needs C++ compiler (cmake/nmake not on Windows); `conda install -c conda-forge pinocchio` failed with ChunkedEncodingError mid-download. FIX: run `conda install -c conda-forge pinocchio` from Anaconda Prompt with stable network, or use mamba: `mamba install -c conda-forge pinocchio`. Pinocchio needed for `friction_sparsity_analysis.py` and future training data generation.
+- **Pinocchio install on Windows (persisting):** Attempted `conda install -c conda-forge pinocchio` — conda solver hung indefinitely. Attempted `pip install pin` — no Windows wheel available. **FIX PATH: Install Pinocchio via Windows Subsystem for Linux (WSL)** — open Ubuntu terminal in WSL, run `sudo apt install python3-pinocchio`, then test with `python -m pinocchio_baseline.friction_sparsity_analysis` from project root. If WSL unavailable, build from source on Windows with C++ compiler (MSVC, CMake, vcpkg).
+- **N2-WhenPhysics diagnostic:** After first synthetic training run, inspect per-joint val MSE comparing joints 5-7 (12 Nm limit) vs. joints 1-4 (87 Nm limit). If outer joints show elevated error relative to torque budget, implement EMA loss balancing (beta=0.95) in training/train.py to reweight gradients by 1/residual_RMS.
 - N3-Djeumou (semi-supervised dissipativity): awaits first real motor-babbling HDF5 dataset to design and run ablation.
 - N1-WangCAC (Sobol sampling): consider for the data pipeline when Isaac Sim HDF5 pipeline is built.
 - Data pipeline: Isaac Sim excitation trajectories → HDF5 (q, qdot, qddot, delta, tau_real) not yet built; Fourier trajectory baseline available as fallback. Real motor-babbling dataset needed to run `training/fine_tune.py`.
-- Physics validator advisories (non-blocking): (1) dissipativity multiplier currently batch-mean — consider per-sample multipliers if weak at runtime; (2) document under-sampling risk for max_samples < ~2000 in ablation study methodology; (3) Stage 3 DEFAULT_ERROR_BOUND = [5,5,5,5,2,2,2] Nm is placeholder — must recompute via `compute_lyapunov_gains(real_error_bound)` after Stage 1 validation.
+- Physics validator advisories (non-blocking): (1) dissipativity multiplier currently batch-mean — consider per-sample multipliers if weak at runtime; (2) document under-sampling risk for max_samples < ~2000 in ablation study methodology; (3) Stage 3 DEFAULT_ERROR_BOUND = [5,5,5,5,2,2,2] Nm is placeholder — must recompute via `compute_lyapunov_gains(real_error_bound)` after Stage 1 validation; (4) N3-Duong freeze logic via `named_modules()` — document assumption if future architecture changes; (5) N2-Liu FrictionNet lambda_dissip grows slower when active (intended).
+- **papers/inbox/ workflow improved:** /process-papers now renames archived papers to "MAIN_CONTRIBUTOR et al. (YEAR) TITLE.md" format and skips duplicates by checking if (first_author, year) already exists in papers_review.csv. Reduces manual file cleanup.
 
 ## What to do next session
-1. Install pinocchio from Anaconda Prompt: `conda install -c conda-forge pinocchio` (or mamba). Run `python -m pinocchio_baseline.friction_sparsity_analysis` to validate setup.
-2. Run smoke tests once pinocchio is installed: `python -m training.train --synthetic --epochs 5` (baseline), then `python -m training.train --synthetic --epochs 5 --use_friction_net` (with FrictionNet).
-3. When GPU available: run real Stage 1 training, extract validation RMSE per joint, call `compute_lyapunov_gains(real_error_bound)`, update DEFAULT_ERROR_BOUND in Stage 3, and resolve `TODO(stage3)` markers in `pinn_controller_node.py`.
+1. Install Pinocchio via WSL: open Ubuntu terminal in WSL, run `sudo apt install python3-pinocchio`. Test with `python -m pinocchio_baseline.friction_sparsity_analysis` to confirm setup.
+2. Run smoke tests once Pinocchio works: `python -m training.train --synthetic --epochs 5` (baseline), then `python -m training.train --synthetic --epochs 5 --use_friction_net` (with FrictionNet).
+3. When GPU available: run real Stage 1 training on real dataset (q, qdot, qddot, delta, tau_real), extract per-joint validation RMSE, then call `compute_lyapunov_gains(real_error_bound)`, update DEFAULT_ERROR_BOUND in Stage 3 controller, run N2-WhenPhysics diagnostic (inspect outer-joint error scaling).
