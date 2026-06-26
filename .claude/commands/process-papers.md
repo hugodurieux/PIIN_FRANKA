@@ -34,6 +34,11 @@ Do NOT run the extractor, supervisor, or implementer on duplicates.
 
 ### For EACH paper (alphabetical order), run this sequence:
 
+> **STRICT SEQUENTIAL RULE:** Complete ALL steps (1–7) for the current paper before
+> launching ANY agent for the next paper. NEVER launch multiple paper-extractor,
+> supervisor, or implementer agents in parallel across different papers. One paper
+> at a time, start to finish.
+
 **1. Extraction** — Launch the `paper-extractor` subagent on the paper.
    Collect its structured YAML + summary.
 

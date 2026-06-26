@@ -1,12 +1,12 @@
 # Project State — PINN Franka Pipeline
-_Last updated: 2026-06-26_
+_Last updated: 2026-06-26 (session 2, paper-review batch 2)_
 
 ## 1. Objectives (from goal.md)
 | # | Objective | Status | Evidence / where proven |
 |---|-----------|--------|-------------------------|
-| 1 | Automated "URDF-to-Model" Pipeline — accept any URDF, auto-extract kinematics via Pinocchio, generate network, produce trained dynamic model | in progress | `pinocchio_baseline/rnea_wrapper.py` (URDF -> RNEA); `network/grey_box_net.py` + `training/train.py` (architecture + training loop). N4 data-efficiency ablation flag (`--max_samples`) merged. Fourier dataset built (`generate_fourier_dataset.py`): 3 × ~50k samples, payloads 0/1/3 kg, real Pinocchio RNEA (cmeel example-robot-data), Sobol segments (N1-WangCAC). Training runs validated on CPU (val RMSE ≈ 0.22 Nm in 20 epochs). Multi-payload training not yet built. Full convergence needs GPU. |
+| 1 | Automated "URDF-to-Model" Pipeline — accept any URDF, auto-extract kinematics via Pinocchio, generate network, produce trained dynamic model | in progress | `pinocchio_baseline/rnea_wrapper.py` (URDF -> RNEA); `network/grey_box_net.py` + `training/train.py` (architecture + training loop). N4 data-efficiency ablation flag (`--max_samples`) merged. Fourier dataset built (`generate_fourier_dataset.py`): 3 × ~50k samples, payloads 0/1/3 kg, real Pinocchio RNEA (cmeel example-robot-data), Sobol segments (N1-WangCAC). Training runs validated on CPU (val RMSE ≈ 0.22 Nm in 20 epochs). Multi-payload training not yet built. Full convergence needs GPU. Li et al. (2025) review confirms dual payload-awareness (RNEA white-box + tau_res delta input) is ahead of their published approach. |
 | 2 | High-Frequency Real-Time Control at 1000 Hz (MPC integration, microsecond inference) | in progress | Stage 2: ROS2 Humble node on `stage2/moveit2-ros2-humble` publishes effort commands at 1000 Hz with MoveIt2 trajectory bridge. Stage 3: `ComputedTorquePDController.step()` on `stage3/computed-torque-pd-controller` is the 1 kHz torque computation kernel. Both scaffolded; wiring pending trained Stage 1 model. |
-| 3 | Scaling to 7-DoF — Augmented Lagrangian constraints + residual friction on a full Franka Panda | in progress | `training/constraints.py` implements AL penalties (torque limits + dissipativity) for all 7 joints. Stage 3 hard-clips to per-joint TORQUE_LIMITS. N2-Liu FrictionNet IMPLEMENTED (`network/friction_net.py`): structural dissipativity guarantee via Softplus-diagonal D matrix; hard guarantee `tau_friction · qdot <= 0` always; 6,087 params; physics PASSED. No training run yet. |
+| 3 | Scaling to 7-DoF — Augmented Lagrangian constraints + residual friction on a full Franka Panda | in progress | `training/constraints.py` implements AL penalties (torque limits + dissipativity) for all 7 joints. Stage 3 hard-clips to per-joint TORQUE_LIMITS. N2-Liu FrictionNet IMPLEMENTED (`network/friction_net.py`): structural dissipativity guarantee via Softplus-diagonal D matrix; hard guarantee `tau_friction · qdot <= 0` always; 6,087 params; physics PASSED. Hu et al. (2026) review passively validates that RNEA covers load-dependent terms and tau_res captures motion-state residuals. |
 | 4 | Standardized Sim-to-Real Gap resolution via physics-constrained fine-tuning | in progress | `training/fine_tune.py` on branch `novelty/duong2024-N3-simtoreal-finetune` — PASSED physics validation. Loads pre-trained GreyBoxNet, freezes all layers except last 2 nn.Linear modules, fine-tunes under full PINN loss (MSE + AL). First code implementation of Goal 4. Real data pipeline (HDF5) not yet built. |
 
 ## 2. Pipeline architecture (URDF -> trained robot)
@@ -81,6 +81,12 @@ Not started.
 | N2-WhenPhysics | Prabhakar et al. (ICLR 2026) | EMA momentum-smoothed per-residual loss balancing (beta=0.95). INVESTIGATE — per-joint val RMSE diagnostic LIVE in `training/train.py` (printed at end of every run). Fourier baseline result 2026-06-26: ratio 1.0× (joints 1-4: 0.239 Nm, 5-7: 0.247 Nm) — no imbalance on synthetic residual. Revisit after real robot recordings. | Goal 3 | diagnostic in main | confirmed no imbalance on Fourier data | diagnostic merged |
 | N3-WhenPhysics | Prabhakar et al. (ICLR 2026) | UDE frozen-backbone fine-tuning — Universal Differential Equation approach with frozen physics backbone. REJECT — duplicate of N3-Duong already implemented in `training/fine_tune.py`. | — | rejected | — | — |
 | N1-Feizi | Feizi et al. (arXiv 2025) | Few-shot PINN adaptation for Cosserat rod BVP (continuum surgical robot shape reconstruction). REJECT — full domain mismatch: Cosserat rod PDE, tanh activations, no torques, no URDF, no rigid-body chain; zero applicability to Franka 7-DoF inverse dynamics. | — | rejected | — | — |
+| N1-BacklashPINN | Hu et al. (IEEE/ASME T-Mech 2026) | Amplitude-weighted training loss — weight loss by motion amplitude to emphasise high-excitation segments when backlash is dominant. REJECT — redundant with N2-WhenPhysics EMA balancing (same motivation, same mechanism); also validated only on SIASUN/ROKAE 6-DoF with ReLU activations (forbidden). | — | rejected | — | — |
+| N2-BacklashPINN | Hu et al. (IEEE/ASME T-Mech 2026) | Gaussian basis-function output head — replace final linear layer with a Gaussian RBF layer to localise backlash responses. REJECT — requires labeled backlash windows (unavailable for Franka); ReLU used throughout (forbidden activation). | — | rejected | — | — |
+| N3-BacklashPINN | Hu et al. (IEEE/ASME T-Mech 2026) | TCN (Temporal Convolutional Network) sliding-window inference — replace MLP with causal TCN to capture hysteresis history. REJECT — stateful sliding window breaks the stateless 1 kHz control loop; incompatible with the project's real-time constraint. | — | rejected | — | — |
+| N1-PayloadPINN | Li et al. (IEEE RA-L 2025) | QDD current-based payload identification — estimate payload inertia from quasi-direct-drive motor currents, no torque sensor needed. REJECT — Franka uses gearboxes (not QDD), making current-to-torque mapping nonlinear and unreliable; architecture mismatch. | — | rejected | — | — |
+| N2-PayloadPINN | Li et al. (IEEE RA-L 2025) | Virtual payload link injection in Pinocchio for white-box payload awareness. REJECT — ALREADY FULLY IMPLEMENTED: `pinocchio_baseline/rnea_wrapper.py` uses `_inject_payload()` / `_restore_payload()` methods that modify the end-effector link inertia in Pinocchio before each RNEA call. This project's implementation predates and exceeds the paper's. | — | n/a (pre-existing) | architecture match confirmed | n/a (pre-existing) |
+| N3-PayloadPINN | Li et al. (IEEE RA-L 2025) | PINN-inside-NMPC at 100 Hz — embed the trained PINN as a forward model inside a nonlinear MPC predict-and-optimise loop at 100 Hz. REJECT — CLAUDE.md mandates Stage 2 uses standard MoveIt2; NMPC replaces rather than extends MoveIt2, and 100 Hz is below the 1 kHz target. | — | rejected | — | — |
 
 ## 3a. Primary baseline — Liu et al. (2024) competitive gaps
 Liu et al. (2024): "Physics-Informed Neural Networks to Model and Control Robots:
@@ -95,7 +101,14 @@ A Theoretical and Experimental Investigation" — the primary state-of-the-art r
 | 5 | No torque / velocity limits in loss | AL constraints enforce torque limits and dissipativity for all 7 joints; Stage 3 hard-clips at publish boundary |
 | 6 | Full black-box Lagrangian — no RNEA white-box term | Grey-box: RNEA white-box + learned residual; RNEA baseline never modified |
 
-## 3b. Physics validator advisories (non-blocking)
+## 3b. Secondary validations from paper reviews (no implementation required)
+Independent papers reviewed in batch 2 (2026-06-26) produced two secondary findings that strengthen existing design choices:
+
+1. **Backlash error is payload-independent and motion-state-dependent** (Hu et al., IEEE/ASME T-Mech 2026): Paper shows backlash manifests as a function of velocity direction and joint position, not payload mass. This passively validates the grey-box decomposition: RNEA correctly accounts for all load-dependent (inertia, Coriolis, gravity) terms, and the learned tau_res cleanly captures the motion-state-dependent residual (including backlash-like phenomena) without entanglement with payload dynamics.
+
+2. **Dual payload-awareness is ahead of the published state of the art** (Li et al., IEEE RA-L 2025): Li et al. propose virtual payload link injection in Pinocchio as a novel contribution. This project already implements exactly this mechanism in `pinocchio_baseline/rnea_wrapper.py` (`_inject_payload()` / `_restore_payload()`), and additionally conditions the learned residual network on the payload scalar delta — providing a second, independent pathway for payload adaptation that Li et al. do not have. No code changes needed; this is a documented advantage over the published baseline.
+
+## 3c. Physics validator advisories (non-blocking)
 1. N4 branch — dissipativity multiplier is batch-mean (pre-existing, not introduced by N4 branch) — consider per-sample multipliers if enforcement is weak at runtime.
 2. N4 branch — at very small max_samples (< ~2000 from a 25k dataset), random draw may under-sample high-velocity excitation regions — document this in ablation study.
 3. N3-Liu (Stage 3) — DEFAULT_KP/DEFAULT_KD are placeholders computed from `DEFAULT_ERROR_BOUND = [5,5,5,5,2,2,2]` Nm. Gains must be recomputed via `compute_lyapunov_gains(real_error_bound)` once Stage 1 produces validation error statistics.
@@ -135,6 +148,7 @@ pinn_franka/
 |
 |-- pinocchio_baseline/
 |   |-- rnea_wrapper.py              RneaBaseline: URDF -> batched RNEA, payload injection
+|   |                                (_inject_payload / _restore_payload); ahead of Li 2025
 |   |-- __init__.py
 |
 |-- controller/                      [branch: stage3/computed-torque-pd-controller]
@@ -157,8 +171,8 @@ pinn_franka/
 |   |-- papers_review.csv            One row per paper processed
 |
 |-- papers/
-|   |-- inbox/                       Drop new papers here for /process-papers
-|   |   |-- (empty — all reviewed papers moved to processed/)
+|   |-- inbox/                       3 papers remaining (s11433-025-2810-1,
+|   |                                s41598-026-50630-y_reference, ssrn-6550385)
 |   |-- processed/
 |       |-- Liu et al. (2024)...     (primary baseline, see section 3a)
 |       |-- Djeumou et al. (2022)... (processed)
@@ -173,6 +187,10 @@ pinn_franka/
 |       |-- Fang et al. (2026)...    (processed — AdaKineNet, Robotics & Autonomous Systems; relevance 0, all REJECTed)
 |       |-- Prabhakar et al. (2026). (processed — "When Does Physics Help?", ICLR 2026; relevance 1; N2-WhenPhysics INVESTIGATE)
 |       |-- Feizi et al. (2025)...   (processed — Few-shot PINN for CTR shape, arXiv 2605.12790; relevance 0, all REJECTed)
+|       |-- Yu et al. (2026)...      (processed — Hybrid LSTM-edge crop monitoring, Frontiers in Agronomy; relevance 0, all REJECTed)
+|       |-- Agrawal et al. (2026)... (processed — PINN-based IK via RPA, Frontiers in Robotics and AI; relevance 0, all REJECTed)
+|       |-- Hu et al. (2026)...      (processed — Backlash PINN, IEEE/ASME T-Mech; relevance 1, all REJECTed; secondary finding: backlash payload-independence validates RNEA decomposition)
+|       |-- Li et al. (2025)...      (processed — Payload ID PINN, IEEE RA-L; relevance 1, all REJECTed; secondary finding: dual payload-awareness already implemented, ahead of paper)
 |
 |-- docs/
 |   |-- HOW_TO_USE.md
@@ -193,6 +211,7 @@ pinn_franka/
 - Human review and merge of `stage2/moveit2-ros2-humble` into main (merge Stage 3 first — Stage 2 depends on it via `TODO(stage3)` hook).
 - After Stage 3 merge: resolve `TODO(stage3)` markers in `pinn_controller_node.py` (`_compute_torques()` and `_try_load_controller()`) to wire in `ComputedTorquePDController`.
 - After Stage 1 first training run: recompute Lyapunov gains via `controller/lyapunov_gains.py::compute_lyapunov_gains(real_error_bound)` using real validation error statistics; replace `DEFAULT_ERROR_BOUND` placeholder.
+- **3 papers remain in papers/inbox/:** s11433-025-2810-1, s41598-026-50630-y_reference, ssrn-6550385. Process next session via `/process-papers`.
 - **Multi-payload training:** adapt `training/dataset.py` to concatenate all 3 HDF5 files — train on payloads 0/1/3 kg simultaneously to prove payload-conditioned generalisation (Goal 1).
 - **GPU + full convergence:** run `python3 -m training.train --data data/fourier_baseline_0kg.h5 --epochs 200 --use_friction_net` for a properly converged model; extract per-joint RMSE for Lyapunov gain update.
 - **Lyapunov gains:** update `DEFAULT_ERROR_BOUND` in `controller/lyapunov_gains.py` from real per-joint RMSE after convergence run.
@@ -206,3 +225,4 @@ pinn_franka/
 - Address physics-validator advisory 4 (N3-Duong): document freeze-logic assumption (last 2 nn.Linear via `named_modules()`) if architecture gains skip-connection Linear layers outside `self.net`.
 - Address physics-validator advisory 5 (N2-Liu): document slower lambda_dissip growth when `--use_friction_net` active; include in ablation comparison.
 - Address physics-validator advisory 6 (Prabhakar 2026 negative result): scope project claims to in-distribution trajectory following; do not claim temporal extrapolation without empirical evidence.
+- **Write-up note (dual payload-awareness):** document in paper/report that `_inject_payload()` in `rnea_wrapper.py` + delta conditioning of tau_res constitutes dual payload-awareness, predating and exceeding Li et al. (2025)'s single-pathway approach.

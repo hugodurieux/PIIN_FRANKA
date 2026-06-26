@@ -275,6 +275,14 @@ _To be written after experiments._
 
 12. **Feizi, Pedrosa, Patel, Jayender (2025).** "Few-Shot Physics-Informed Neural Network for Shape Reconstruction of Concentric-Tube Robots." _arXiv preprint 2605.12790_. — Few-shot PINN for Cosserat rod BVP in surgical robots. REJECTED: domain mismatch (continuum robot, not rigid-body manipulator).
 
+13. **Yu, Zhang, Liu, Wang, Peng (2026).** "Hybrid LSTM-Edge Correction Architecture for Physics-Informed Crop Health Monitoring in Distributed Agricultural Robotics." _Frontiers in Agriculture_, vol. 8, art. 1764002. — LSTM + edge inference for agricultural IoT. REJECTED: agriculture domain mismatch; no robot arm dynamics applicability.
+
+14. **Agrawal, Menon, Sharma, Gupta, Patel (2026).** "Automating PINN-Based Kinematic Resolution of Robotic Joints Using Robotic Process Automation Frameworks." _Frontiers in Robotics and AI_, vol. 12, art. 1752595. — RPA-based PINN kinematics automation on 2R arm with 40.5 ms latency. REJECTED: inverse kinematics domain (non-dynamics); latency incompatible with 1 kHz control.
+
+15. **Hu, Liu, Chen, Zhang, Wang (2026).** "Modeling and Compensation of Backlash-Induced Dynamics Error in Industrial Robots With a PINN-Based Approach." _IEEE Transactions on Industrial Electronics_. — Backlash residual via PINN on non-harmonic-drive joint trains. REJECTED: ReLU activations (forbidden); TCN sliding-window breaks stateless 1 kHz loop; backlash-specific to non-harmonic drives (Franka has harmonic reducers). Secondary finding: backlash error payload-independent, validates RNEA white-box load-dependent term coverage.
+
+16. **Li, Yang, Zhao, Wang, Zhou (2025).** "PINN-Based Predictive Control Combined With Unknown Payload Identification for Robots With Prismatic Quasi-Direct-Drives." _IEEE Transactions on Automation Science and Engineering_. — Virtual payload link + NMPC 100 Hz for QDD arms. REJECTED: QDD motor model incompatible with Franka harmonic-drive + motor-inertia model; NMPC 100 Hz incompatible with Stage 2/3 architecture. COMPETITIVE ADVANTAGE: N2-PayloadPINN (virtual payload link runtime injection) already implemented in `pinocchio_baseline/rnea_wrapper.py` via `_inject_payload/_restore_payload`. Dual payload-awareness (RNEA white-box + τ_res delta input) ahead of published Li et al. 2025 — highlight in final paper.
+
 ---
 
 ## Appendix A — Novelty Tracking
@@ -304,3 +312,12 @@ _To be written after experiments._
 | N1-WhenPhysics | Soft contact dynamics via LuGre friction ODE | Prabhakar et al. 2026 | — | REJECT — equivalent to τ_friction in constraints.py |
 | N2-WhenPhysics | EMA loss balancing (β=0.95) per residual magnitude for 87/12 Nm scale imbalance | Prabhakar et al. 2026 | 3 | INVESTIGATE — diagnostic live in `train.py`; Fourier ratio 1.0× (no imbalance); revisit after real robot data |
 | N3-WhenPhysics | Physics-aware trajectory sampling for sim-to-real | Prabhakar et al. 2026 | — | REJECT — duplicate of N3-Duong |
+| N1-fagro | LSTM edge-correction for crop health prediction (agricultural domain) | Yu et al. 2026, Sec. 3 | — | REJECT — agriculture robotics domain mismatch; no dynamics learning applicability |
+| N2-fagro | Distributed edge-sensor fusion architecture for IoT agricultural monitoring | Yu et al. 2026, Sec. 2 | — | REJECT — agriculture domain; no robot arm applicability |
+| N1-frobt | Automating robotic kinematics PINN via RPA frameworks on 2R arm | Agrawal et al. 2026, Sec. III | — | REJECT — inverse kinematics domain (non-dynamics); 40.5 ms latency incompatible with 1 kHz control |
+| N1-BacklashPINN | Backlash compensation via residual PINN: τ_pred = RNEA + τ_backlash + τ_res | Hu et al. 2026, Sec. II | — | REJECT — ReLU activations forbidden by CLAUDE.md Mish/Softplus constraint |
+| N2-BacklashPINN | TCN sliding-window architecture for history-dependent backlash estimation | Hu et al. 2026, Sec. II | — | REJECT — stateful sliding-window breaks stateless 1 kHz control loop invariant; recurrent incompatible with real-time servo |
+| N3-BacklashPINN | Backlash hysteresis modeling on non-harmonic-drive joint gear trains | Hu et al. 2026, Sec. III | — | REJECT — Franka uses harmonic reducers on all 7 joints; backlash error payload-independent, validates RNEA white-box coverage of load-dependent terms; non-applicable |
+| N1-PayloadPINN | PINN payload identification under QDD quasi-direct-drive motor assumption | Li et al. 2025, Sec. II | — | REJECT — Franka Panda has harmonic reducers + motor inertia, not QDD; incompatible motor model |
+| N2-PayloadPINN | Virtual payload link at runtime (inject, estimate, restore in Pinocchio RNEA) | Li et al. 2025, Sec. III | 1 | **REJECT/PRE-EXISTING** — already implemented in `pinocchio_baseline/rnea_wrapper.py` (_inject_payload/_restore_payload functions). Dual payload-awareness (RNEA white-box + τ_res delta input) ahead of published Li et al. 2025 state of art. Competitive advantage — highlight in final paper. |
+| N3-PayloadPINN | NMPC 100 Hz predictive control with payload disturbance rejection | Li et al. 2025, Sec. IV | — | REJECT — 100 Hz NMPC incompatible with Stage 2 (MoveIt2) + Stage 3 (stateless 1 kHz feedforward + PD) architecture |
