@@ -59,9 +59,11 @@
 |--------|------|----------|-------|
 | smoke-baseline | 2026-06-26 | 44.10 (mse 0.87) | `--synthetic --epochs 5`, no FrictionNet. MSE 3.41→0.87, dissip_viol=0. Saved: models/run_20260626_104119/ |
 | smoke-frictionnet | 2026-06-26 | 44.01 (mse 0.83) | `--synthetic --epochs 5 --use_friction_net`. D_diag converged to ~1.0-1.3 (joint 1 highest, physically plausible). dissip_viol=0. Saved: models/run_20260626_104318/ |
+| fourier-baseline | 2026-06-26 | 0.0453 (mse 0.0453) | `--data fourier_baseline_0kg.h5 --epochs 20`, no FrictionNet. MSE 0.92→0.048, dissip_viol=0. Real RNEA data (example_robot_data inertials). Saved: models/run_20260626_111550/ |
+| fourier-frictionnet | 2026-06-26 | 0.0451 (mse 0.0451) | `--data fourier_baseline_0kg.h5 --epochs 20 --use_friction_net`. D_diag converged to ~1.5-2.1 (J1 highest at 2.05, physically plausible). Marginal improvement over baseline as expected on simple synthetic residual. Saved: models/run_20260626_111912/ |
 
 ## Current milestone
-Stage 1 (PINN) — pipeline fully operational. 15 papers processed. All KEEP novelties (N2-Liu FrictionNet, N3-Liu Lyapunov gains, N4-Liu max_samples, N3-Duong sim-to-real fine-tuning) implemented and merged to main. Smoke tests passed on 2026-06-26: baseline and FrictionNet both train correctly on synthetic data in WSL (Ubuntu 24.04). Pinocchio 4.0.0 confirmed working. Awaiting GPU access and real dataset for full training run.
+Stage 1 (PINN) — pipeline fully validated end-to-end. Fourier dataset generated (3 × 50,000 samples, payloads 0/1/3 kg) using real Pinocchio RNEA with example_robot_data inertials. Training on real RNEA data achieves val MSE ~0.045 Nm² (RMSE ≈ 0.21 Nm) in 20 epochs on CPU — 20× better than synthetic smoke test. FrictionNet (N2-Liu) confirmed working with physically plausible D_diag (J1 highest friction at 2.05). Full pipeline: data generation → RNEA → training → FrictionNet all green. Awaiting GPU for scale and real robot recordings for fine-tuning.
 
 ## Open questions / blockers
 - **GPU access blocker:** Stage 1 training cannot execute at scale without GPU. Waiting for GPU allocation.
@@ -74,7 +76,8 @@ Stage 1 (PINN) — pipeline fully operational. 15 papers processed. All KEEP nov
 - **papers/inbox/ workflow improved:** /process-papers now renames archived papers to "MAIN_CONTRIBUTOR et al. (YEAR) TITLE.md" format and skips duplicates by checking if (first_author, year) already exists in papers_review.csv. Reduces manual file cleanup.
 
 ## What to do next session
-1. **GPU + real dataset:** run full Stage 1 training on real dataset (q, qdot, qddot, delta, tau_real) from WSL. Extract per-joint validation RMSE.
-2. **Lyapunov gains:** call `compute_lyapunov_gains(real_error_bound)` with real RMSE values, update DEFAULT_ERROR_BOUND in Stage 3 controller (currently placeholder [5,5,5,5,2,2,2] Nm).
-3. **N2-WhenPhysics diagnostic:** inspect outer-joint (5-7, 12 Nm) vs inner-joint (1-4, 87 Nm) val MSE after real training run. If imbalanced, implement EMA loss balancing (beta=0.95) in training/train.py.
-4. **Data pipeline:** build Isaac Sim excitation trajectory → HDF5 pipeline. Consider Sobol sampling (N1-WangCAC) at this stage.
+1. **GPU + longer training:** run `python3 -m training.train --data data/fourier_baseline_0kg.h5 --epochs 200 --use_friction_net` on GPU to get a properly converged model.
+2. **Multi-payload training:** adapt dataset.py or concatenate HDF5 files to train on all 3 payloads (0/1/3 kg) simultaneously — needed to validate payload-conditioned generalisation (Goal 1).
+3. **Per-joint RMSE diagnostic (N2-WhenPhysics):** after a longer run, extract per-joint val MSE comparing joints 5-7 (12 Nm) vs 1-4 (87 Nm). If imbalanced, implement EMA loss balancing (beta=0.95) in training/train.py.
+4. **Lyapunov gains:** call `compute_lyapunov_gains(real_error_bound)` with real per-joint RMSE, update DEFAULT_ERROR_BOUND in Stage 3 controller (placeholder [5,5,5,5,2,2,2] Nm).
+5. **Real robot data:** obtain motor-babbling recordings → run `training/fine_tune.py` for sim-to-real transfer (N3-Duong).
