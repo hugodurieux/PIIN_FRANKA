@@ -3,13 +3,13 @@
 **Hugo Durieux** — Master's Internship, 2026
 
 _Working draft — updated automatically at the end of each session._
-_Last updated: 2026-06-25 (late evening)_
+_Last updated: 2026-06-26_
 
 ---
 
 ## Abstract
 
-We present an automated pipeline that takes a robot's URDF description as input and produces a trained, real-time-deployable dynamics model for a 7-degree-of-freedom manipulator. The pipeline combines a deterministic white-box baseline (Recursive Newton-Euler Algorithm, RNEA, computed via Pinocchio from the URDF) with a physics-constrained neural residual network that learns unmodeled friction, elasticity, and payload-dependent effects. Four contributions distinguish this work from the primary state of the art (Liu et al., 2024): (1) a fully automated URDF-to-model pipeline requiring no manual kinematic derivation; (2) a real-time computed-torque controller with Lyapunov-certified gain selection operating at 1000 Hz; (3) a structurally dissipative FrictionNet sub-module that guarantees the friction residual dissipates energy by construction, without relying on soft penalty terms; and (4) a two-step sim-to-real fine-tuning protocol that recovers tracking accuracy from a pre-trained simulation model using only a brief real-world motor-babbling sequence. Experiments on the Franka Panda arm with payloads of 0, 1, and 3 kg are planned pending GPU allocation.
+We present an automated pipeline that takes a robot's URDF description as input and produces a trained, real-time-deployable dynamics model for a 7-degree-of-freedom manipulator. The pipeline combines a deterministic white-box baseline (Recursive Newton-Euler Algorithm, RNEA, computed via Pinocchio from the URDF) with a physics-constrained neural residual network that learns unmodeled friction, elasticity, and payload-dependent effects. Four contributions distinguish this work from the primary state of the art (Liu et al., 2024): (1) a fully automated URDF-to-model pipeline requiring no manual kinematic derivation, with Sobol low-discrepancy excitation trajectory generation for improved joint-space coverage; (2) a real-time computed-torque controller with Lyapunov-certified gain selection operating at 1000 Hz; (3) a structurally dissipative FrictionNet sub-module that guarantees the friction residual dissipates energy by construction, without relying on soft penalty terms, with physical justification from a Pinocchio-based sparsity analysis confirming the 7-parameter diagonal structure (80% reduction vs. full Cholesky); and (4) a two-step sim-to-real fine-tuning protocol that recovers tracking accuracy from a pre-trained simulation model using only a brief real-world motor-babbling sequence. Preliminary experiments on CPU with Fourier excitation data (Pinocchio RNEA, 50k samples/payload, 0/1/3 kg) achieve val RMSE ≈ 0.22 Nm in 20 epochs; full GPU-scale experiments pending.
 
 ---
 
@@ -182,7 +182,24 @@ python -m training.fine_tune --checkpoint models/run_XXXX/greybox_best.pt \
 
 _File: `training/fine_tune.py`_ [Duong et al. 2024, Section IV-D, Table III] | Merged: `novelty/duong2024-N3-simtoreal-finetune`
 
-### 3.8 Data-Efficiency Ablation (N4-Liu)
+### 3.8 Sobol Excitation Trajectory Generation (N1-WangCAC)
+
+Fourier-series excitation trajectories are parameterised by per-joint harmonic frequencies and phases. Naive uniform random sampling of these parameters can leave regions of joint space poorly covered. Following Wang et al. (2024), we replace uniform random sampling with Sobol low-discrepancy sequences (scipy.stats.qmc.Sobol) to fill the 7-dimensional joint configuration space more uniformly.
+
+Concretely, for each payload condition the trajectory is generated as N_SEGMENTS = 10 independent segments, each starting from a Sobol-sampled joint centre q_center drawn from the joint range [Q_LOWER, Q_UPPER]:
+
+```
+q_centers = Sobol(d=7, seed=42).random(10)  mapped to [Q_LOWER, Q_UPPER]
+For each q_center_i:
+    Fourier params (A_k, ω_k, φ_k) sampled randomly
+    Segment trajectory: q(t) = q_center_i + Σ_k A_k sin(ω_k t + φ_k)
+```
+
+Each segment contributes 5,000 samples (5 s at 1000 Hz); segments are concatenated to 50,000 samples per payload. Timesteps where any |τ_RNEA| > τ_max are excluded (not clipped), preserving training label validity. The Sobol seeds differ per payload to ensure independent joint-space coverage across conditions.
+
+_File: `generate_fourier_dataset.py`_ [Wang et al. 2024, CAC]
+
+### 3.9 Data-Efficiency Ablation (N4-Liu)
 
 To quantify the advantage of the URDF-seeded grey-box approach over Liu et al.'s 25,000-sample black-box baseline, training supports a `--max_samples N` flag that truncates the dataset to N random samples (seed=42) before the train/val split.
 
@@ -209,9 +226,20 @@ _Pending GPU allocation. This section will be populated after Stage 1 training._
 | Sim-to-real transfer (N3-Duong) | RMSE before/after fine-tuning at N steps | No fine-tuning |
 | Stage 3 tracking on real hardware | Tracking error [rad] at 1000 Hz | Liu et al.: 500 Hz |
 
-### 4.2 Results
+### 4.2 Preliminary Results (CPU, 20 epochs, Fourier baseline)
 
-_No training runs executed yet. GPU access pending._
+| Run | Dataset | FrictionNet | Best val loss | Val RMSE |
+|-----|---------|-------------|---------------|----------|
+| smoke-baseline | synthetic (4096 samples) | No | 44.10 | ~0.93 Nm |
+| smoke-frictionnet | synthetic (4096 samples) | Yes | 44.01 | ~0.91 Nm |
+| fourier-baseline | Fourier 0 kg (50k, real RNEA) | No | 0.0453 | 0.213 Nm |
+| fourier-frictionnet | Fourier 0 kg (50k, real RNEA) | Yes | 0.0451 | 0.212 Nm |
+| fourier-sobol | Fourier 0 kg (50k, Sobol, real RNEA) | No | 0.0570 | 0.239 Nm |
+
+**Per-joint RMSE (Fourier-Sobol run):** [0.240, 0.233, 0.257, 0.228, 0.257, 0.228, 0.256] Nm.
+Joint scale diagnostic (N2-WhenPhysics): joints 1–4 (87 Nm) mean 0.239 Nm, joints 5–7 (12 Nm) mean 0.247 Nm — ratio 1.0×. EMA loss balancing not required on Fourier data.
+
+_Note: all runs on CPU, 20 epochs. Convergence is not reached; full experiments require GPU and 200+ epochs._
 
 ---
 
@@ -262,8 +290,8 @@ _To be written after experiments._
 | N4-Liu | --max_samples data-efficiency ablation | Liu et al. 2024, Sec. IV-B | 1 | **MERGED** — `training/dataset.py` |
 | N1-Duong | L L^T + εI Cholesky kernel | Duong et al. 2024, Sec. II-C | 3 | Folded into N2-Liu FrictionNet |
 | N3-Duong | 100-step frozen-backbone sim-to-real fine-tuning | Duong et al. 2024, Sec. IV-D | 4 | **MERGED** — `training/fine_tune.py` |
-| N1-SPEL | Revolute-joint sparsity mask → diagonal D | Wang et al. 2025, Sec. II-B | 3 | Folded into N2-Liu FrictionNet |
-| N1-WangCAC | Sobol sampling for excitation trajectories | Wang et al. 2024 | 1 | INVESTIGATE — needs data pipeline |
+| N1-SPEL | Revolute-joint sparsity mask → diagonal D | Wang et al. 2025, Sec. II-B | 3 | **CONFIRMED** via Pinocchio analysis — all 7 joints JointModelRZ, 80% param reduction, diagonal D physically justified |
+| N1-WangCAC | Sobol sampling for excitation trajectories | Wang et al. 2024 | 1 | **IMPLEMENTED** — `generate_fourier_dataset.py`, 10 Sobol segments per payload |
 | N1-E2NN | Structural sub-term embedding (inertia, Coriolis, gravity) | Deng et al. 2024, Sec. 3 | — | REJECT — 1-DoF only; manual per-robot derivation conflicts Goal 1 automation |
 | N2-E2NN | Liquid gating mechanism (recurrent state modulation) | Deng et al. 2024, Sec. 2.3 | — | REJECT — recurrent incompatible with 1 kHz loop; tanh/sigmoid forbidden |
 | N1-CMP | Eikonal PDE planner on constraint manifold | Ni & Qureshi 2024, Sec. III | — | REJECT — custom planner incompatible with MoveIt2 mandate (Stage 2) |
@@ -274,5 +302,5 @@ _To be written after experiments._
 | N1-AdaKineNet | Adaptive kinematic network with learnable loss weighting for IK | Fang et al. 2026 | — | REJECT — inverse kinematics problem; dynamics-independent |
 | N2-AdaKineNet | ReLU-based deep architecture on 10-DoF mobile manipulator | Fang et al. 2026 | — | REJECT — ReLU forbidden; mobile platform domain mismatch |
 | N1-WhenPhysics | Soft contact dynamics via LuGre friction ODE | Prabhakar et al. 2026 | — | REJECT — equivalent to τ_friction in constraints.py |
-| N2-WhenPhysics | EMA loss balancing (β=0.95) per residual magnitude for 87/12 Nm scale imbalance | Prabhakar et al. 2026 | 3 | INVESTIGATE — gated on first training run |
+| N2-WhenPhysics | EMA loss balancing (β=0.95) per residual magnitude for 87/12 Nm scale imbalance | Prabhakar et al. 2026 | 3 | INVESTIGATE — diagnostic live in `train.py`; Fourier ratio 1.0× (no imbalance); revisit after real robot data |
 | N3-WhenPhysics | Physics-aware trajectory sampling for sim-to-real | Prabhakar et al. 2026 | — | REJECT — duplicate of N3-Duong |
