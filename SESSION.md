@@ -3,7 +3,7 @@
      Do not edit by hand. CLAUDE.md imports it at every startup. -->
 
 ## Last updated
-2026-06-26 (multi-payload training run completed)
+2026-06-26 (Isaac Sim generator built; PAPER_DRAFT Section 4.1 planned experiments + Related Work completed)
 
 ## Papers processed
 | Status | File | Relevance | Novelties kept |
@@ -40,7 +40,7 @@
 | N1-Duong | Cholesky L L^T + eps*I algebraic kernel for parameterizing positive-definite dissipative matrices | INVESTIGATE — 28 lower-triangular entries, Softplus diagonal; considered and rejected in favor of diagonal D for N2-Liu (Franka serial-chain independent motors justify sparsity) | pending |
 | N2-Duong | (duplicate of N1-Duong in port-Hamiltonian formulation) | REJECT — no new content beyond N1-Duong | rejected |
 | N3-Duong | Sim-to-real fine-tuning via frozen-backbone learning: load GreyBoxNet checkpoint, freeze all but last 2 nn.Linear layers, fine-tune for --max_steps (default=100) under full PINN loss | KEEP — IMPLEMENTED on branch novelty/duong2024-N3-simtoreal-finetune, physics validator PASSED, MERGED to main (commit 0aa4fdc) | done |
-| N1-WangCAC | Sobol sampling (low-discrepancy sequences) for excitation trajectory generation to improve coverage | IMPLEMENTED — generate_fourier_dataset.py uses scipy.stats.qmc.Sobol to sample 10 q_center configurations (7-D joint space), generating 10 segments × 5000 samples per payload. Falls back to uniform if scipy unavailable. Dataset regenerated 2026-06-26. | done |
+| N1-WangCAC | Sobol sampling (low-discrepancy sequences) for excitation trajectory generation to improve coverage | IMPLEMENTED — `generate_isaac_dataset.py` (primary) and `generate_fourier_dataset.py` (smoke-test) both use scipy.stats.qmc.Sobol to sample 10 q_center configurations (7-D joint space), generating 10 segments × 5000 samples per payload. Falls back to uniform if scipy unavailable. | done |
 | N2-WangCAC | Trapezoidal collocation loss (residual on acceleration from finite differences) | REJECT — same RK4 vs RNEA grey-box conflict as N1-Liu | rejected |
 | N3-WangCAC | Extended Kalman Filter for state estimation under sensor latency | REJECT — latency > 1 ms incompatible with 1 kHz control rate | rejected |
 | N1-SPEL | Physics-driven sparsity mask on Cholesky friction matrix: structurally-zero entries for revolute joints in 7x7 symmetric matrix | CLOSED — Pinocchio analysis confirmed diagonal D correct (80% param reduction vs full Cholesky, all 7 joints are independent JointModelRZ). Validates existing N2-Liu FrictionNet design. No new implementation needed. | done |
