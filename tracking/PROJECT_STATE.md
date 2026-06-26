@@ -1,10 +1,10 @@
 # Project State — PINN Franka Pipeline
-_Last updated: 2026-06-26 (session 2, paper-review batch 2)_
+_Last updated: 2026-06-26 (multi-payload training validated, all novelty branches merged)_
 
 ## 1. Objectives (from goal.md)
 | # | Objective | Status | Evidence / where proven |
 |---|-----------|--------|-------------------------|
-| 1 | Automated "URDF-to-Model" Pipeline — accept any URDF, auto-extract kinematics via Pinocchio, generate network, produce trained dynamic model | in progress | `pinocchio_baseline/rnea_wrapper.py` (URDF -> RNEA); `network/grey_box_net.py` + `training/train.py` (architecture + training loop). N4 data-efficiency ablation flag (`--max_samples`) merged. Fourier dataset built (`generate_fourier_dataset.py`): 3 × ~50k samples, payloads 0/1/3 kg, real Pinocchio RNEA (cmeel example-robot-data), Sobol segments (N1-WangCAC). Training runs validated on CPU (val RMSE ≈ 0.22 Nm in 20 epochs). Multi-payload training not yet built. Full convergence needs GPU. Li et al. (2025) review confirms dual payload-awareness (RNEA white-box + tau_res delta input) is ahead of their published approach. |
+| 1 | Automated "URDF-to-Model" Pipeline — accept any URDF, auto-extract kinematics via Pinocchio, generate network, produce trained dynamic model | in progress | `pinocchio_baseline/rnea_wrapper.py` (URDF -> RNEA); `network/grey_box_net.py` + `training/train.py` (architecture + training loop). N4 data-efficiency ablation flag (`--max_samples`) merged. Fourier dataset built (`generate_fourier_dataset.py`): 3 × ~50k samples, payloads 0/1/3 kg, real Pinocchio RNEA (cmeel example-robot-data), Sobol segments (N1-WangCAC). **Multi-payload training DONE**: `MultiPayloadDataset` in `training/dataset.py` concatenates all 3 HDF5 files (147,734 samples); validated 2026-06-26 (val RMSE 0.228 Nm, dissip_viol=0, ratio 1.0×). Full convergence needs GPU. Li et al. (2025) review confirms dual payload-awareness (RNEA white-box + tau_res delta input) is ahead of their published approach. |
 | 2 | High-Frequency Real-Time Control at 1000 Hz (MPC integration, microsecond inference) | in progress | Stage 2: ROS2 Humble node on `stage2/moveit2-ros2-humble` publishes effort commands at 1000 Hz with MoveIt2 trajectory bridge. Stage 3: `ComputedTorquePDController.step()` on `stage3/computed-torque-pd-controller` is the 1 kHz torque computation kernel. Both scaffolded; wiring pending trained Stage 1 model. |
 | 3 | Scaling to 7-DoF — Augmented Lagrangian constraints + residual friction on a full Franka Panda | in progress | `training/constraints.py` implements AL penalties (torque limits + dissipativity) for all 7 joints. Stage 3 hard-clips to per-joint TORQUE_LIMITS. N2-Liu FrictionNet IMPLEMENTED (`network/friction_net.py`): structural dissipativity guarantee via Softplus-diagonal D matrix; hard guarantee `tau_friction · qdot <= 0` always; 6,087 params; physics PASSED. Hu et al. (2026) review passively validates that RNEA covers load-dependent terms and tau_res captures motion-state residuals. |
 | 4 | Standardized Sim-to-Real Gap resolution via physics-constrained fine-tuning | in progress | `training/fine_tune.py` on branch `novelty/duong2024-N3-simtoreal-finetune` — PASSED physics validation. Loads pre-trained GreyBoxNet, freezes all layers except last 2 nn.Linear modules, fine-tunes under full PINN loss (MSE + AL). First code implementation of Goal 4. Real data pipeline (HDF5) not yet built. |
@@ -17,7 +17,7 @@ Loss     = MSE(tau_pred, tau_real) + AugmentedLagrangian(torque_limits, dissipat
 FrictionNet is optional (--use_friction_net flag). When active, its structural guarantee absorbs part of the dissipativity constraint, so the AL lambda_dissip multiplier grows more slowly — intended and correct.
 
 ### Stage 1 — PINN dynamics learning
-Fully architected and pipeline validated. 5 training runs completed (CPU, 20 epochs). Fourier dataset operational. GPU needed for full convergence.
+Fully architected and pipeline validated. **6 training runs completed** (CPU, 20 epochs), including first multi-payload run (147,734 samples, 0/1/3 kg). Fourier dataset operational. GPU needed for full convergence.
 
 - White-box RNEA: `pinocchio_baseline/rnea_wrapper.py` — wraps `pinocchio.rnea`, handles payload injection into end-effector inertia, runs offline only.
 - Residual network: `network/grey_box_net.py` — MLP (default 4x256, Mish), input X in R^22 = [sin(q), cos(q), qdot, delta], output tau_res in R^7. ReLU forbidden.
@@ -25,7 +25,7 @@ Fully architected and pipeline validated. 5 training runs completed (CPU, 20 epo
 - Physics constraints: `training/constraints.py` — `AugmentedLagrangian` class; enforces |tau_pred| <= TORQUE_LIMITS and tau_res · qdot <= 0 (dissipativity) with dual-ascent multiplier updates.
 - Training loop: `training/train.py` — Adam optimizer, 90/10 train/val split, CSV logging, best-checkpoint save. Supports `--synthetic` (no Pinocchio needed) and real HDF5 datasets. Accepts `--max_samples N` (N4) and `--use_friction_net` (N2-Liu); when friction net active, logs D_diag mean per joint per epoch and saves `friction_net_best.pt` alongside `greybox_best.pt`.
 - Sim-to-real fine-tuning: `training/fine_tune.py` — loads pre-trained checkpoint, freezes all layers except last 2 nn.Linear modules (4th hidden layer + output layer), fine-tunes for `--max_steps` gradient steps (default=100) under full PINN loss. Saves `greybox_finetuned.pt`. (N3-Duong)
-- Dataset: `training/dataset.py` — `_random_subsample_indices()` helper; both `FrankaDynamicsDataset` and `SyntheticDataset` accept `max_samples` param (seed=42, before train/val split).
+- Dataset: `training/dataset.py` — `_random_subsample_indices()` helper; `FrankaDynamicsDataset` (single HDF5), `MultiPayloadDataset` (list of HDF5, concatenates tensors then subsamples combined pool), and `SyntheticDataset` all accept `max_samples` param (seed=42, before train/val split). `--data` CLI arg accepts one or more paths (multi-payload training validated 2026-06-26, 147,734 samples).
 - Constants: `network/constants.py` — single source of truth for joint limits, velocity limits, input/output dims, payload values, `FRICTION_NET_HIDDEN = 64`.
 
 Data pipeline: Fourier baseline BUILT (`generate_fourier_dataset.py`) — real Pinocchio RNEA, Sobol segments, 3 × ~50k samples (0/1/3 kg payloads). Isaac Sim integration not yet built.
@@ -57,12 +57,12 @@ Not started.
 | N2-Djeumou | Djeumou et al. (2022) | Augmented Lagrangian training with Lagrange multiplier dual-ascent for hard physics constraints. REJECT — already fully implemented in `constraints.py`. | Goal 3 | main | architecture match confirmed | n/a (pre-existing) |
 | N3-Djeumou | Djeumou et al. (2022) | Semi-supervised constraint enforcement on unlabeled joint-space points to extend dissipativity guarantees beyond training trajectories. INVESTIGATE — ablation study needed. | Goal 3, Goal 4 | not started | not validated | not merged |
 | N1-Liu | Liu et al. (2024) | RK4 rollout loss — augment the training loss with a 4th-order Runge-Kutta forward simulation residual. REJECT — conflicts with RNEA grey-box architecture; would destroy primary novelty. | — | rejected | — | — |
-| N2-Liu | Liu et al. (2024) | Cholesky dissipativity structural constraint — FrictionNet sub-module with Softplus-diagonal D matrix; tau_friction = -D_diag * qdot; hard structural guarantee tau_friction · qdot <= 0 always. Synthesises N2-Liu (Cholesky concept) + N1-Duong (L L^T algebraic kernel, diagonal case) + N1-SPEL (revolute-joint sparsity: diagonal D, not full 28-entry Cholesky). KEEP — IMPLEMENTED in `network/friction_net.py`; `--use_friction_net` flag in `training/train.py`; logs D_diag mean per joint; saves `friction_net_best.pt`. 6,087 parameters. Physics validator advisory: lambda_dissip grows more slowly when active (intended). | Goal 3 | `novelty/N2-Liu-frictionnet` | PASSED (physics validator) | awaiting human review |
-| N3-Liu | Liu et al. (2024) | Lyapunov stability template for Stage 3 controller — `Kd = safety_margin * error_bound`, `Kp = Kd^2/4` (critical damping), `DEFAULT_ERROR_BOUND = [5,5,5,5,2,2,2]` Nm placeholder. KEEP — implemented in `controller/lyapunov_gains.py`. DEFAULT_KP/DEFAULT_KD are placeholders; call `compute_lyapunov_gains(real_error_bound)` after Stage 1 training. | Goal 2 | `stage3/computed-torque-pd-controller` | PASSED (physics validator) | awaiting human review |
-| N4-Liu | Liu et al. (2024) | `--max_samples` data-efficiency ablation flag — truncate training data to N random samples (seed=42, before train/val split) to quantify how few samples are needed vs. Liu's 25k-sample benchmark. KEEP — implemented. | Goal 1 | `novelty/liu2024-N4-max-samples` | PASSED (physics validator, non-blocking advisories) | awaiting human review |
+| N2-Liu | Liu et al. (2024) | Cholesky dissipativity structural constraint — FrictionNet sub-module with Softplus-diagonal D matrix; tau_friction = -D_diag * qdot; hard structural guarantee tau_friction · qdot <= 0 always. Synthesises N2-Liu (Cholesky concept) + N1-Duong (L L^T algebraic kernel, diagonal case) + N1-SPEL (revolute-joint sparsity: diagonal D, not full 28-entry Cholesky). KEEP — IMPLEMENTED in `network/friction_net.py`; `--use_friction_net` flag in `training/train.py`; logs D_diag mean per joint; saves `friction_net_best.pt`. 6,087 parameters. Physics validator advisory: lambda_dissip grows more slowly when active (intended). | Goal 3 | `novelty/N2-Liu-frictionnet` | PASSED (physics validator) | **MERGED to main (commit ebc2ba3)** |
+| N3-Liu | Liu et al. (2024) | Lyapunov stability template for Stage 3 controller — `Kd = safety_margin * error_bound`, `Kp = Kd^2/4` (critical damping), `DEFAULT_ERROR_BOUND = [5,5,5,5,2,2,2]` Nm placeholder. KEEP — implemented in `controller/lyapunov_gains.py`. DEFAULT_KP/DEFAULT_KD are placeholders; call `compute_lyapunov_gains(real_error_bound)` after Stage 1 training. | Goal 2 | `stage3/computed-torque-pd-controller` | PASSED (physics validator) | **MERGED to main** |
+| N4-Liu | Liu et al. (2024) | `--max_samples` data-efficiency ablation flag — truncate training data to N random samples (seed=42, before train/val split) to quantify how few samples are needed vs. Liu's 25k-sample benchmark. KEEP — implemented. | Goal 1 | `novelty/liu2024-N4-max-samples` | PASSED (physics validator, non-blocking advisories) | **MERGED to main** |
 | N1-Duong | Duong et al. (2024) | Cholesky-factored inverse mass sub-network — L L^T + eps*I algebraic trick (28 lower-triangular entries for 7x7 matrix, Softplus on diagonal) guarantees positive-definiteness. INVESTIGATE — algebraic input to N2-Liu FrictionNet design (diagonal case used). Folds into N2-Liu; implemented there. | Goal 3 | folds into N2-Liu | folded into N2-Liu PASSED | not separate |
 | N2-Duong | Duong et al. (2024) | Separate dissipation sub-network. REJECT — duplicate of N1-Duong's algebraic core; no independent contribution beyond what N1-Duong and N2-Liu already capture. | — | rejected | — | — |
-| N3-Duong | Duong et al. (2024) | 100-step payload fine-tuning protocol — freeze all layers except last 2 nn.Linear modules (4th hidden layer + output layer), fine-tune for `--max_steps` steps (default 100, range 50–200) under full PINN loss (MSE + AL), lr=1e-4 to limit catastrophic forgetting. KEEP — IMPLEMENTED in `training/fine_tune.py`. First code realisation of Goal 4. | Goal 4 | `novelty/duong2024-N3-simtoreal-finetune` | PASSED (physics validator) | awaiting human review |
+| N3-Duong | Duong et al. (2024) | 100-step payload fine-tuning protocol — freeze all layers except last 2 nn.Linear modules (4th hidden layer + output layer), fine-tune for `--max_steps` steps (default 100, range 50–200) under full PINN loss (MSE + AL), lr=1e-4 to limit catastrophic forgetting. KEEP — IMPLEMENTED in `training/fine_tune.py`. First code realisation of Goal 4. | Goal 4 | `novelty/duong2024-N3-simtoreal-finetune` | PASSED (physics validator) | **MERGED to main (commit 0aa4fdc)** |
 | N1-WangCAC | Wang et al. (CAC 2024) | Sobol quasi-random data sampling — 10 Sobol-sampled q_center configurations per payload in `generate_fourier_dataset.py`; scipy.stats.qmc.Sobol, 7-D joint space, scrambled, per-payload seed. IMPLEMENTED — validated 2026-06-26. | Goal 1 | main | confirmed working | merged (in generate_fourier_dataset.py) |
 | N2-WangCAC | Wang et al. (CAC 2024) | Trapezoidal physics residual in PINN loss — time-discretised integration of dynamics residual at 20 Hz. REJECT — conflicts with RNEA offline-qddot path (same fundamental problem as N1-Liu); 20 Hz discretisation incompatible with 1 kHz target. | — | rejected | — | — |
 | N3-WangCAC | Wang et al. (CAC 2024) | EKF noise filter at PINN-NMPC interface — Extended Kalman Filter to denoise joint state estimates before feeding the PINN. REJECT — matrix inversion per control step is incompatible with sub-ms 1 kHz loop latency requirement. | — | rejected | — | — |
@@ -204,25 +204,31 @@ pinn_franka/
 ```
 
 ## 5. Open items / next steps
-- Human review and merge of `novelty/N2-Liu-frictionnet` into main (FrictionNet structural dissipativity guarantee, physics PASSED). Test command: `python -m training.train --synthetic --epochs 5 --use_friction_net`
-- Human review and merge of `novelty/duong2024-N3-simtoreal-finetune` into main (Goal 4 fine-tuning, physics PASSED).
-- Human review and merge of `novelty/liu2024-N4-max-samples` into main.
-- Human review and merge of `stage3/computed-torque-pd-controller` into main.
-- Human review and merge of `stage2/moveit2-ros2-humble` into main (merge Stage 3 first — Stage 2 depends on it via `TODO(stage3)` hook).
-- After Stage 3 merge: resolve `TODO(stage3)` markers in `pinn_controller_node.py` (`_compute_torques()` and `_try_load_controller()`) to wire in `ComputedTorquePDController`.
-- After Stage 1 first training run: recompute Lyapunov gains via `controller/lyapunov_gains.py::compute_lyapunov_gains(real_error_bound)` using real validation error statistics; replace `DEFAULT_ERROR_BOUND` placeholder.
-- **3 papers remain in papers/inbox/:** s11433-025-2810-1, s41598-026-50630-y_reference, ssrn-6550385. Process next session via `/process-papers`.
-- **Multi-payload training:** adapt `training/dataset.py` to concatenate all 3 HDF5 files — train on payloads 0/1/3 kg simultaneously to prove payload-conditioned generalisation (Goal 1).
-- **GPU + full convergence:** run `python3 -m training.train --data data/fourier_baseline_0kg.h5 --epochs 200 --use_friction_net` for a properly converged model; extract per-joint RMSE for Lyapunov gain update.
-- **Lyapunov gains:** update `DEFAULT_ERROR_BOUND` in `controller/lyapunov_gains.py` from real per-joint RMSE after convergence run.
-- **Inference latency benchmark:** add a timing script to prove microsecond inference at 1000 Hz (needed for Goal 2 claim).
-- N3-Djeumou (semi-supervised dissipativity): design and run ablation study; needs real motor-babbling dataset.
-- N2-WhenPhysics: re-run diagnostic after real robot recordings — real per-joint friction differences may trigger EMA balancing.
-- Build real motor-babbling HDF5 dataset to enable `training/fine_tune.py` (command: `python -m training.fine_tune --checkpoint models/run_XXXX/greybox_best.pt --real_data data/real_motor_babbling.h5 --max_steps 100`).
-- Build Isaac Sim integration for higher-fidelity pre-training data.
-- Address physics-validator advisory 1: evaluate per-sample vs. batch-mean dissipativity multiplier enforcement.
-- Address physics-validator advisory 2: document under-sampling risk for max_samples < 2000 in ablation study methodology.
-- Address physics-validator advisory 4 (N3-Duong): document freeze-logic assumption (last 2 nn.Linear via `named_modules()`) if architecture gains skip-connection Linear layers outside `self.net`.
-- Address physics-validator advisory 5 (N2-Liu): document slower lambda_dissip growth when `--use_friction_net` active; include in ablation comparison.
-- Address physics-validator advisory 6 (Prabhakar 2026 negative result): scope project claims to in-distribution trajectory following; do not claim temporal extrapolation without empirical evidence.
-- **Write-up note (dual payload-awareness):** document in paper/report that `_inject_payload()` in `rnea_wrapper.py` + delta conditioning of tau_res constitutes dual payload-awareness, predating and exceeding Li et al. (2025)'s single-pathway approach.
+
+### Done since last update (2026-06-26)
+- [x] All novelty branches merged to main (N2-Liu, N3-Liu, N4-Liu, N3-Duong, N1-WangCAC, N1-SPEL)
+- [x] Multi-payload training implemented (`MultiPayloadDataset`) and validated (147,734 samples, val RMSE 0.228 Nm, dissip_viol=0)
+- [x] `requirements.txt` added for GPU Ubuntu setup
+- [x] `tracking/experiments_log.csv` created (6 runs logged)
+
+### Blocked on GPU
+- **GPU + full convergence:** `python3 -m training.train --data data/fourier_baseline_0kg.h5 data/fourier_baseline_1kg.h5 data/fourier_baseline_3kg.h5 --epochs 200 --use_friction_net` — needs GPU for proper convergence.
+- **Lyapunov gains:** after convergence, call `compute_lyapunov_gains(real_error_bound)` using per-joint RMSE from training output; replace `DEFAULT_ERROR_BOUND = [5,5,5,5,2,2,2]` Nm placeholder in `controller/lyapunov_gains.py`.
+
+### Blocked on real robot data
+- Build real motor-babbling HDF5 dataset to enable `training/fine_tune.py` (Goal 4): `python -m training.fine_tune --checkpoint models/run_XXXX/greybox_best.pt --real_data data/real_motor_babbling.h5 --max_steps 100`
+- N3-Djeumou (semi-supervised dissipativity): design and run ablation study.
+- N2-WhenPhysics: re-run diagnostic on real data — real per-joint friction differences may trigger EMA balancing (ratio 1.0× on synthetic, may differ on hardware).
+
+### Stage wiring (pending Stage 1 convergence)
+- Resolve `TODO(stage3)` markers in `pinn_controller_node.py` (`_compute_torques()` and `_try_load_controller()`) to wire in `ComputedTorquePDController` after Stage 1 model is converged.
+- **Inference latency benchmark:** add a timing script to confirm sub-1 ms per forward pass (required to substantiate Goal 2 claim at 1000 Hz).
+
+### Paper / write-up
+- **Dual payload-awareness competitive advantage:** document in paper that `_inject_payload()` in `rnea_wrapper.py` + delta conditioning of tau_res predates and exceeds Li et al. (2025)'s single-pathway approach.
+- **Scope physics claims to in-distribution trajectories:** following Prabhakar et al. (ICLR 2026) negative result — do not claim temporal extrapolation without empirical evidence.
+- **Physics-validator advisories to address in paper methodology section:** (1) per-sample vs. batch-mean dissipativity multiplier; (2) under-sampling risk for max_samples < 2000; (3) slower lambda_dissip growth with FrictionNet (intended — document in ablation).
+
+### Future (optional)
+- Isaac Sim integration for higher-fidelity pre-training data.
+- 3 papers not yet obtained: s11433-025-2810-1, s41598-026-50630-y_reference, ssrn-6550385.
