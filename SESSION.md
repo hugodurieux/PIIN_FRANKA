@@ -3,7 +3,7 @@
      Do not edit by hand. CLAUDE.md imports it at every startup. -->
 
 ## Last updated
-2026-06-25 (late evening)
+2026-06-26
 
 ## Papers processed
 | Status | File | Relevance | Novelties kept |
@@ -57,15 +57,16 @@
 ## Experiments logged
 | Run ID | Date | Val loss | Notes |
 |--------|------|----------|-------|
-| N/A | N/A | N/A | No training runs executed yet; Stage 1 pipeline ready, awaiting GPU access |
+| smoke-baseline | 2026-06-26 | 44.10 (mse 0.87) | `--synthetic --epochs 5`, no FrictionNet. MSE 3.41→0.87, dissip_viol=0. Saved: models/run_20260626_104119/ |
+| smoke-frictionnet | 2026-06-26 | 44.01 (mse 0.83) | `--synthetic --epochs 5 --use_friction_net`. D_diag converged to ~1.0-1.3 (joint 1 highest, physically plausible). dissip_viol=0. Saved: models/run_20260626_104318/ |
 
 ## Current milestone
-Stage 1 (PINN) — 15 papers processed across 3 sessions (Batch 1: 6 papers; Batch 2: 5 papers; Batch 3: 4 papers from today + duplicate). All N2-Liu (FrictionNet), N3-Liu (Lyapunov gains), N4-Liu (max_samples), and N3-Duong (sim-to-real fine-tuning) IMPLEMENTED and MERGED to main. papers_review.csv reformatted today with concise 2-3-sentence summaries and consistent quoting. /process-papers command updated to enforce "MAIN_CONTRIBUTOR et al. (YEAR) TITLE.md" naming convention on archive and skip duplicates by first-author + year. papers/inbox/ now empty. Awaiting GPU access for Stage 1 training runs.
+Stage 1 (PINN) — pipeline fully operational. 15 papers processed. All KEEP novelties (N2-Liu FrictionNet, N3-Liu Lyapunov gains, N4-Liu max_samples, N3-Duong sim-to-real fine-tuning) implemented and merged to main. Smoke tests passed on 2026-06-26: baseline and FrictionNet both train correctly on synthetic data in WSL (Ubuntu 24.04). Pinocchio 4.0.0 confirmed working. Awaiting GPU access and real dataset for full training run.
 
 ## Open questions / blockers
-- **GPU access blocker:** Stage 1 training cannot execute without GPU. Waiting for GPU allocation.
-- **Pinocchio install on Windows (persisting):** Attempted `conda install -c conda-forge pinocchio` — conda solver hung indefinitely. Attempted `pip install pin` — no Windows wheel available. **FIX PATH: Install Pinocchio via Windows Subsystem for Linux (WSL)** — open Ubuntu terminal in WSL, run `sudo apt install python3-pinocchio`, then test with `python -m pinocchio_baseline.friction_sparsity_analysis` from project root. If WSL unavailable, build from source on Windows with C++ compiler (MSVC, CMake, vcpkg).
-- **N2-WhenPhysics diagnostic:** After first synthetic training run, inspect per-joint val MSE comparing joints 5-7 (12 Nm limit) vs. joints 1-4 (87 Nm limit). If outer joints show elevated error relative to torque budget, implement EMA loss balancing (beta=0.95) in training/train.py to reweight gradients by 1/residual_RMS.
+- **GPU access blocker:** Stage 1 training cannot execute at scale without GPU. Waiting for GPU allocation.
+- **Pinocchio — RESOLVED:** Installed via `pip3 install pin --break-system-packages` in WSL Ubuntu 24.04. Version 4.0.0. Run all training commands from WSL: `cd "/mnt/c/Users/Hugo Durieux/Desktop/Stage 3A/LESTAGE/pinn_franka" && python3 -m training.train ...`
+- **N2-WhenPhysics diagnostic:** Smoke tests do not expose per-joint val MSE. After first real training run, inspect per-joint val MSE comparing joints 5-7 (12 Nm limit) vs. joints 1-4 (87 Nm limit). If outer joints show elevated error relative to torque budget, implement EMA loss balancing (beta=0.95) in training/train.py.
 - N3-Djeumou (semi-supervised dissipativity): awaits first real motor-babbling HDF5 dataset to design and run ablation.
 - N1-WangCAC (Sobol sampling): consider for the data pipeline when Isaac Sim HDF5 pipeline is built.
 - Data pipeline: Isaac Sim excitation trajectories → HDF5 (q, qdot, qddot, delta, tau_real) not yet built; Fourier trajectory baseline available as fallback. Real motor-babbling dataset needed to run `training/fine_tune.py`.
@@ -73,6 +74,7 @@ Stage 1 (PINN) — 15 papers processed across 3 sessions (Batch 1: 6 papers; Bat
 - **papers/inbox/ workflow improved:** /process-papers now renames archived papers to "MAIN_CONTRIBUTOR et al. (YEAR) TITLE.md" format and skips duplicates by checking if (first_author, year) already exists in papers_review.csv. Reduces manual file cleanup.
 
 ## What to do next session
-1. Install Pinocchio via WSL: open Ubuntu terminal in WSL, run `sudo apt install python3-pinocchio`. Test with `python -m pinocchio_baseline.friction_sparsity_analysis` to confirm setup.
-2. Run smoke tests once Pinocchio works: `python -m training.train --synthetic --epochs 5` (baseline), then `python -m training.train --synthetic --epochs 5 --use_friction_net` (with FrictionNet).
-3. When GPU available: run real Stage 1 training on real dataset (q, qdot, qddot, delta, tau_real), extract per-joint validation RMSE, then call `compute_lyapunov_gains(real_error_bound)`, update DEFAULT_ERROR_BOUND in Stage 3 controller, run N2-WhenPhysics diagnostic (inspect outer-joint error scaling).
+1. **GPU + real dataset:** run full Stage 1 training on real dataset (q, qdot, qddot, delta, tau_real) from WSL. Extract per-joint validation RMSE.
+2. **Lyapunov gains:** call `compute_lyapunov_gains(real_error_bound)` with real RMSE values, update DEFAULT_ERROR_BOUND in Stage 3 controller (currently placeholder [5,5,5,5,2,2,2] Nm).
+3. **N2-WhenPhysics diagnostic:** inspect outer-joint (5-7, 12 Nm) vs inner-joint (1-4, 87 Nm) val MSE after real training run. If imbalanced, implement EMA loss balancing (beta=0.95) in training/train.py.
+4. **Data pipeline:** build Isaac Sim excitation trajectory → HDF5 pipeline. Consider Sobol sampling (N1-WangCAC) at this stage.
