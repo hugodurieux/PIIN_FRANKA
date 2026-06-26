@@ -1,5 +1,5 @@
 # Project State — PINN Franka Pipeline
-_Last updated: 2026-06-26 (multi-payload training validated, all novelty branches merged)_
+_Last updated: 2026-06-26 (Isaac Sim generator built, PAPER_DRAFT Section 4.1 + Related Work completed)_
 
 ## 1. Objectives (from goal.md)
 | # | Objective | Status | Evidence / where proven |
@@ -232,5 +232,5 @@ pinn_franka/
 - **Physics-validator advisories to address in paper methodology section:** (1) per-sample vs. batch-mean dissipativity multiplier; (2) under-sampling risk for max_samples < 2000; (3) slower lambda_dissip growth with FrictionNet (intended — document in ablation).
 
 ### Future (optional)
-- Isaac Sim integration for higher-fidelity pre-training data.
 - 3 papers not yet obtained: s11433-025-2810-1, s41598-026-50630-y_reference, ssrn-6550385.
+- Real motor-babbling HDF5 recording (needed for N3-Duong fine-tuning and N3-Djeumou ablation).
