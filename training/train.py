@@ -9,11 +9,14 @@ Run a smoke test on synthetic data (no pinocchio / no real data needed):
 Run with FrictionNet (novelty N2, Liu et al. 2024):
     python -m training.train --synthetic --epochs 5 --use_friction_net
 
-Run on a real HDF5 dataset:
-    python -m training.train --data data/dataset_1kg_xxx.h5 --epochs 200
+Run on a single HDF5 dataset:
+    python -m training.train --data data/fourier_baseline_0kg.h5 --epochs 200
+
+Multi-payload training (0 kg + 1 kg + 3 kg concatenated):
+    python -m training.train --data data/fourier_baseline_0kg.h5 data/fourier_baseline_1kg.h5 data/fourier_baseline_3kg.h5 --epochs 200
 
 Data-efficiency ablation (novelty N4 from Liu et al. 2024):
-    python -m training.train --data data/dataset.h5 --max_samples 5000 --epochs 200
+    python -m training.train --data data/fourier_baseline_0kg.h5 --max_samples 5000 --epochs 200
     Truncates the dataset to N random samples (seed=42) before splitting
     into train/val, enabling direct comparison against Liu et al.'s
     25 000-sample benchmark.
@@ -32,12 +35,13 @@ from torch.utils.data import DataLoader
 from network.grey_box_net import GreyBoxNet
 from network.friction_net import FrictionNet
 from training.constraints import AugmentedLagrangian
-from training.dataset import SyntheticDataset, FrankaDynamicsDataset
+from training.dataset import SyntheticDataset, FrankaDynamicsDataset, MultiPayloadDataset
 
 
 def build_loaders(args):
     """Build train and validation DataLoaders.
 
+    Supports single-file and multi-file (multi-payload) HDF5 datasets.
     When ``args.max_samples`` is set (novelty N4), the dataset is truncated
     to that many samples *before* the 90/10 train/val split, so both
     partitions see only the reduced data budget.
@@ -46,8 +50,10 @@ def build_loaders(args):
 
     if args.synthetic or not args.data:
         full = SyntheticDataset(n=args.synthetic_n, max_samples=max_samples)
+    elif len(args.data) > 1:
+        full = MultiPayloadDataset(args.data, max_samples=max_samples)
     else:
-        full = FrankaDynamicsDataset(args.data, max_samples=max_samples)
+        full = FrankaDynamicsDataset(args.data[0], max_samples=max_samples)
 
     if max_samples is not None:
         print(f"[N4] Dataset truncated to {len(full)} samples "
@@ -90,7 +96,9 @@ def step_loss(net, al, batch, device, friction_net=None):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--data", type=str, default="")
+    p.add_argument("--data", type=str, nargs="+", default=[],
+                   help="One or more HDF5 dataset files. Multiple files are "
+                        "concatenated (multi-payload training).")
     p.add_argument("--synthetic", action="store_true")
     p.add_argument("--synthetic_n", type=int, default=4096)
     p.add_argument("--max_samples", type=int, default=None,

@@ -7,6 +7,11 @@ Each file holds: q, qdot, qddot, tau_real, tau_theo, tau_res, delta.
 A synthetic generator is included so the training pipeline can be smoke-tested
 end-to-end BEFORE any real data exists.
 
+Multi-payload training: use ``MultiPayloadDataset`` to concatenate several HDF5
+files (e.g. 0 kg, 1 kg, 3 kg) into a single dataset before splitting into
+train/val. Subsampling (novelty N4) is applied on the combined pool so the
+ablation budget is shared proportionally across payloads.
+
 Novelty N4-Liu (goal.md Objective 1 -- Automated URDF-to-Model Pipeline,
 data-efficiency sub-claim):
 
@@ -23,7 +28,7 @@ data-efficiency sub-claim):
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional
 
 import numpy as np
 import torch
@@ -94,6 +99,76 @@ class FrankaDynamicsDataset(Dataset):
             tau_real = tau_real[idx]
             tau_theo = tau_theo[idx]
             delta = delta[idx]
+
+        self.q = torch.tensor(q, dtype=torch.float32)
+        self.qdot = torch.tensor(qdot, dtype=torch.float32)
+        self.tau_real = torch.tensor(tau_real, dtype=torch.float32)
+        self.tau_theo = torch.tensor(tau_theo, dtype=torch.float32)
+        self.delta = torch.tensor(delta, dtype=torch.float32).reshape(-1, 1)
+
+    def __len__(self) -> int:
+        return self.q.shape[0]
+
+    def __getitem__(self, i: int) -> dict:
+        return {
+            "q": self.q[i],
+            "qdot": self.qdot[i],
+            "delta": self.delta[i],
+            "tau_real": self.tau_real[i],
+            "tau_theo": self.tau_theo[i],
+        }
+
+
+class MultiPayloadDataset(Dataset):
+    """Concatenates multiple HDF5 payload files into a single dataset.
+
+    Each file typically corresponds to one payload condition (0 kg, 1 kg, 3 kg).
+    All files are loaded individually, their tensors are concatenated along the
+    sample axis, and then ``max_samples`` subsampling (novelty N4) is applied on
+    the combined pool — so the ablation budget is shared across all payloads.
+
+    Args:
+        h5_paths:    List of paths to HDF5 dataset files.
+        max_samples: If not None, randomly subsample the combined dataset to at
+                     most this many entries (reproducible, seed=42).
+    """
+
+    def __init__(self, h5_paths: List[str], max_samples: Optional[int] = None):
+        if not _HAS_H5PY:
+            raise ImportError("h5py required. Install with: pip install h5py")
+        if not h5_paths:
+            raise ValueError("h5_paths must contain at least one file path.")
+
+        qs, qdots, tau_reals, tau_theos, deltas = [], [], [], [], []
+
+        for path in h5_paths:
+            with h5py.File(path, "r") as f:
+                qs.append(f["q"][:])
+                qdots.append(f["qdot"][:])
+                tau_reals.append(f["tau_real"][:])
+                tau_theos.append(f["tau_theo"][:])
+                deltas.append(f["delta"][:])
+            n = qs[-1].shape[0]
+            print(f"[MultiPayload] Loaded {n:>7,} samples from {path}")
+
+        q = np.concatenate(qs, axis=0)
+        qdot = np.concatenate(qdots, axis=0)
+        tau_real = np.concatenate(tau_reals, axis=0)
+        tau_theo = np.concatenate(tau_theos, axis=0)
+        delta = np.concatenate(deltas, axis=0)
+
+        print(f"[MultiPayload] Combined: {q.shape[0]:,} samples from {len(h5_paths)} files")
+
+        # --- Subsample on the combined pool (novelty N4) ---
+        n_total = q.shape[0]
+        if max_samples is not None and max_samples > 0:
+            idx = _random_subsample_indices(n_total, max_samples)
+            q = q[idx]
+            qdot = qdot[idx]
+            tau_real = tau_real[idx]
+            tau_theo = tau_theo[idx]
+            delta = delta[idx]
+            print(f"[MultiPayload] Subsampled to {q.shape[0]:,} samples (max_samples={max_samples})")
 
         self.q = torch.tensor(q, dtype=torch.float32)
         self.qdot = torch.tensor(qdot, dtype=torch.float32)
