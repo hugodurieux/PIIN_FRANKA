@@ -63,6 +63,8 @@ FREQ_HZ     = 1000      # Sampling rate [Hz]
 N_SAMPLES   = 50_000    # Timesteps per payload (50 s).  Set to 600_000 for the
                         # full 10-min recording; 50k keeps memory under ~120 MB.
 N_HARMONICS = 5         # Fourier harmonics per joint (k = 1 … N_HARMONICS)
+N_SEGMENTS  = 10        # [N1-WangCAC] Sobol segments per payload
+N_SAMPLES_PER_SEG = N_SAMPLES // N_SEGMENTS  # 5 000 samples per segment
 FREQ_MIN    = 0.1       # Minimum harmonic frequency [Hz]
 FREQ_MAX    = 2.0       # Maximum harmonic frequency [Hz]
 VEL_SAFETY  = 0.80      # Target: peak |qdot| <= VEL_SAFETY * VEL_LIMITS
@@ -99,7 +101,25 @@ def load_model():
     """
     import pinocchio as pin
 
-    # --- attempt 1: example_robot_data ---
+    # --- attempt 1: cmeel-installed example-robot-data URDF (pip install example_robot_data) ---
+    import glob, site
+    _cmeel_candidates = []
+    for sp in site.getsitepackages() + [site.getusersitepackages()]:
+        _cmeel_candidates += glob.glob(
+            os.path.join(sp, "cmeel.prefix", "share", "example-robot-data",
+                         "robots", "panda_description", "urdf", "panda.urdf")
+        )
+    if _cmeel_candidates:
+        _erd_urdf = _cmeel_candidates[0]
+        model = pin.buildModelFromUrdf(_erd_urdf)
+        pinocchio_data = model.createData()
+        total_mass = sum(model.inertias[i].mass for i in range(1, model.njoints))
+        has_inertials = total_mass > 1.0
+        print(f"[model] cmeel example-robot-data: nq={model.nq}, nv={model.nv}, "
+              f"total_mass={total_mass:.3f} kg, has_inertials={has_inertials}")
+        return model, pinocchio_data, model.nq, has_inertials
+
+    # --- attempt 2: example_robot_data Python API (alternative install) ---
     try:
         import example_robot_data as erd
         robot = erd.load("panda")
@@ -111,7 +131,7 @@ def load_model():
               f"total_mass={total_mass:.3f} kg, has_inertials={has_inertials}")
         return model, pinocchio_data, model.nq, has_inertials
     except Exception as exc:
-        print(f"[model] example_robot_data not available ({exc}); "
+        print(f"[model] example_robot_data API not available ({exc}); "
               f"falling back to local panda.urdf")
 
     # --- attempt 2: local URDF ---
@@ -168,12 +188,37 @@ def get_ee_joint_id(model):
 # Fourier trajectory
 # ---------------------------------------------------------------------------
 
-def sample_fourier_params(rng):
+def sobol_q_centers(n_segments, seed):
     """
-    Draw random Fourier parameters for all 7 joints.
+    [N1-WangCAC] Sample n_segments joint-space centres using Sobol low-discrepancy
+    sequences (scipy.stats.qmc.Sobol). Falls back to uniform random if scipy is
+    unavailable. Sobol fills the 7-D joint space more evenly than pseudo-random,
+    ensuring trajectory segments visit diverse regions of configuration space.
+    """
+    try:
+        import math
+        from scipy.stats.qmc import Sobol
+        n_pow2 = 2 ** math.ceil(math.log2(max(n_segments, 2)))
+        sampler = Sobol(d=N_JOINTS, scramble=True, seed=seed)
+        unit = sampler.random(n_pow2)[:n_segments]          # (n_segments, 7) in [0,1]
+        centers = Q_LOWER + unit * (Q_UPPER - Q_LOWER)
+        print(f"  [N1-WangCAC] Sobol q_centers: {n_segments} segments "
+              f"(scipy.stats.qmc.Sobol, seed={seed})")
+        return centers
+    except ImportError:
+        print("  [N1-WangCAC] scipy not found — falling back to uniform q_centers")
+        rng_s = np.random.default_rng(seed)
+        unit  = rng_s.uniform(0, 1, size=(n_segments, N_JOINTS))
+        return Q_LOWER + unit * (Q_UPPER - Q_LOWER)
+
+
+def sample_fourier_params(rng, q_center):
+    """
+    Draw random Fourier parameters for a trajectory centred at q_center.
 
     Amplitude bounds (conservative, per-harmonic):
       Position: |A_k| <= POS_SAFETY * half_range[j] / N_HARMONICS
+                where half_range[j] = min(q_center[j]-Q_LOWER[j], Q_UPPER[j]-q_center[j])
       Velocity: |A_k * omega_k| <= VEL_SAFETY * VEL_LIMITS[j] / N_HARMONICS
                 => |A_k| <= VEL_SAFETY * VEL_LIMITS[j] / (N_HARMONICS * omega_k)
 
@@ -181,13 +226,11 @@ def sample_fourier_params(rng):
 
     Returns
     -------
-    q_center    (7,)                  — trajectory center [rad]
     amplitudes  (7, N_HARMONICS)      — per-harmonic amplitude [rad]
     frequencies (7, N_HARMONICS)      — per-harmonic frequency [Hz]
     phases      (7, N_HARMONICS)      — per-harmonic phase [rad]
     """
-    q_center   = (Q_LOWER + Q_UPPER) / 2.0
-    half_range = (Q_UPPER - Q_LOWER) / 2.0
+    half_range = np.minimum(q_center - Q_LOWER, Q_UPPER - q_center)
 
     frequencies = rng.uniform(FREQ_MIN, FREQ_MAX, size=(N_JOINTS, N_HARMONICS))
     phases      = rng.uniform(0.0, 2.0 * np.pi, size=(N_JOINTS, N_HARMONICS))
@@ -200,7 +243,7 @@ def sample_fourier_params(rng):
             vel_amp = VEL_SAFETY * VEL_LIMITS[j] / (N_HARMONICS * omega_k)
             amplitudes[j, k] = min(pos_amp, vel_amp)
 
-    return q_center, amplitudes, frequencies, phases
+    return amplitudes, frequencies, phases
 
 
 def fourier_trajectory(t, q_center, amplitudes, frequencies, phases):
@@ -322,7 +365,7 @@ def compute_tau_theo_batch(model, pinocchio_data, q, qdot, qddot, model_nq):
 # ---------------------------------------------------------------------------
 
 def generate_and_save(payload_kg, model, pinocchio_data, model_nq,
-                      has_inertials, rng, t):
+                      has_inertials, rng):
     """
     Generate one dataset file for a given payload mass and save it to DATA_DIR.
 
@@ -351,23 +394,36 @@ def generate_and_save(payload_kg, model, pinocchio_data, model_nq,
     print(f"  Payload injection: joint {ee_jid}, "
           f"mass {base_ee_mass:.3f} → {model.inertias[ee_jid].mass:.3f} kg")
 
-    # 2 ── Fourier trajectory ─────────────────────────────────────────────────
-    q_center, amplitudes, frequencies, phases = sample_fourier_params(rng)
-    q, qdot, qddot = fourier_trajectory(t, q_center, amplitudes, frequencies, phases)
+    # 2 ── [N1-WangCAC] Sobol segments ───────────────────────────────────────
+    q_centers = sobol_q_centers(N_SEGMENTS, seed=RANDOM_SEED + int(payload_kg * 10))
+    t_seg     = np.arange(N_SAMPLES_PER_SEG, dtype=np.float64) / FREQ_HZ
+    seg_q, seg_qdot, seg_qddot = [], [], []
+    for seg_idx, q_ctr in enumerate(q_centers):
+        amp, freq, phase = sample_fourier_params(rng, q_ctr)
+        qs, qds, qdds   = fourier_trajectory(t_seg, q_ctr, amp, freq, phase)
+        seg_q.append(qs); seg_qdot.append(qds); seg_qddot.append(qdds)
+    q     = np.concatenate(seg_q,     axis=0)
+    qdot  = np.concatenate(seg_qdot,  axis=0)
+    qddot = np.concatenate(seg_qddot, axis=0)
+    t_global = np.concatenate([
+        t_seg + seg_idx * (N_SAMPLES_PER_SEG / FREQ_HZ)
+        for seg_idx in range(N_SEGMENTS)
+    ])
 
     # 3 ── Trajectory validation ───────────────────────────────────────────────
     print("\n  Trajectory validation (before torque filtering):")
     validate_trajectory(q, qdot, qddot)
 
     # 4 ── RNEA ───────────────────────────────────────────────────────────────
-    print(f"\n  Running RNEA on {len(t)} samples (nq={model_nq}) ...")
+    print(f"\n  Running RNEA on {q.shape[0]} samples "
+          f"({N_SEGMENTS} segments × {N_SAMPLES_PER_SEG}, nq={model_nq}) ...")
     t_start = time.perf_counter()
     tau_theo, keep_mask = compute_tau_theo_batch(
         model, pinocchio_data, q, qdot, qddot, model_nq
     )
     elapsed = time.perf_counter() - t_start
     print(f"  RNEA completed in {elapsed:.2f} s "
-          f"({len(t) / elapsed:.0f} samples/s)")
+          f"({q.shape[0] / elapsed:.0f} samples/s)")
 
     # 5 ── Restore payload ─────────────────────────────────────────────────────
     model.inertias[ee_jid].mass = base_ee_mass
@@ -377,7 +433,7 @@ def generate_and_save(payload_kg, model, pinocchio_data, model_nq,
     qdot     = qdot[keep_mask]
     qddot    = qddot[keep_mask]
     tau_theo = tau_theo[keep_mask]
-    t_kept   = t[keep_mask]
+    t_kept   = t_global[keep_mask]
     N        = q.shape[0]
 
     # 7 ── Synthetic residual ──────────────────────────────────────────────────
@@ -489,7 +545,7 @@ def main():
     print(f"  URDF path    : {URDF_PATH}")
     print(f"  Output dir   : {DATA_DIR}")
     print(f"  Random seed  : {RANDOM_SEED}")
-    print(f"  Samples/file : {N_SAMPLES}  ({N_SAMPLES / FREQ_HZ:.0f} s at {FREQ_HZ} Hz)")
+    print(f"  Samples/file : {N_SAMPLES}  ({N_SEGMENTS} segments × {N_SAMPLES_PER_SEG} samples)")
     print(f"  Payloads     : {PAYLOADS} kg")
     print(f"  Harmonics    : {N_HARMONICS}  freq=[{FREQ_MIN}, {FREQ_MAX}] Hz")
     print(f"  Vel safety   : {VEL_SAFETY*100:.0f}%  Pos safety: {POS_SAFETY*100:.0f}%")
@@ -524,9 +580,6 @@ def main():
     # Load model (once, reused for all payloads)
     model, pinocchio_data, model_nq, has_inertials = load_model()
 
-    # Shared time axis [0, 1/FREQ_HZ, …, (N_SAMPLES-1)/FREQ_HZ] seconds
-    t = np.arange(N_SAMPLES, dtype=np.float64) / FREQ_HZ
-
     # Single RNG shared across payloads: each payload draws different Fourier
     # parameters from successive draws, so all three trajectories differ.
     rng = np.random.default_rng(seed=RANDOM_SEED)
@@ -534,7 +587,7 @@ def main():
     saved_files = []
     for payload_kg in PAYLOADS:
         path = generate_and_save(
-            payload_kg, model, pinocchio_data, model_nq, has_inertials, rng, t
+            payload_kg, model, pinocchio_data, model_nq, has_inertials, rng
         )
         saved_files.append((path, payload_kg))
 

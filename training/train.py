@@ -195,8 +195,37 @@ def main():
                     os.path.join(run_dir, "friction_net_best.pt"),
                 )
 
+    # [N2-WhenPhysics] Per-joint val RMSE diagnostic
+    # Detects 87 Nm vs 12 Nm torque-scale imbalance across joints.
+    net.eval()
+    if friction_net is not None:
+        friction_net.eval()
+    per_joint_se = torch.zeros(7)
+    n_diag = 0
+    with torch.no_grad():
+        for batch in val_loader:
+            _, _, tau_pred, _, _ = step_loss(
+                net, al, batch, device, friction_net=friction_net
+            )
+            tau_real_b = batch["tau_real"].to(device)
+            per_joint_se += (tau_pred - tau_real_b).pow(2).sum(dim=0).cpu()
+            n_diag += tau_pred.shape[0]
+    per_joint_rmse = (per_joint_se / n_diag).sqrt()
+    rmse_str = ", ".join(f"{v:.4f}" for v in per_joint_rmse.tolist())
+    inner = per_joint_rmse[:4].mean().item()
+    outer = per_joint_rmse[4:].mean().item()
+    print(f"\n[N2-WhenPhysics] Per-joint val RMSE (Nm): [{rmse_str}]")
+    print(f"  Joints 1-4 (87 Nm): {inner:.4f} Nm  |  Joints 5-7 (12 Nm): {outer:.4f} Nm")
+    ratio = outer / inner if inner > 0 else float("inf")
+    if ratio > 2.0:
+        print(f"  -> Imbalance detected (ratio {ratio:.1f}x). "
+              f"Consider EMA loss balancing (beta=0.95) in training/train.py.")
+    else:
+        print(f"  -> Scale within tolerance (ratio {ratio:.1f}x).")
+
     # save config + final
-    config = vars(args) | {"best_val_loss": best_val, "run_id": run_id}
+    config = vars(args) | {"best_val_loss": best_val, "run_id": run_id,
+                            "per_joint_val_rmse": per_joint_rmse.tolist()}
     with open(os.path.join(run_dir, "config.json"), "w") as f:
         json.dump(config, f, indent=2)
     saved = "greybox_best.pt"

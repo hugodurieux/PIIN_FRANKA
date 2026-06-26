@@ -36,10 +36,10 @@
 | N1-Duong | Cholesky L L^T + eps*I algebraic kernel for parameterizing positive-definite dissipative matrices | INVESTIGATE — 28 lower-triangular entries, Softplus diagonal; considered and rejected in favor of diagonal D for N2-Liu (Franka serial-chain independent motors justify sparsity) | pending |
 | N2-Duong | (duplicate of N1-Duong in port-Hamiltonian formulation) | REJECT — no new content beyond N1-Duong | rejected |
 | N3-Duong | Sim-to-real fine-tuning via frozen-backbone learning: load GreyBoxNet checkpoint, freeze all but last 2 nn.Linear layers, fine-tune for --max_steps (default=100) under full PINN loss | KEEP — IMPLEMENTED on branch novelty/duong2024-N3-simtoreal-finetune, physics validator PASSED, MERGED to main (commit 0aa4fdc) | done |
-| N1-WangCAC | Sobol sampling (low-discrepancy sequences) for excitation trajectory generation to improve coverage | INVESTIGATE — consider for data pipeline when Isaac Sim pipeline is built | pending |
+| N1-WangCAC | Sobol sampling (low-discrepancy sequences) for excitation trajectory generation to improve coverage | IMPLEMENTED — generate_fourier_dataset.py uses scipy.stats.qmc.Sobol to sample 10 q_center configurations (7-D joint space), generating 10 segments × 5000 samples per payload. Falls back to uniform if scipy unavailable. Dataset regenerated 2026-06-26. | done |
 | N2-WangCAC | Trapezoidal collocation loss (residual on acceleration from finite differences) | REJECT — same RK4 vs RNEA grey-box conflict as N1-Liu | rejected |
 | N3-WangCAC | Extended Kalman Filter for state estimation under sensor latency | REJECT — latency > 1 ms incompatible with 1 kHz control rate | rejected |
-| N1-SPEL | Physics-driven sparsity mask on Cholesky friction matrix: structurally-zero entries for revolute joints in 7x7 symmetric matrix | INVESTIGATE — considered and rejected in favor of diagonal D for N2-Liu FrictionNet; Pinocchio pass deferred | pending |
+| N1-SPEL | Physics-driven sparsity mask on Cholesky friction matrix: structurally-zero entries for revolute joints in 7x7 symmetric matrix | CLOSED — Pinocchio analysis confirmed diagonal D correct (80% param reduction vs full Cholesky, all 7 joints are independent JointModelRZ). Validates existing N2-Liu FrictionNet design. No new implementation needed. | done |
 | N2-SPEL | Trainable URDF constants (link masses, inertias, friction coefficients) in neural augmentation | REJECT — violates RNEA-intact white-box invariant in grey-box architecture | rejected |
 | N3-SPEL | KAN (Kolmogorov-Arnold Networks) activations for physics-informed learning | REJECT — violates Mish/Softplus smoothness constraint from CLAUDE.md | rejected |
 | N1-E2NN | Structural sub-term embedding (Deng et al. 2024): explicitly decompose inverse dynamics into inertia, Coriolis, gravity terms per-joint | REJECT — E2NN validated on 1-DoF only; manual per-robot sub-term derivation conflicts with Goal 1 automation | rejected |
@@ -51,7 +51,7 @@
 | N1-AdaKineNet | Adaptive kinematic network with attention mechanism for inverse kinematics (Fang et al. 2026) | REJECT — inverse kinematics problem; dynamics-independent of torque learning | rejected |
 | N2-AdaKineNet | ReLU-based deep IK architecture on 10-DoF mobile manipulator | REJECT — ReLU forbidden; mobile manipulator domain incompatible with fixed Franka 7-DoF | rejected |
 | N1-WhenPhysics | Soft contact dynamics via LuGre friction ODE for prediction accuracy on unknown payloads | REJECT — equivalent to τ_friction in constraints.py augmented Lagrangian | rejected |
-| N2-WhenPhysics | EMA loss balancing (β=0.95) per residual magnitude to mitigate 87/12 Nm torque scale imbalance across joints | INVESTIGATE — diagnostic: after first synthetic training run, if outer joints (5-7, 12 Nm) show higher val MSE than inner joints (1-4, 87 Nm), implement in training/train.py | pending |
+| N2-WhenPhysics | EMA loss balancing (β=0.95) per residual magnitude to mitigate 87/12 Nm torque scale imbalance across joints | INVESTIGATE — diagnostic implemented in training/train.py (per-joint val RMSE printed at end of training). Fourier baseline result 2026-06-26: ratio 1.0x (joints 1-4: 0.239 Nm, joints 5-7: 0.247 Nm) — no imbalance on synthetic residual. Revisit after real robot recordings. | pending |
 | N3-WhenPhysics | Physics-aware trajectory sampling for sim-to-real transfer (Prabhakar et al. 2026) | REJECT — duplicate of N3-Duong 100-step frozen-backbone fine-tuning | rejected |
 
 ## Experiments logged
@@ -68,7 +68,7 @@ Stage 1 (PINN) — pipeline fully validated end-to-end. Fourier dataset generate
 ## Open questions / blockers
 - **GPU access blocker:** Stage 1 training cannot execute at scale without GPU. Waiting for GPU allocation.
 - **Pinocchio — RESOLVED:** Installed via `pip3 install pin --break-system-packages` in WSL Ubuntu 24.04. Version 4.0.0. Run all training commands from WSL: `cd "/mnt/c/Users/Hugo Durieux/Desktop/Stage 3A/LESTAGE/pinn_franka" && python3 -m training.train ...`
-- **N2-WhenPhysics diagnostic:** Smoke tests do not expose per-joint val MSE. After first real training run, inspect per-joint val MSE comparing joints 5-7 (12 Nm limit) vs. joints 1-4 (87 Nm limit). If outer joints show elevated error relative to torque budget, implement EMA loss balancing (beta=0.95) in training/train.py.
+- **N2-WhenPhysics diagnostic:** Per-joint RMSE logging now live in training/train.py. Fourier baseline ratio = 1.0x (no imbalance). Re-run diagnostic after real robot recordings — real friction differences across joints may trigger EMA balancing.
 - N3-Djeumou (semi-supervised dissipativity): awaits first real motor-babbling HDF5 dataset to design and run ablation.
 - N1-WangCAC (Sobol sampling): consider for the data pipeline when Isaac Sim HDF5 pipeline is built.
 - Data pipeline: Isaac Sim excitation trajectories → HDF5 (q, qdot, qddot, delta, tau_real) not yet built; Fourier trajectory baseline available as fallback. Real motor-babbling dataset needed to run `training/fine_tune.py`.
