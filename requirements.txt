@@ -1,7 +1,50 @@
-# Stage 1 — PINN grey-box dynamics
-torch>=2.2
+# =============================================================================
+# PINN Franka — Python dependencies
+# Target: Ubuntu (GPU machine, CUDA)
+# =============================================================================
+#
+# INSTALL ORDER (important — torch must come first with the right CUDA wheel):
+#
+#   1. PyTorch with CUDA (pick the line matching your CUDA version):
+#
+#      CUDA 12.1:
+#        pip install torch --index-url https://download.pytorch.org/whl/cu121
+#
+#      CUDA 12.4:
+#        pip install torch --index-url https://download.pytorch.org/whl/cu124
+#
+#      CPU only (no GPU):
+#        pip install torch
+#
+#   2. Everything else:
+#        pip install -r requirements.txt
+#
+# =============================================================================
+# Stage 1 — PINN training (core)
+# =============================================================================
 numpy>=1.24
 h5py>=3.8
-# White-box baseline (install separately, conda recommended for pinocchio):
-#   pip install pin            # Pinocchio
-# or: conda install pinocchio -c conda-forge
+
+# =============================================================================
+# Stage 1 — Data pipeline (Fourier dataset generation + RNEA)
+# =============================================================================
+scipy>=1.10          # Sobol low-discrepancy sampling (novelty N1-WangCAC)
+pin>=2.7.0           # Pinocchio robot dynamics (RNEA white-box baseline)
+                     # If "pip install pin" fails, try: pip install pinocchio
+
+# =============================================================================
+# Experiment tracking
+# =============================================================================
+openpyxl>=3.1        # write tracking/experiments_log.xlsx
+
+# =============================================================================
+# Stage 2 & 3 — ROS2 (NOT pip-installable)
+# =============================================================================
+# rclpy, sensor_msgs, std_msgs, trajectory_msgs, launch, launch_ros
+# are ROS2 system packages. Install ROS2 Humble (Ubuntu 22.04) or
+# ROS2 Jazzy (Ubuntu 24.04) from:
+#   https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html
+#
+# Then source the workspace before running Stage 2/3 nodes:
+#   source /opt/ros/humble/setup.bash
+#   cd ros2_ws && colcon build && source install/setup.bash
