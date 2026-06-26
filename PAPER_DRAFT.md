@@ -73,9 +73,21 @@ Two concepts are extracted from this paper. (1) The L L^T + ε I algebraic kerne
 
 Provides the sparsity argument for the FrictionNet design: for revolute joints rotating about a single axis, the per-link SE(3) dissipation matrix has structural zeros, collapsing to a per-joint scalar in joint space for a serial independent-motor chain (Section II-B). Applied to the Franka Panda (7 independent revolute joints), this reduces the FrictionNet output from 28 lower-triangular Cholesky entries to 7 diagonal entries — a 75% parameter reduction with full physical justification. The SPEL forward-simulation ODE architecture is not used.
 
-### 2.5 Excluded Papers
+### 2.5 Excitation Trajectory Design
 
-**Djeumou et al. (2024)** (CoRL, vehicle drifting via conditional diffusion) and **Wang et al. (2024)** (CAC, PINN-NMPC on 3-DoF planar arm): domain mismatch (vehicles, 3-DoF simulation) and architectural incompatibilities (ReLU, ODE rollouts, no RNEA) preclude any direct contribution.
+**Wang, Xia, Jin, Xu, Zhang (2024).** "Trajectory Control of Multi-Axis Robotic Arms Based on Physics-Informed Neural Networks and Nonlinear Model Predictive Control." _2024 China Automation Congress (CAC)_, IEEE.
+
+Wang et al. use Sobol low-discrepancy sequences to sample joint-centre configurations for Fourier excitation trajectories, improving coverage of the joint-space compared to uniform random sampling. This idea (N1-WangCAC) is adopted directly: the data generator samples 10 Sobol joint centres per payload condition via `scipy.stats.qmc.Sobol(d=7)`, then builds bandlimited Fourier segments around each centre. The PINN-NMPC control architecture from this paper (trapezoidal collocation loss, EKF state estimation) is not used — it conflicts with the RNEA grey-box design and the 1 kHz stateless control requirement.
+
+### 2.6 Concurrent and Competitive Work
+
+**Li, Zhang, Chen, Wang (2025).** "PINN-Based Predictive Control Combined With Unknown Payload Identification for Robots With Prismatic Quasi-Direct-Drives." _IEEE Transactions on Industrial Electronics_.
+
+Li et al. propose a payload identification strategy using a virtual payload link injected into a PINN dynamics model at runtime. This is directly competitive with this project's dual payload-awareness approach. Notably, the virtual payload injection mechanism (`_inject_payload` / `_restore_payload` in `pinocchio_baseline/rnea_wrapper.py`) was independently implemented in this project before Li et al. (2025) was processed. Additionally, this project combines RNEA white-box payload awareness with neural residual δ-conditioning — two complementary channels — whereas Li et al. use a single pathway. The motor model (QDD quasi-direct-drive) and control architecture (NMPC at 100 Hz) are incompatible with the Franka Panda (harmonic reducers, 1 kHz stateless control).
+
+### 2.7 Excluded Papers
+
+**Djeumou et al. (2024)** (CoRL, vehicle drifting via conditional diffusion): domain mismatch (wheeled vehicle, no rigid-body manipulator dynamics). No contribution extracted.
 
 ---
 
@@ -275,14 +287,18 @@ _Pending GPU allocation. This section will be populated after Stage 1 training._
 
 ### 4.1 Planned Experiments
 
-| Experiment | Metric | Baseline |
-|-----------|--------|----------|
-| Stage 1 smoke test | Val loss convergence | N/A |
-| Torque prediction RMSE per joint | RMSE [Nm] | Liu et al. 2024: 2.68 rad² over 2 s |
-| Data-efficiency ablation (N4) | Val RMSE vs. N_samples | Liu et al.: 25k samples |
-| FrictionNet ablation (N2) | Val RMSE, dissipation violation rate | Baseline GreyBoxNet |
-| Sim-to-real transfer (N3-Duong) | RMSE before/after fine-tuning at N steps | No fine-tuning |
-| Stage 3 tracking on real hardware | Tracking error [rad] at 1000 Hz | Liu et al.: 500 Hz |
+| Experiment | Metric | Baseline | Goal |
+|-----------|--------|----------|------|
+| Isaac Sim residual diagnostic | Mean \|τ_res\| per joint [Nm]; must be > 0.01 Nm | N/A (data validity check) | 1 |
+| Torque prediction RMSE per joint | RMSE [Nm] per joint, test set | 0.22 Nm (CPU smoke test, synthetic data) | 1, 3 |
+| Multi-payload generalisation | Per-payload val RMSE [Nm] (0 / 1 / 3 kg conditions) | Single-payload model | 1 |
+| Data-efficiency ablation (N4-Liu) | Val RMSE vs. N_samples (1k–50k) | Liu et al.: 25k samples, black-box | 1 |
+| FrictionNet ablation (N2-Liu) | Val RMSE with/without FrictionNet; D_diag values; dissipativity violation rate | Baseline GreyBoxNet (no FrictionNet) | 3 |
+| Inference latency benchmark | Forward pass time [ms] per call under `torch.no_grad()` | Target: < 1 ms (1 kHz control loop) | 2 |
+| Sim-to-real fine-tuning (N3-Duong) | Val RMSE before/after fine-tuning at N steps (N = 10, 50, 100, 500) | No fine-tuning | 4 |
+| Stage 3 tracking on real hardware | Tracking error [rad] at 1000 Hz | Liu et al.: 500 Hz | 2 |
+
+_Note on Liu et al. (2024) metric: their primary reported metric is a 2 s trajectory rollout error (2.68 rad²), not instantaneous per-joint RMSE in Nm. These are not directly comparable. Our RMSE metric is preferred for diagnosing per-joint model quality; the rollout metric will be computed in Stage 3 for direct comparison._
 
 ### 4.2 Preliminary Results (CPU, 20 epochs, Fourier baseline)
 
@@ -320,9 +336,11 @@ _To be written after experiments._
 
 4. **Wang, Chen, Ding (2025).** "Symplectic Physics-Embedded Learning via Lie Groups Hamiltonian Formulation for Serial Manipulator Dynamics Prediction." _Scientific Reports_ (Nature), vol. 15, art. 33179. — Revolute-joint sparsity mask for diagonal FrictionNet (N1-SPEL).
 
-5. **Wang, Xia, Jin, Xu, Zhang (2024).** "Trajectory Control of Multi-Axis Robotic Arms Based on Physics-Informed Neural Networks and Nonlinear Model Predictive Control." _2024 China Automation Congress (CAC)_, IEEE. — Sobol sampling idea (N1-WangCAC, future data pipeline).
+5. **Wang, Xia, Jin, Xu, Zhang (2024).** "Trajectory Control of Multi-Axis Robotic Arms Based on Physics-Informed Neural Networks and Nonlinear Model Predictive Control." _2024 China Automation Congress (CAC)_, IEEE. — Sobol low-discrepancy trajectory sampling (N1-WangCAC, implemented in `generate_isaac_dataset.py`).
 
-6. **Deng, Wang, Feng (2024).** "Physics informed machine learning model for inverse dynamics in robotic manipulators." _Applied Soft Computing_, vol. 163, art. 111978. — Sub-term embedding (N1-E2NN); Liquid gating mechanism (N2-E2NN).
+6. **Li, Zhang, Chen, Wang (2025).** "PINN-Based Predictive Control Combined With Unknown Payload Identification for Robots With Prismatic Quasi-Direct-Drives." _IEEE Transactions on Industrial Electronics_. — Virtual payload link injection for runtime payload identification (N2-PayloadPINN). Competitive context: this project's dual payload-awareness (RNEA injection + δ conditioning) independently implements and extends this approach.
+
+7. **Deng, Wang, Feng (2024).** "Physics informed machine learning model for inverse dynamics in robotic manipulators." _Applied Soft Computing_, vol. 163, art. 111978. — Sub-term embedding (N1-E2NN); Liquid gating mechanism (N2-E2NN).
 
 7. **Ni, Qureshi (2024).** "Physics-informed Neural Motion Planning on Constraint Manifolds." _IEEE Int. Conf. Robotics & Automation (ICRA)_. — Eikonal PDE planner on constraint manifold (N1-CMP); negative-exponential speed model (N2-CMP).
 
