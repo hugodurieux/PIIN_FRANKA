@@ -28,7 +28,9 @@ Fully architected and pipeline validated. **6 training runs completed** (CPU, 20
 - Dataset: `training/dataset.py` — `_random_subsample_indices()` helper; `FrankaDynamicsDataset` (single HDF5), `MultiPayloadDataset` (list of HDF5, concatenates tensors then subsamples combined pool), and `SyntheticDataset` all accept `max_samples` param (seed=42, before train/val split). `--data` CLI arg accepts one or more paths (multi-payload training validated 2026-06-26, 147,734 samples).
 - Constants: `network/constants.py` — single source of truth for joint limits, velocity limits, input/output dims, payload values, `FRICTION_NET_HIDDEN = 64`.
 
-Data pipeline: Fourier baseline BUILT (`generate_fourier_dataset.py`) — real Pinocchio RNEA, Sobol segments, 3 × ~50k samples (0/1/3 kg payloads). Isaac Sim integration not yet built.
+Data pipeline:
+- **Isaac Sim generator BUILT** (`generate_isaac_dataset.py`) — PRIMARY training data source. Plays Fourier+Sobol trajectories inside Isaac Sim physics engine; tau_real from `get_measured_joint_efforts()` (Isaac Sim Franka USD friction/damping); tau_theo from Pinocchio RNEA. tau_res is non-zero and physically meaningful. Outputs `data/isaac_{payload}kg.h5` (same HDF5 schema). Requires Isaac Sim 4.x + Nucleus on GPU machine.
+- **Fourier baseline** (`generate_fourier_dataset.py`) — SMOKE-TEST ONLY. tau_res = synthetic Coulomb+viscous (hand-tuned). Useful for CPU pipeline validation; does not produce paper-quality residuals. Outputs `data/fourier_baseline_{payload}kg.h5`.
 
 ### Stage 2 — Motion planning (MoveIt2 / ROS2)
 Scaffolded on branch `stage2/moveit2-ros2-humble` — PHYSICS PASSED (after fix). Awaiting merge and Stage 1 trained model.

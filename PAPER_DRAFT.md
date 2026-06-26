@@ -9,7 +9,7 @@ _Last updated: 2026-06-26_
 
 ## Abstract
 
-We present an automated pipeline that takes a robot's URDF description as input and produces a trained, real-time-deployable dynamics model for a 7-degree-of-freedom manipulator. The pipeline combines a deterministic white-box baseline (Recursive Newton-Euler Algorithm, RNEA, computed via Pinocchio from the URDF) with a physics-constrained neural residual network that learns unmodeled friction, elasticity, and payload-dependent effects. Four contributions distinguish this work from the primary state of the art (Liu et al., 2024): (1) a fully automated URDF-to-model pipeline requiring no manual kinematic derivation, with Sobol low-discrepancy excitation trajectory generation for improved joint-space coverage, validated by concurrent multi-payload training across 0/1/3 kg payload conditions (147,734 samples); (2) a real-time computed-torque controller with Lyapunov-certified gain selection targeting 1000 Hz, with stability certificates derived from per-joint model error bounds; (3) a structurally dissipative FrictionNet sub-module that guarantees the friction residual dissipates energy by construction, without relying on soft penalty terms, with physical justification from a Pinocchio-based sparsity analysis confirming the 7-parameter diagonal structure (80% reduction vs. full Cholesky); and (4) a two-step sim-to-real fine-tuning protocol that recovers tracking accuracy from a pre-trained simulation model using only a brief real-world motor-babbling sequence. Preliminary experiments on CPU with Fourier excitation data (Pinocchio RNEA, Sobol segments, 147k samples across 3 payload conditions) achieve val RMSE ≈ 0.22 Nm in 20 epochs with physics constraints satisfied throughout (dissipativity violation = 0); full GPU-scale experiments pending.
+We present an automated pipeline that takes a robot's URDF description as input and produces a trained, real-time-deployable dynamics model for a 7-degree-of-freedom manipulator. The pipeline combines a deterministic white-box baseline (Recursive Newton-Euler Algorithm, RNEA, computed via Pinocchio from the URDF) with a physics-constrained neural residual network that learns unmodeled friction, elasticity, and payload-dependent effects. Four contributions distinguish this work from the primary state of the art (Liu et al., 2024): (1) a fully automated URDF-to-model pipeline requiring no manual kinematic derivation, with Sobol low-discrepancy excitation trajectory generation for improved joint-space coverage, validated by concurrent multi-payload training across 0/1/3 kg payload conditions (147,734 samples); (2) a real-time computed-torque controller with Lyapunov-certified gain selection targeting 1000 Hz, with stability certificates derived from per-joint model error bounds; (3) a structurally dissipative FrictionNet sub-module that guarantees the friction residual dissipates energy by construction, without relying on soft penalty terms, with physical justification from a Pinocchio-based sparsity analysis confirming the 7-parameter diagonal structure (80% reduction vs. full Cholesky); and (4) a two-step sim-to-real fine-tuning protocol that recovers tracking accuracy from a pre-trained simulation model using only a brief real-world motor-babbling sequence. Preliminary smoke-test experiments on CPU with synthetic Fourier data (Pinocchio RNEA, Sobol segments, 147k samples across 3 payload conditions) achieve val RMSE ≈ 0.22 Nm in 20 epochs with physics constraints satisfied throughout (dissipativity violation = 0). Paper-quality training will use Isaac Sim physics-engine data (`generate_isaac_dataset.py`) where tau_real comes from the Isaac Sim Franka Panda model, producing non-zero tau_res residuals that represent real joint friction and compliance; full GPU-scale experiments pending.
 
 ---
 
@@ -34,7 +34,7 @@ Liu et al. (2024) demonstrated that a Lagrangian/Hamiltonian neural network trai
 The four project objectives, and where each is addressed and evidenced in this paper:
 
 **Goal 1 — Automated URDF-to-Model Pipeline** _(Sections 3.2, 3.3, 3.8, 3.9; Experiments 4.2)_
-The entire pipeline is driven by the URDF: Pinocchio reads it to produce the RNEA white-box term; the network architecture is fixed independently of the robot's kinematic structure; Sobol excitation trajectories are generated programmatically from joint limits extracted from the URDF. No manual equation derivation is required. Payload conditioning (δ ∈ {0, 1, 3} kg) is baked into every forward pass, and the `--max_samples` ablation flag (N4-Liu) measures data efficiency relative to Liu et al.'s 25k-sample black-box benchmark. Evidence: multi-payload training on the concatenated 147k-sample dataset (0/1/3 kg) converges to val RMSE ≈ 0.22 Nm in 20 CPU epochs with no physics violations, demonstrating payload-conditioned generalisation from a single URDF.
+The entire pipeline is driven by the URDF: Pinocchio reads it to produce the RNEA white-box term; the network architecture is fixed independently of the robot's kinematic structure; Sobol excitation trajectories are generated programmatically from joint limits extracted from the URDF. No manual equation derivation is required. Payload conditioning (δ ∈ {0, 1, 3} kg) is baked into every forward pass, and the `--max_samples` ablation flag (N4-Liu) measures data efficiency relative to Liu et al.'s 25k-sample black-box benchmark. Training data is generated via Isaac Sim (`generate_isaac_dataset.py`): the Franka Panda USD physics engine provides realistic tau_real (friction, damping, actuator dynamics), while tau_theo is computed from the same URDF via Pinocchio RNEA — the gap is the meaningful residual the network learns. Evidence (smoke test): multi-payload training on concatenated synthetic Fourier data (147k samples, 0/1/3 kg) converges to val RMSE ≈ 0.22 Nm in 20 CPU epochs with no physics violations; Isaac Sim GPU-scale results pending.
 
 **Goal 2 — High-Frequency Real-Time Control at 1000 Hz** _(Sections 3.6, 3.7)_
 The Stage 3 computed-torque controller is designed for sub-millisecond inference: all `GreyBoxNet` forward passes run under `torch.no_grad()`, inputs and outputs are pure numpy, and no iterative solver is involved. Gain stability is certified analytically via Liu et al. (2024) Proposition 1: Kd = safety_margin × ε, Kp = Kd²/4 (critical damping), where ε is the per-joint model error bound from Stage 1 validation. The Stage 2 ROS2 node publishes effort commands at 1000 Hz with a hard torque-limit clamp at the publish boundary. Evidence pending: an inference latency benchmark (timing script) is needed to confirm sub-1 ms per call; gains will be recomputed from real per-joint RMSE after GPU-scale training.
@@ -198,11 +198,13 @@ python -m training.fine_tune --checkpoint models/run_XXXX/greybox_best.pt \
 
 _File: `training/fine_tune.py`_ [Duong et al. 2024, Section IV-D, Table III] | Merged: `novelty/duong2024-N3-simtoreal-finetune`
 
-### 3.8 Sobol Excitation Trajectory Generation (N1-WangCAC)
+### 3.8 Excitation Trajectory Design and Isaac Sim Data Collection
+
+#### 3.8.1 Sobol Excitation Trajectory Design (N1-WangCAC)
 
 Fourier-series excitation trajectories are parameterised by per-joint harmonic frequencies and phases. Naive uniform random sampling of these parameters can leave regions of joint space poorly covered. Following Wang et al. (2024), we replace uniform random sampling with Sobol low-discrepancy sequences (scipy.stats.qmc.Sobol) to fill the 7-dimensional joint configuration space more uniformly.
 
-Concretely, for each payload condition the trajectory is generated as N_SEGMENTS = 10 independent segments, each starting from a Sobol-sampled joint centre q_center drawn from the joint range [Q_LOWER, Q_UPPER]:
+For each payload condition the trajectory is designed as N_SEGMENTS = 10 independent segments, each starting from a Sobol-sampled joint centre q_center drawn from the joint range [Q_LOWER, Q_UPPER]:
 
 ```
 q_centers = Sobol(d=7, seed=42).random(10)  mapped to [Q_LOWER, Q_UPPER]
@@ -211,9 +213,35 @@ For each q_center_i:
     Segment trajectory: q(t) = q_center_i + Σ_k A_k sin(ω_k t + φ_k)
 ```
 
-Each segment contributes 5,000 samples (5 s at 1000 Hz); segments are concatenated to 50,000 samples per payload. Timesteps where any |τ_RNEA| > τ_max are excluded (not clipped), preserving training label validity. The Sobol seeds differ per payload to ensure independent joint-space coverage across conditions.
+Each segment covers 5,000 timesteps (5 s at 1000 Hz), giving 50,000 reference states per payload before filtering.
 
-_File: `generate_fourier_dataset.py`_ [Wang et al. 2024, CAC]
+#### 3.8.2 Isaac Sim Physics-Based Data Collection (primary training source)
+
+The Fourier trajectory design above specifies joint reference states. To obtain physically meaningful training labels, these trajectories are **played back inside Isaac Sim** (NVIDIA Omniverse Physics Engine) rather than evaluated analytically.
+
+**Why Isaac Sim is required:** If tau_real were computed analytically from the same Pinocchio/URDF model as tau_theo, the residual tau_res = tau_real − tau_theo ≈ 0 and the network learns nothing. Isaac Sim uses its own physics engine (articulation drives, joint friction, damping coefficients from the Franka Panda USD) that differ from the analytical URDF model, producing non-zero tau_res dominated by joint friction and compliance.
+
+**Data collection pipeline:**
+
+```
+generate_isaac_dataset.py:
+  1. Load Franka Panda from Isaac Sim Nucleus USD (built-in physics model)
+  2. Attach payload sphere to panda_hand (mass += payload_kg)
+  3. For each Sobol segment:
+       a. Warm up 200 physics steps at initial pose
+       b. Apply Fourier position+velocity targets via ArticulationAction
+       c. Step simulation at 1 kHz; read get_measured_joint_efforts() → tau_real
+  4. Filter: discard timesteps where |tau_real| > tau_max
+  5. Compute tau_theo via Pinocchio RNEA on recorded (q, qdot, qddot_ref)
+  6. tau_res = tau_real − tau_theo  [non-zero: Isaac friction ≠ URDF model]
+  7. Save HDF5: q, qdot, qddot, tau_real, tau_theo, tau_res, delta
+```
+
+Payload is injected into both the Isaac Sim USD (panda_hand mass) and the Pinocchio model (`_inject_payload`, same as `rnea_wrapper.py`) to keep both models consistent.
+
+A diagnostic check prints per-joint RMSE of tau_res. Values < 0.01 Nm indicate near-zero residual, which would signal that the Franka USD is using the same inertials as the URDF (check joint friction/damping settings in Isaac Sim).
+
+_Files: `generate_isaac_dataset.py` (primary), `generate_fourier_dataset.py` (smoke-test only — synthetic tau_res)_ [Wang et al. 2024, CAC]
 
 ### 3.9 Data-Efficiency Ablation (N4-Liu)
 
@@ -225,10 +253,16 @@ python -m training.train --data data/dataset.h5 --max_samples 5000 --epochs 200
 
 Multi-payload training uses `MultiPayloadDataset`, which concatenates the three HDF5 files (0/1/3 kg) along the sample axis before the train/val split. The `max_samples` subsampling is applied on the combined pool, so the N4 ablation budget is shared proportionally across all payload conditions.
 
-```
-python -m training.train \
-  --data data/fourier_baseline_0kg.h5 data/fourier_baseline_1kg.h5 data/fourier_baseline_3kg.h5 \
+```bash
+# Paper results — Isaac Sim training data (primary)
+python3 -m training.train \
+  --data data/isaac_0.0kg.h5 data/isaac_1.0kg.h5 data/isaac_3.0kg.h5 \
   --epochs 200 --use_friction_net
+
+# Smoke test — synthetic Fourier data (no Isaac Sim required)
+python3 -m training.train \
+  --data data/fourier_baseline_0kg.h5 data/fourier_baseline_1kg.h5 data/fourier_baseline_3kg.h5 \
+  --epochs 20 --use_friction_net
 ```
 
 _File: `training/dataset.py`_ [Liu et al. 2024, Section IV-B, Table I] | Merged: `novelty/liu2024-N4-max-samples`

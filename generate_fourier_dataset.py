@@ -1,5 +1,22 @@
 #!/usr/bin/env python3
 """
+SMOKE-TEST ONLY — not for paper results.
+
+    tau_res here = -COULOMB*sign(qdot) - VISCOUS*qdot  (hand-tuned synthetic model)
+
+The network converges on this data but learns an artificial residual that does
+not match the real Franka's friction, damping, or actuator dynamics.
+
+Use this script for:
+  • End-to-end pipeline smoke tests with no Isaac Sim or GPU required
+  • Verifying dataset loading, training loop, and constraint enforcement
+  • Quick CPU sanity checks before committing to full GPU runs
+
+For paper-quality training data, use instead:
+  generate_isaac_dataset.py      -- Isaac Sim physics engine (meaningful tau_res)
+  real motor-babbling HDF5       -- hardware recordings for sim-to-real fine-tuning
+
+----------------------------------------------------------------------
 Fourier-series excitation trajectory dataset generator for Franka Panda PINN.
 
 Generates one HDF5 file per payload using bandlimited Fourier trajectories that

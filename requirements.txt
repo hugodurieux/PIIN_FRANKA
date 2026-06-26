@@ -38,6 +38,24 @@ pin>=2.7.0           # Pinocchio robot dynamics (RNEA white-box baseline)
 openpyxl>=3.1        # write tracking/experiments_log.xlsx
 
 # =============================================================================
+# Stage 1 — Isaac Sim data pipeline (NOT pip-installable via this file)
+# =============================================================================
+# Isaac Sim 4.x is a standalone NVIDIA Omniverse application.
+# Download: https://docs.omniverse.nvidia.com/isaacsim/latest/installation/
+#
+# Inside Isaac Sim's bundled Python (./python.sh), install:
+#   ./python.sh -m pip install pin h5py scipy
+#
+# Generate training datasets:
+#   cd <isaac-sim-root>
+#   for P in 0.0 1.0 3.0; do
+#       ./python.sh /path/to/pinn_franka/generate_isaac_dataset.py --payload $P
+#   done
+#
+# Nucleus server must be running (localhost) for Franka USD asset loading.
+# Output: data/isaac_{payload}kg.h5  (same schema as fourier_baseline_*.h5)
+
+# =============================================================================
 # Stage 2 & 3 — ROS2 (NOT pip-installable)
 # =============================================================================
 # rclpy, sensor_msgs, std_msgs, trajectory_msgs, launch, launch_ros
