@@ -3,7 +3,7 @@
      Do not edit by hand. CLAUDE.md imports it at every startup. -->
 
 ## Last updated
-2026-06-26 (Isaac Sim generator built; PAPER_DRAFT Section 4.1 planned experiments + Related Work completed)
+2026-06-27 (Full audit and correction pass on PAPER_DRAFT.md completed; all issues fixed in commit 29eadb7)
 
 ## Papers processed
 | Status | File | Relevance | Novelties kept |
@@ -43,7 +43,7 @@
 | N1-WangCAC | Sobol sampling (low-discrepancy sequences) for excitation trajectory generation to improve coverage | IMPLEMENTED — `generate_isaac_dataset.py` (primary) and `generate_fourier_dataset.py` (smoke-test) both use scipy.stats.qmc.Sobol to sample 10 q_center configurations (7-D joint space), generating 10 segments × 5000 samples per payload. Falls back to uniform if scipy unavailable. | done |
 | N2-WangCAC | Trapezoidal collocation loss (residual on acceleration from finite differences) | REJECT — same RK4 vs RNEA grey-box conflict as N1-Liu | rejected |
 | N3-WangCAC | Extended Kalman Filter for state estimation under sensor latency | REJECT — latency > 1 ms incompatible with 1 kHz control rate | rejected |
-| N1-SPEL | Physics-driven sparsity mask on Cholesky friction matrix: structurally-zero entries for revolute joints in 7x7 symmetric matrix | CLOSED — Pinocchio analysis confirmed diagonal D correct (80% param reduction vs full Cholesky, all 7 joints are independent JointModelRZ). Validates existing N2-Liu FrictionNet design. No new implementation needed. | done |
+| N1-SPEL | Physics-driven sparsity mask on Cholesky friction matrix: structurally-zero entries for revolute joints in 7x7 symmetric matrix | CLOSED — Pinocchio analysis confirmed diagonal D correct (75% param reduction vs full Cholesky: 28 lower-triangular → 7 diagonal, all 7 joints are independent JointModelRZ). Validates existing N2-Liu FrictionNet design. No new implementation needed. | done |
 | N2-SPEL | Trainable URDF constants (link masses, inertias, friction coefficients) in neural augmentation | REJECT — violates RNEA-intact white-box invariant in grey-box architecture | rejected |
 | N3-SPEL | KAN (Kolmogorov-Arnold Networks) activations for physics-informed learning | REJECT — violates Mish/Softplus smoothness constraint from CLAUDE.md | rejected |
 | N1-E2NN | Structural sub-term embedding (Deng et al. 2024): explicitly decompose inverse dynamics into inertia, Coriolis, gravity terms per-joint | REJECT — E2NN validated on 1-DoF only; manual per-robot sub-term derivation conflicts with Goal 1 automation | rejected |
@@ -78,7 +78,7 @@
 | multi-payload-frictionnet-smoke | 2026-06-26 | 0.0523 (mse 0.0530) | `--data fourier_baseline_0kg.h5 fourier_baseline_1kg.h5 fourier_baseline_3kg.h5 --epochs 20 --use_friction_net`. First multi-payload run (147,734 total samples). Val MSE 0.0530 slightly higher than single-payload (0.0451) as expected—harder generalization across 3 payload conditions. Physics constraints satisfied throughout (dissip_viol=0). Per-joint val RMSE [0.246, 0.215, 0.219, 0.217, 0.210, 0.219, 0.276] Nm. D_diag mean/joint [1.168, 1.435, 1.629, 1.189, 1.369, 1.337, 1.198]. No EMA balancing (ratio 1.0x: J1-4 0.224 Nm vs J5-7 0.235 Nm). Saved: models/run_20260626_164045/ |
 
 ## Current milestone
-Stage 1 (PINN) — data pipeline complete including Isaac Sim generator. `generate_isaac_dataset.py` BUILT: plays Fourier+Sobol trajectories in Isaac Sim physics engine; tau_real from `get_measured_joint_efforts()` (Isaac Sim Franka USD); tau_theo from Pinocchio RNEA; tau_res non-zero and physically meaningful. All training code (dataset.py, train.py) unchanged — same HDF5 schema. PAPER_DRAFT.md Section 3.8 updated (trajectory design + Isaac Sim collection pipeline). All actionable novelties resolved. Pipeline fully ready: set up Isaac Sim on GPU machine, run generator, then train.
+Stage 1 (PINN) — all actionable novelties implemented, validated, and merged; data pipeline complete including Isaac Sim generator. PAPER_DRAFT.md audit completed (2026-06-27) and all contradictions/unsupported claims resolved (commit 29eadb7): (1) 75% Cholesky reduction math corrected; (2) Abstract RMSE updated to 0.23 Nm; (3) duplicate refs removed; (4) attribution clarified (Mish or Softplus, Kp formula, Duong frozen vs. full retraining); (5) metric units fixed (Liu et al. rad² vs rad). Pipeline fully ready: set up Isaac Sim on GPU machine, run generator, then train.
 
 ## Open questions / blockers
 - **GPU access blocker:** Stage 1 training cannot execute at scale without GPU. Waiting for GPU allocation.
