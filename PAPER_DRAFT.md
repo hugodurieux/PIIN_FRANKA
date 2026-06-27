@@ -9,7 +9,7 @@ _Last updated: 2026-06-26_
 
 ## Abstract
 
-We present an automated pipeline that takes a robot's URDF description as input and produces a trained, real-time-deployable dynamics model for a 7-degree-of-freedom manipulator. The pipeline combines a deterministic white-box baseline (Recursive Newton-Euler Algorithm, RNEA, computed via Pinocchio from the URDF) with a physics-constrained neural residual network that learns unmodeled friction, elasticity, and payload-dependent effects. Four contributions distinguish this work from the primary state of the art (Liu et al., 2024): (1) a fully automated URDF-to-model pipeline requiring no manual kinematic derivation, with Sobol low-discrepancy excitation trajectory generation for improved joint-space coverage, validated by concurrent multi-payload training across 0/1/3 kg payload conditions (147,734 samples); (2) a real-time computed-torque controller with Lyapunov-certified gain selection targeting 1000 Hz, with stability certificates derived from per-joint model error bounds; (3) a structurally dissipative FrictionNet sub-module that guarantees the friction residual dissipates energy by construction, without relying on soft penalty terms, with physical justification from a Pinocchio-based sparsity analysis confirming the 7-parameter diagonal structure (80% reduction vs. full Cholesky); and (4) a two-step sim-to-real fine-tuning protocol that recovers tracking accuracy from a pre-trained simulation model using only a brief real-world motor-babbling sequence. Preliminary smoke-test experiments on CPU with synthetic Fourier data (Pinocchio RNEA, Sobol segments, 147k samples across 3 payload conditions) achieve val RMSE ≈ 0.22 Nm in 20 epochs with physics constraints satisfied throughout (dissipativity violation = 0). Paper-quality training will use Isaac Sim physics-engine data (`generate_isaac_dataset.py`) where tau_real comes from the Isaac Sim Franka Panda model, producing non-zero tau_res residuals that represent real joint friction and compliance; full GPU-scale experiments pending.
+We present an automated pipeline that takes a robot's URDF description as input and produces a trained, real-time-deployable dynamics model for a 7-degree-of-freedom manipulator. The pipeline combines a deterministic white-box baseline (Recursive Newton-Euler Algorithm, RNEA, computed via Pinocchio from the URDF) with a physics-constrained neural residual network that learns unmodeled friction, elasticity, and payload-dependent effects. Four contributions distinguish this work from the primary state of the art (Liu et al., 2024): (1) a fully automated URDF-to-model pipeline requiring no manual kinematic derivation, with Sobol low-discrepancy excitation trajectory generation for improved joint-space coverage, validated by concurrent multi-payload training across 0/1/3 kg payload conditions (147,734 samples); (2) a real-time computed-torque controller with Lyapunov-certified gain selection targeting 1000 Hz, with stability certificates derived from per-joint model error bounds; (3) a structurally dissipative FrictionNet sub-module that guarantees the friction residual dissipates energy by construction, without relying on soft penalty terms, with physical justification from a Pinocchio-based sparsity analysis confirming the 7-parameter diagonal structure (75% reduction vs. full Cholesky: 28 lower-triangular entries → 7 diagonal); and (4) a two-step sim-to-real fine-tuning protocol that recovers tracking accuracy from a pre-trained simulation model using only a brief real-world motor-babbling sequence. Preliminary smoke-test experiments on CPU with synthetic Fourier data (Pinocchio RNEA, Sobol segments, 147k samples across 3 payload conditions) achieve val RMSE ≈ 0.23 Nm in 20 epochs with physics constraints satisfied throughout (dissipativity violation = 0). Paper-quality training will use Isaac Sim physics-engine data (`generate_isaac_dataset.py`) where tau_real comes from the Isaac Sim Franka Panda model, producing non-zero tau_res residuals that represent real joint friction and compliance; full GPU-scale experiments pending.
 
 ---
 
@@ -26,7 +26,7 @@ Liu et al. (2024) demonstrated that a Lagrangian/Hamiltonian neural network trai
 | No payload conditioning | Payload mass δ ∈ {0, 1, 3} kg as network input |
 | No sim-to-real transfer protocol | 2-step pre-train (sim) + fine-tune (real, ~100 steps) |
 | No torque/velocity limits in loss | Augmented Lagrangian constraints on all 7 joints |
-| Full black-box Lagrangian | Grey-box: RNEA white-box + learned residual |
+| Parametric LNN/HNN (learned Lagrangian from scratch, no URDF) | Grey-box: RNEA white-box (from URDF) + learned residual |
 | Soft dissipativity only | FrictionNet: hard structural dissipativity guarantee |
 
 ### Contributions mapped to objectives
@@ -40,10 +40,10 @@ The entire pipeline is driven by the URDF: Pinocchio reads it to produce the RNE
 The Stage 3 computed-torque controller is designed for sub-millisecond inference: all `GreyBoxNet` forward passes run under `torch.no_grad()`, inputs and outputs are pure numpy, and no iterative solver is involved. Gain stability is certified analytically via Liu et al. (2024) Proposition 1: Kd = safety_margin × ε, Kp = Kd²/4 (critical damping), where ε is the per-joint model error bound from Stage 1 validation. The Stage 2 ROS2 node publishes effort commands at 1000 Hz with a hard torque-limit clamp at the publish boundary. Evidence pending: an inference latency benchmark (timing script) is needed to confirm sub-1 ms per call; gains will be recomputed from real per-joint RMSE after GPU-scale training.
 
 **Goal 3 — Scaling to 7-DoF with Physics Constraints** _(Sections 3.4, 3.5; Experiments 4.2)_
-The Augmented Lagrangian enforces per-joint torque limits ([87, 87, 87, 87, 12, 12, 12] Nm) and a global dissipativity constraint for all 7 joints simultaneously. FrictionNet provides a hard structural dissipativity guarantee for the friction residual component — the constraint `τ_friction · q̇ ≤ 0` holds analytically, not as a soft penalty. A Pinocchio-based sparsity analysis (friction_sparsity_analysis.py) confirmed that all 7 Franka joints are independent revolute (JointModelRZ), physically justifying the 7-parameter diagonal D matrix (80% reduction vs. full 28-entry Cholesky). Evidence: dissipativity violation = 0 across all training runs, including 147k-sample multi-payload training.
+The Augmented Lagrangian enforces per-joint torque limits ([87, 87, 87, 87, 12, 12, 12] Nm) and a global dissipativity constraint for all 7 joints simultaneously. FrictionNet provides a hard structural dissipativity guarantee for the friction residual component — the constraint `τ_friction · q̇ ≤ 0` holds analytically, not as a soft penalty. A Pinocchio-based sparsity analysis (friction_sparsity_analysis.py) confirmed that all 7 Franka joints are independent revolute (JointModelRZ), physically justifying the 7-parameter diagonal D matrix (75% reduction vs. full 28-entry Cholesky). Evidence: dissipativity violation = 0 across all training runs, including 147k-sample multi-payload training.
 
 **Goal 4 — Standardised Sim-to-Real Gap Resolution** _(Section 3.7)_
-The two-step protocol freezes all network layers except the last two `nn.Linear` modules and fine-tunes for ~100 gradient steps on real motor-babbling data, with the full PINN loss (MSE + Augmented Lagrangian) acting as a physics-based regulariser against sensor noise overfitting. The design follows empirical findings in Duong et al. (2024) that ~100 steps suffice for payload change recovery. Competitive advantage: this project's dual payload-awareness — RNEA white-box injection of payload inertia (`_inject_payload()`) plus δ conditioning of the neural residual — exceeds the single-pathway approach in the most recent comparable published work (Li et al., 2025). Evidence pending: real motor-babbling HDF5 dataset not yet recorded; protocol is implemented and validated for physics correctness.
+The two-step protocol freezes all network layers except the last two `nn.Linear` modules and fine-tunes for ~100 gradient steps on real motor-babbling data, with the full PINN loss (MSE + Augmented Lagrangian) acting as a physics-based regulariser against sensor noise overfitting. The design is inspired by Duong et al. (2024) (Section VII-E, Table II), who show that a learned dynamics model loses tracking accuracy under an unseen payload and recovers it with access to payload data. The specific frozen-layer scheme and ~100-step budget are implementation choices made in this project. Competitive advantage: this project's dual payload-awareness — RNEA white-box injection of payload inertia (`_inject_payload()`) plus δ conditioning of the neural residual — exceeds the single-pathway approach in the most recent comparable published work (Li et al., 2025). Evidence pending: real motor-babbling HDF5 dataset not yet recorded; protocol is implemented and validated for physics correctness.
 
 ---
 
@@ -65,7 +65,7 @@ Establishes the compositional grey-box architecture (known analytical terms + ne
 
 **Duong, Altawaitan, Stanley, Atanasov (2024).** "Port-Hamiltonian Neural ODE Networks on Lie Groups For Robot Dynamics Learning and Control." _IEEE Transactions on Robotics_.
 
-Two concepts are extracted from this paper. (1) The L L^T + ε I algebraic kernel for parameterising positive-definite dissipation matrices via a lower-triangular Cholesky factor (Section II-C), which informs the FrictionNet design. (2) The empirical finding (Section IV-D, Table III) that a pretrained physics-informed model can recover tracking accuracy after a payload change using only ~100 gradient steps on real hardware data — the direct precedent for our sim-to-real fine-tuning protocol. The port-Hamiltonian, ODE rollout, and Lie-group infrastructure are not used.
+Two concepts are extracted from this paper. (1) The L L^T + ε I algebraic kernel for parameterising positive-definite dissipation matrices via a lower-triangular Cholesky factor (Section V, model architecture), which informs the FrictionNet design. (2) The empirical demonstration (Section VII-E, Table II) that a pretrained physics-informed model suffers reduced tracking accuracy when tested with an unseen payload, but retraining on payload data recovers performance — the qualitative precedent for our sim-to-real fine-tuning protocol. Note: Duong et al. demonstrate full retraining on payload data, not a frozen-layer fine-tuning scheme; our specific design (freeze all but last 2 nn.Linear layers, ~100 gradient steps) is an implementation choice inspired by this finding, not a direct replication. The port-Hamiltonian, ODE rollout, and Lie-group infrastructure are not used.
 
 ### 2.4 Geometric Sparsity in Dissipation Matrices
 
@@ -122,7 +122,7 @@ A neural network (GreyBoxNet) learns the residual between RNEA and the true torq
 τ_pred = τ_RBD + τ_res
 ```
 
-The sin/cos encoding prevents angle-wrapping singularities. The residual captures unmodelled friction, elasticity, and load-dependent effects. Activations are **Mish only** — smooth activations prevent torque discontinuities that would excite motor resonances. ReLU is forbidden.
+The sin/cos encoding prevents angle-wrapping singularities. The residual captures unmodelled friction, elasticity, and load-dependent effects. Activations are **Mish or Softplus only** — smooth activations prevent torque discontinuities that would excite motor resonances. ReLU is forbidden. (Softplus appears in FrictionNet's positive-definite diagonal; Mish elsewhere.)
 
 _Architecture: 4 × 256 hidden units, Mish, input R^22, output R^7._
 _File: `network/grey_box_net.py`_ [Djeumou et al. 2022, Eq. 1-2; Liu et al. 2024]
@@ -185,11 +185,11 @@ The computed-torque controller is:
 τ = RNEA(q, q̇, q̈_des) + τ_res(q, q̇, δ) + K_d(q̇_des − q̇) + K_p(q_des − q)
 ```
 
-Gains are computed from Liu et al. (2024) Proposition 1 (Section III-C):
+The gain design follows Liu et al. (2024) Proposition 1 (Section III-C), which requires K_p and K_d to be positive definite for stability. The specific values are chosen via standard critical-damping analysis of the closed-loop second-order error dynamics:
 
 ```
-K_d[j] = safety_margin × ε_j        (ε_j = per-joint model error bound)
-K_p[j] = K_d[j]² / 4               (critical damping — fastest convergence without overshoot)
+K_d[j] = safety_margin × ε_j        (ε_j = per-joint model error bound from Proposition 1)
+K_p[j] = K_d[j]² / 4               (critical damping: characteristic eq. s² + K_d·s + K_p = 0)
 ```
 
 _Default error bound: [5, 5, 5, 5, 2, 2, 2] Nm (placeholder — to be updated after Stage 1 training)._
@@ -208,7 +208,7 @@ python -m training.fine_tune --checkpoint models/run_XXXX/greybox_best.pt \
     --real_data data/real_motor_babbling.h5 --max_steps 100
 ```
 
-_File: `training/fine_tune.py`_ [Duong et al. 2024, Section IV-D, Table III] | Merged: `novelty/duong2024-N3-simtoreal-finetune`
+_File: `training/fine_tune.py`_ [Duong et al. 2024, Section VII-E, Table II — qualitative inspiration; frozen-layer scheme is original to this project] | Merged: `novelty/duong2024-N3-simtoreal-finetune`
 
 ### 3.8 Excitation Trajectory Design and Isaac Sim Data Collection
 
@@ -298,7 +298,7 @@ _Pending GPU allocation. This section will be populated after Stage 1 training._
 | Sim-to-real fine-tuning (N3-Duong) | Val RMSE before/after fine-tuning at N steps (N = 10, 50, 100, 500) | No fine-tuning | 4 |
 | Stage 3 tracking on real hardware | Tracking error [rad] at 1000 Hz | Liu et al.: 500 Hz | 2 |
 
-_Note on Liu et al. (2024) metric: their primary reported metric is a 2 s trajectory rollout error (2.68 rad²), not instantaneous per-joint RMSE in Nm. These are not directly comparable. Our RMSE metric is preferred for diagnosing per-joint model quality; the rollout metric will be computed in Stage 3 for direct comparison._
+_Note on Liu et al. (2024) metric: Liu et al. report two separate 2 s prediction-error metrics with different units. Table 6 (PyBullet simulation, 1000 Hz): black-box 110.610 rad², LNN-based **8.884 rad²**. Table 8 (real Panda, 500 Hz, 25k samples): black-box 182.495 rad, LNN-based **2.681 rad**. Both tables use 25,000 samples for the LNN model and 550,000 for the black-box. These rollout errors are not directly comparable to our per-joint RMSE in Nm (different metric, accumulated over 2 s); the rollout metric will be computed in Stage 3 for direct comparison._
 
 ### 4.2 Preliminary Results (CPU, 20 epochs, Fourier baseline)
 
@@ -342,25 +342,24 @@ _To be written after experiments._
 
 7. **Deng, Wang, Feng (2024).** "Physics informed machine learning model for inverse dynamics in robotic manipulators." _Applied Soft Computing_, vol. 163, art. 111978. — Sub-term embedding (N1-E2NN); Liquid gating mechanism (N2-E2NN).
 
-7. **Ni, Qureshi (2024).** "Physics-informed Neural Motion Planning on Constraint Manifolds." _IEEE Int. Conf. Robotics & Automation (ICRA)_. — Eikonal PDE planner on constraint manifold (N1-CMP); negative-exponential speed model (N2-CMP).
+8. **Ni, Qureshi (2024).** "Physics-informed Neural Motion Planning on Constraint Manifolds." _IEEE Int. Conf. Robotics & Automation (ICRA)_. — Eikonal PDE planner on constraint manifold (N1-CMP); negative-exponential speed model (N2-CMP).
 
-8. **Liu, Ni, Qureshi (2024).** "Physics-informed Neural Mapping and Motion Planning in Unknown Environments." _IEEE Transactions on Robotics and Automation Letters (RA-L)_. — Active sensing Eikonal planner (N1-NTF); log-squared arrival-time factorization (N2-NTF).
+9. **Liu, Ni, Qureshi (2024).** "Physics-informed Neural Mapping and Motion Planning in Unknown Environments." _IEEE Transactions on Robotics and Automation Letters (RA-L)_. — Active sensing Eikonal planner (N1-NTF); log-squared arrival-time factorization (N2-NTF).
 
-9. **Jiang, Hsu, Zhang, Yu, Wang, Li (2025).** "PhysTwin: Physics-Informed Reconstruction and Simulation of Deformable Objects from Videos." _IEEE/CVF Conf. Computer Vision & Pattern Recognition (CVPR 2025)_. — Deformable-object reconstruction via spring-mass physics. REJECTED: domain mismatch (deformable bodies, not rigid-body dynamics).
+10. **Jiang, Hsu, Zhang, Yu, Wang, Li (2025).** "PhysTwin: Physics-Informed Reconstruction and Simulation of Deformable Objects from Videos." _IEEE/CVF Conf. Computer Vision & Pattern Recognition (CVPR 2025)_. — Deformable-object reconstruction via spring-mass physics. REJECTED: domain mismatch (deformable bodies, not rigid-body dynamics).
 
-10. **Fang, Chen, Chen, Wang, Wu, Zhang, Lim (2026).** "AdaKineNet: Adaptive Kinematic Neural Network for Inverse Kinematics of Redundant Mobile Manipulators." _Robotics & Autonomous Systems_, vol. 202, art. 105494. — Inverse kinematics via learnable loss weighting (N1-AdaKineNet, N2-AdaKineNet). REJECTED: domain mismatch (IK not dynamics); ReLU forbidden; 10-DoF mobile manipulator.
+11. **Fang, Chen, Chen, Wang, Wu, Zhang, Lim (2026).** "AdaKineNet: Adaptive Kinematic Neural Network for Inverse Kinematics of Redundant Mobile Manipulators." _Robotics & Autonomous Systems_, vol. 202, art. 105494. — Inverse kinematics via learnable loss weighting (N1-AdaKineNet, N2-AdaKineNet). REJECTED: domain mismatch (IK not dynamics); ReLU forbidden; 10-DoF mobile manipulator.
 
-11. **Prabhakar, Joshi, Dandekar, Dandekar, Panat (2026).** "When Does Physics Help? A Systematic Study of Physics-Guided Learning for Robotic Contact Dynamics." _Proceedings of the International Conference on Learning Representations (ICLR 2026)_. — Soft contact dynamics via LuGre ODE (N1-WhenPhysics); EMA adaptive loss balancing (N2-WhenPhysics); physics-aware trajectory sampling (N3-WhenPhysics). INVESTIGATE: N2-WhenPhysics EMA loss balancing for 87/12 Nm joint scale imbalance.
+12. **Prabhakar, Joshi, Dandekar, Dandekar, Panat (2026).** "When Does Physics Help? A Systematic Study of Physics-Guided Learning for Robotic Contact Dynamics." _Proceedings of the International Conference on Learning Representations (ICLR 2026)_. — Soft contact dynamics via LuGre ODE (N1-WhenPhysics); EMA adaptive loss balancing (N2-WhenPhysics); physics-aware trajectory sampling (N3-WhenPhysics). INVESTIGATE: N2-WhenPhysics EMA loss balancing for 87/12 Nm joint scale imbalance.
 
-12. **Feizi, Pedrosa, Patel, Jayender (2025).** "Few-Shot Physics-Informed Neural Network for Shape Reconstruction of Concentric-Tube Robots." _arXiv preprint 2605.12790_. — Few-shot PINN for Cosserat rod BVP in surgical robots. REJECTED: domain mismatch (continuum robot, not rigid-body manipulator).
+13. **Feizi, Pedrosa, Patel, Jayender (2025).** "Few-Shot Physics-Informed Neural Network for Shape Reconstruction of Concentric-Tube Robots." _arXiv preprint 2605.12790_. — Few-shot PINN for Cosserat rod BVP in surgical robots. REJECTED: domain mismatch (continuum robot, not rigid-body manipulator).
 
-13. **Yu, Zhang, Liu, Wang, Peng (2026).** "Hybrid LSTM-Edge Correction Architecture for Physics-Informed Crop Health Monitoring in Distributed Agricultural Robotics." _Frontiers in Agriculture_, vol. 8, art. 1764002. — LSTM + edge inference for agricultural IoT. REJECTED: agriculture domain mismatch; no robot arm dynamics applicability.
+14. **Yu, Zhang, Liu, Wang, Peng (2026).** "Hybrid LSTM-Edge Correction Architecture for Physics-Informed Crop Health Monitoring in Distributed Agricultural Robotics." _Frontiers in Agriculture_, vol. 8, art. 1764002. — LSTM + edge inference for agricultural IoT. REJECTED: agriculture domain mismatch; no robot arm dynamics applicability.
 
-14. **Agrawal, Menon, Sharma, Gupta, Patel (2026).** "Automating PINN-Based Kinematic Resolution of Robotic Joints Using Robotic Process Automation Frameworks." _Frontiers in Robotics and AI_, vol. 12, art. 1752595. — RPA-based PINN kinematics automation on 2R arm with 40.5 ms latency. REJECTED: inverse kinematics domain (non-dynamics); latency incompatible with 1 kHz control.
+15. **Agrawal, Menon, Sharma, Gupta, Patel (2026).** "Automating PINN-Based Kinematic Resolution of Robotic Joints Using Robotic Process Automation Frameworks." _Frontiers in Robotics and AI_, vol. 12, art. 1752595. — RPA-based PINN kinematics automation on 2R arm with 40.5 ms latency. REJECTED: inverse kinematics domain (non-dynamics); latency incompatible with 1 kHz control.
 
-15. **Hu, Liu, Chen, Zhang, Wang (2026).** "Modeling and Compensation of Backlash-Induced Dynamics Error in Industrial Robots With a PINN-Based Approach." _IEEE Transactions on Industrial Electronics_. — Backlash residual via PINN on non-harmonic-drive joint trains. REJECTED: ReLU activations (forbidden); TCN sliding-window breaks stateless 1 kHz loop; backlash-specific to non-harmonic drives (Franka has harmonic reducers). Secondary finding: backlash error payload-independent, validates RNEA white-box load-dependent term coverage.
+16. **Hu, Liu, Chen, Zhang, Wang (2026).** "Modeling and Compensation of Backlash-Induced Dynamics Error in Industrial Robots With a PINN-Based Approach." _IEEE Transactions on Industrial Electronics_. — Backlash residual via PINN on non-harmonic-drive joint trains. REJECTED: ReLU activations (forbidden); TCN sliding-window breaks stateless 1 kHz loop; backlash-specific to non-harmonic drives (Franka has harmonic reducers). Secondary finding: backlash error payload-independent, validates RNEA white-box load-dependent term coverage.
 
-16. **Li, Yang, Zhao, Wang, Zhou (2025).** "PINN-Based Predictive Control Combined With Unknown Payload Identification for Robots With Prismatic Quasi-Direct-Drives." _IEEE Transactions on Automation Science and Engineering_. — Virtual payload link + NMPC 100 Hz for QDD arms. REJECTED: QDD motor model incompatible with Franka harmonic-drive + motor-inertia model; NMPC 100 Hz incompatible with Stage 2/3 architecture. COMPETITIVE ADVANTAGE: N2-PayloadPINN (virtual payload link runtime injection) already implemented in `pinocchio_baseline/rnea_wrapper.py` via `_inject_payload/_restore_payload`. Dual payload-awareness (RNEA white-box + τ_res delta input) ahead of published Li et al. 2025 — highlight in final paper.
 
 ---
 
@@ -377,7 +376,7 @@ _To be written after experiments._
 | N4-Liu | --max_samples data-efficiency ablation | Liu et al. 2024, Sec. IV-B | 1 | **MERGED** — `training/dataset.py` |
 | N1-Duong | L L^T + εI Cholesky kernel | Duong et al. 2024, Sec. II-C | 3 | Folded into N2-Liu FrictionNet |
 | N3-Duong | 100-step frozen-backbone sim-to-real fine-tuning | Duong et al. 2024, Sec. IV-D | 4 | **MERGED** — `training/fine_tune.py` |
-| N1-SPEL | Revolute-joint sparsity mask → diagonal D | Wang et al. 2025, Sec. II-B | 3 | **CONFIRMED** via Pinocchio analysis — all 7 joints JointModelRZ, 80% param reduction, diagonal D physically justified |
+| N1-SPEL | Revolute-joint sparsity mask → diagonal D | Wang et al. 2025, Sec. II-B | 3 | **CONFIRMED** via Pinocchio analysis — all 7 joints JointModelRZ, 75% param reduction (28→7 entries), diagonal D physically justified |
 | N1-WangCAC | Sobol sampling for excitation trajectories | Wang et al. 2024 | 1 | **IMPLEMENTED** — `generate_fourier_dataset.py`, 10 Sobol segments per payload |
 | N1-E2NN | Structural sub-term embedding (inertia, Coriolis, gravity) | Deng et al. 2024, Sec. 3 | — | REJECT — 1-DoF only; manual per-robot derivation conflicts Goal 1 automation |
 | N2-E2NN | Liquid gating mechanism (recurrent state modulation) | Deng et al. 2024, Sec. 2.3 | — | REJECT — recurrent incompatible with 1 kHz loop; tanh/sigmoid forbidden |
