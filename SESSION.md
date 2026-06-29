@@ -3,7 +3,7 @@
      Do not edit by hand. CLAUDE.md imports it at every startup. -->
 
 ## Last updated
-2026-06-27 (5-paper batch processed: 0 KEEP novelties, 4 additional novelties reviewed; papers/inbox cleared)
+2026-06-29 (PAPER_DRAFT.md restoration: recovered commit 29eadb7, reapplied N1-N2-CompliantPINN/N1-PIKANs/N2-SNRDiag, merged commit 62104c6; no code/novelty/experiment changes)
 
 ## Papers processed
 | Status | File | Relevance | Novelties kept |
@@ -99,6 +99,7 @@ Stage 1 (PINN) — all actionable novelties implemented, validated, and merged; 
 - Physics validator advisories (non-blocking): (1) dissipativity multiplier currently batch-mean — consider per-sample multipliers if weak at runtime; (2) document under-sampling risk for max_samples < ~2000 in ablation study methodology; (3) Stage 3 DEFAULT_ERROR_BOUND = [5,5,5,5,2,2,2] Nm is placeholder — must recompute via `compute_lyapunov_gains(real_error_bound)` after Stage 1 validation; (4) N3-Duong freeze logic via `named_modules()` — document assumption if future architecture changes; (5) N2-Liu FrictionNet lambda_dissip grows slower when active (intended).
 - **Competitive advantage note:** N2-PayloadPINN (virtual payload link runtime injection) is already implemented in pinocchio_baseline/rnea_wrapper.py. Dual payload-awareness (RNEA white-box + tau_res delta input) ahead of Li et al. 2025 — cite in final paper as evidence of alignment with recent published work. Additional validation: Li et al. (2025) "Physics-informed neural networks for compliant robotic manipulators dynamic modeling" independently demonstrates grey-box design (DeLaN-FFNN ≈ RNEA + tau_res) on compliant arms. Toscano et al. (2025) survey corroborates grey-box, AL constraints, frozen-backbone fine-tuning as cutting-edge practices.
 - **Excel logging:** tracking/experiments_log.xlsx must be populated. Need Python authorization to generate via pandas/openpyxl or alternate logging method.
+- **PAPER_DRAFT.md preservation:** Future sessions should use surgical edits (targeted insertions/corrections) rather than full rewrites. Commit 3465927 accidentally deleted 395 lines. Restoration completed (commit 62104c6).
 
 ## What to do next session
 1. **Isaac Sim setup on GPU machine:** install Isaac Sim 4.x, start Nucleus server, install pin+h5py+scipy inside Isaac Sim Python (`./python.sh -m pip install pin h5py scipy`), then run: `for P in 0.0 1.0 3.0; do ./python.sh /path/to/pinn_franka/generate_isaac_dataset.py --payload $P; done`
