@@ -3,7 +3,7 @@
      Do not edit by hand. CLAUDE.md imports it at every startup. -->
 
 ## Last updated
-2026-06-29 (PAPER_DRAFT.md restoration: recovered commit 29eadb7, reapplied N1-N2-CompliantPINN/N1-PIKANs/N2-SNRDiag, merged commit 62104c6; no code/novelty/experiment changes)
+2026-06-29 (Stage 4: demo_targets.py, dry_run.py, gripper read/stop fixes on stage4/force-controlled-grasping, commit fb98bdb; all 4 buildable gaps closed; remaining gaps blocked on Stages 2+3)
 
 ## Papers processed
 | Status | File | Relevance | Novelties kept |
@@ -87,7 +87,7 @@
 | multi-payload-frictionnet-smoke | 2026-06-26 | 0.0523 (mse 0.0530) | `--data fourier_baseline_0kg.h5 fourier_baseline_1kg.h5 fourier_baseline_3kg.h5 --epochs 20 --use_friction_net`. First multi-payload run (147,734 total samples). Val MSE 0.0530 slightly higher than single-payload (0.0451) as expected—harder generalization across 3 payload conditions. Physics constraints satisfied throughout (dissip_viol=0). Per-joint val RMSE [0.246, 0.215, 0.219, 0.217, 0.210, 0.219, 0.276] Nm. D_diag mean/joint [1.168, 1.435, 1.629, 1.189, 1.369, 1.337, 1.198]. No EMA balancing (ratio 1.0x: J1-4 0.224 Nm vs J5-7 0.235 Nm). Saved: models/run_20260626_164045/ |
 
 ## Current milestone
-Stage 1 (PINN) — all actionable novelties implemented, validated, and merged; data pipeline complete including Isaac Sim generator. PAPER_DRAFT.md audit completed (2026-06-27). Literature survey closed: 24 papers processed, 3 KEEP novelties (N2-Liu, N3-Liu, N4-Liu all merged; N3-Duong also merged); all rejections and pending statuses final. Inbox cleared again. Ready for GPU phase: Isaac Sim data generation → training on multi-payload dataset → Lyapunov gains recomputation → Stage 2/3 integration.
+Stage 1 (PINN) + Stage 4 — Stage 1 complete: all novelties implemented, validated, merged; data pipeline ready (Isaac Sim generator built). Stage 4 framework complete: force-controlled grasping architecture (grasp_config, gripper_controller, grasp_executor on stage4/force-controlled-grasping, commit fb98bdb) with dry-run test suite PASSING (6 tests: pick+place, gripper failure, abort, defaults, demo_targets, state transitions). gripper_controller.read() now subscribes to /{robot}/franka_gripper/joint_states; stop() cancels action goals. Remaining gap: _move_arm() wiring awaits Stage 2/3 validated end-to-end. Ready for GPU phase: Isaac Sim data generation → training on multi-payload dataset → Lyapunov gains recomputation → Stage 2/3 validation → Stage 4 arm motion integration.
 
 ## Open questions / blockers
 - **GPU access blocker:** Stage 1 training cannot execute at scale without GPU. Waiting for GPU allocation.
@@ -100,6 +100,7 @@ Stage 1 (PINN) — all actionable novelties implemented, validated, and merged; 
 - **Competitive advantage note:** N2-PayloadPINN (virtual payload link runtime injection) is already implemented in pinocchio_baseline/rnea_wrapper.py. Dual payload-awareness (RNEA white-box + tau_res delta input) ahead of Li et al. 2025 — cite in final paper as evidence of alignment with recent published work. Additional validation: Li et al. (2025) "Physics-informed neural networks for compliant robotic manipulators dynamic modeling" independently demonstrates grey-box design (DeLaN-FFNN ≈ RNEA + tau_res) on compliant arms. Toscano et al. (2025) survey corroborates grey-box, AL constraints, frozen-backbone fine-tuning as cutting-edge practices.
 - **Excel logging:** tracking/experiments_log.xlsx must be populated. Need Python authorization to generate via pandas/openpyxl or alternate logging method.
 - **PAPER_DRAFT.md preservation:** Future sessions should use surgical edits (targeted insertions/corrections) rather than full rewrites. Commit 3465927 accidentally deleted 395 lines. Restoration completed (commit 62104c6).
+- **Stage 4 arm motion integration:** dry_run.py (6 tests) PASSES. gripper_controller.py read() and stop() FIXED. Remaining blocker: _move_arm() in grasp_executor.py raises NotImplementedError, waiting for Stage 2 (MoveIt2 planning) + Stage 3 (ComputedTorquePDController) validated end-to-end integration. ROS2 node for joint state subscriber + grasp orchestration: pending ROS2 environment.
 
 ## What to do next session
 1. **Isaac Sim setup on GPU machine:** install Isaac Sim 4.x, start Nucleus server, install pin+h5py+scipy inside Isaac Sim Python (`./python.sh -m pip install pin h5py scipy`), then run: `for P in 0.0 1.0 3.0; do ./python.sh /path/to/pinn_franka/generate_isaac_dataset.py --payload $P; done`
