@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Optional
 
+import numpy as np
+
 
 class GripperState(Enum):
     OPEN = auto()
@@ -146,10 +148,12 @@ class FrankaROS2GripperController(BaseGripperController):
                     f"{timeout_wait}s — is franka_gripper running?"
                 )
 
-        self._Grasp   = Grasp
-        self._Move    = Move
-        self._Homing  = Homing
-        self._rclpy   = rclpy
+        self._Grasp      = Grasp
+        self._Move       = Move
+        self._Homing     = Homing
+        self._rclpy      = rclpy
+        self._robot_name = robot_name
+        self._setup_state_subscriber()
 
     def _send_goal_sync(self, client, goal, timeout: float):
         """Send an action goal and block until it completes or times out."""
@@ -200,23 +204,59 @@ class FrankaROS2GripperController(BaseGripperController):
         result = self._send_goal_sync(self._grasp_client, goal, timeout)
         return result is not None and result.result.success
 
+    def _setup_state_subscriber(self) -> None:
+        """
+        Subscribe to the gripper joint_states topic to track finger width.
+
+        franka_gripper publishes sensor_msgs/JointState on
+        /{robot_name}/franka_gripper/joint_states with two joints:
+          [0] panda_finger_joint1  — position = half the total width
+          [1] panda_finger_joint2  — mirror of joint1
+
+        Called once from __init__ after action clients are confirmed live.
+        """
+        from sensor_msgs.msg import JointState as JointStateMsg
+        self._gripper_width: float = float("nan")
+        self._gripper_is_grasped: bool = False
+
+        topic = f"/{self._robot_name}/franka_gripper/joint_states"
+
+        def _cb(msg: JointStateMsg) -> None:
+            if len(msg.position) >= 2:
+                # Total width = sum of both finger positions
+                self._gripper_width = float(msg.position[0] + msg.position[1])
+
+        self._node.create_subscription(JointStateMsg, topic, _cb, 10)
+
     def read(self) -> GripperStatus:
-        # franka_gripper publishes state on /franka_gripper/joint_states;
-        # for simplicity we return UNKNOWN here — implement a subscriber
-        # in the ROS2 node that calls this if live state is needed.
+        import rclpy
+        rclpy.spin_once(self._node, timeout_sec=0.0)  # flush pending callbacks
+        width = self._gripper_width
+        is_grasped = self._gripper_is_grasped
+        if np.isnan(width):
+            state = GripperState.UNKNOWN
+        elif is_grasped:
+            state = GripperState.GRASPING
+        elif width >= 0.075:
+            state = GripperState.OPEN
+        else:
+            state = GripperState.CLOSED
         return GripperStatus(
-            width=float("nan"),
+            width=width,
             max_width=0.08,
-            is_grasped=False,
+            is_grasped=is_grasped,
             temperature=-1.0,
-            state=GripperState.UNKNOWN,
+            state=state,
         )
 
     def stop(self) -> None:
-        # franka_ros2 does not expose a dedicated stop action;
-        # cancel all pending goals as the closest equivalent.
-        self._grasp_client._cancel_goal_async  # no-op placeholder
-        self._node.get_logger().warn("stop() called — no franka_ros2 stop action")
+        # franka_ros2 has no dedicated "stop" action; cancel all active goals.
+        for client in (self._grasp_client, self._move_client):
+            try:
+                client._cancel_goal_async(client._goal_handle)
+            except Exception:
+                pass
+        self._node.get_logger().warn("stop(): cancelled active gripper goals")
 
 
 # ---------------------------------------------------------------------------
