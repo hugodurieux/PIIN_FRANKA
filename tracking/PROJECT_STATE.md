@@ -1,5 +1,5 @@
 # Project State — PINN Franka Pipeline
-_Last updated: 2026-06-27 (5 papers processed, inbox cleared; 0 KEEP novelties; all REJECTed or domain-mismatched)_
+_Last updated: 2026-06-29 (Stage 4 grasping scaffolded and merged to main, commit b86f335)_
 
 ## 1. Objectives (from goal.md)
 | # | Objective | Status | Evidence / where proven |
@@ -49,8 +49,18 @@ Scaffolded on branch `stage3/computed-torque-pd-controller` — PHYSICS PASSED. 
 - `controller/computed_torque_pd.py`: `ComputedTorquePDController.step()` — `tau = RNEA(q, qdot, qddot_des) + tau_res(q, qdot, delta) + Kp*(q_des - q) + Kd*(qdot_des - qdot)`, hard-clipped to TORQUE_LIMITS; all I/O numpy; `torch.no_grad()` for inference.
 - Wiring dependency: Stage 2's `TODO(stage3)` must be resolved after this branch is merged into main.
 
-### Stage 4 — Grabbing (optional)
-Not started.
+### Stage 4 — Grasping (optional)
+Scaffolded and merged to main (commit b86f335). Fully isolated — zero modifications to Stages 1-3.
+
+- `stage4/grasp_config.py`: `GraspConfig` dataclass — all grasping parameters in one place: grasp_width/force/speed, epsilon_inner/outer, open_width/speed, pre_approach_height/speed, lift_height/speed, max_torque_error, gripper_timeout, arm_motion_timeout, object_mass.
+- `stage4/gripper_controller.py`: `BaseGripperController` ABC + `FrankaROS2GripperController` (ROS2 Humble, franka_gripper Grasp/Move/Homing action clients, joint_states subscriber for `read()`, goal cancellation in `stop()`) + `MockGripperController` (no-hardware testing).
+- `stage4/grasp_executor.py`: `GraspExecutor` state machine — `pick()` and `place()` methods; phases IDLE -> PRE_APPROACH -> APPROACH -> GRASPING -> LIFTING -> HOLDING -> RELEASING -> ABORTED. After successful grasp calls `arm.update_payload(object_mass)` to update Stage 3 controller payload estimate.
+- `stage4/demo_targets.py`: named poses (box_center, box_left, box_right, place_tray, home); orientations TOP_DOWN and TILTED_30; `get_target(name)` returns (4,4) homogeneous transform in Franka base frame.
+- `stage4/dry_run.py`: 6 offline tests (successful pick+place, gripper failure, abort, GraspConfig defaults, demo_targets validation, MockGripperController transitions) — all pass without hardware / ROS2 / trained model. Run with: `python -m stage4.dry_run`.
+
+Remaining gaps (blocked on Stages 2+3 end-to-end with trained model):
+- `_move_arm()` in `grasp_executor.py` raises `NotImplementedError`; needs IK (Pinocchio or MoveIt2) + trajectory generation (Stage 2) + 1 kHz execution via Stage 3. `TODO(stage4-arm-motion)` marks the integration point.
+- Stage 4 ROS2 orchestration node (joint-state subscriber + full grasp sequence).
 
 ## 3. Implemented novelties
 | ID | From paper | Description | Goal served | Branch | Validated | Merged |
@@ -176,6 +186,15 @@ pinn_franka/
 |       |-- config/
 |           |-- controller_params.yaml
 |
+|-- stage4/                          [merged to main: commit b86f335]
+|   |-- grasp_config.py              GraspConfig dataclass: all grasping parameters
+|   |-- gripper_controller.py        BaseGripperController ABC; FrankaROS2GripperController
+|   |                                (ROS2 Humble action clients); MockGripperController
+|   |-- grasp_executor.py            GraspExecutor state machine: pick()/place(), 8 phases;
+|   |                                calls arm.update_payload() after successful grasp
+|   |-- demo_targets.py              Named poses + orientations; get_target() -> (4,4) SE3
+|   |-- dry_run.py                   6 offline tests; run: python -m stage4.dry_run
+|
 |-- tracking/
 |   |-- PROJECT_STATE.md             This file
 |   |-- papers_review.csv            One row per paper processed
@@ -221,7 +240,8 @@ pinn_franka/
 
 ## 5. Open items / next steps
 
-### Done since last update (2026-06-27)
+### Done since last update (2026-06-29)
+- [x] Stage 4 grasping module scaffolded and merged to main (commit b86f335): `stage4/` directory with GraspConfig dataclass, FrankaROS2GripperController + MockGripperController, GraspExecutor 8-phase state machine, demo_targets, and 6-test dry_run suite. Fully isolated from Stages 1-3. `_move_arm()` is a stub pending Stage 2/3 end-to-end wiring.
 - [x] 5 papers processed (Ma 2025, Li 2025 compliant, Alessi 2024, Chen 2025, Toscano 2025): 0 KEEP novelties; inbox cleared
 - [x] 2 secondary findings added to section 3b (DeLaN-FFNN grey-box validation; PIKANs survey corroboration)
 - [x] 2 new Related Work citations identified: Li et al. (2025) compliant PINN and Toscano et al. (2025) survey
@@ -237,6 +257,7 @@ pinn_franka/
 
 ### Stage wiring (pending Stage 1 convergence)
 - Resolve `TODO(stage3)` markers in `pinn_controller_node.py` (`_compute_torques()` and `_try_load_controller()`) to wire in `ComputedTorquePDController` after Stage 1 model is converged.
+- Resolve `TODO(stage4-arm-motion)` in `stage4/grasp_executor.py` (`_move_arm()`) once Stage 2/3 are wired end-to-end with a trained model.
 - **Inference latency benchmark:** add a timing script to confirm sub-1 ms per forward pass (required to substantiate Goal 2 claim at 1000 Hz).
 
 ### Paper / write-up
