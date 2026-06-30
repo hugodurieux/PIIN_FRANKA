@@ -1,5 +1,5 @@
 # Project State — PINN Franka Pipeline
-_Last updated: 2026-06-29 (Stage 4 grasping scaffolded and merged to main, commit b86f335)_
+_Last updated: 2026-06-30 (3 papers processed: Lutter IROS 2019, Lutter ICLR 2019, Sutanto L4DC 2020; all novelties REJECT; DeLaN lineage secondary finding added)_
 
 ## 1. Objectives (from goal.md)
 | # | Objective | Status | Evidence / where proven |
@@ -103,6 +103,14 @@ Remaining gaps (blocked on Stages 2+3 end-to-end with trained model):
 | N2-CompliantPINN | Li et al. (2025) — compliant manipulators | Payload-weighted loss scaling (scale loss by estimated payload effect per joint). REJECT — weaker duplicate of N2-WhenPhysics EMA diagnostic; N2-WhenPhysics per-joint RMSE diagnostic already implemented in `training/train.py` with exponential smoothing option; no new mechanism. | — | rejected | — | — |
 | N1-PIKANs | Toscano et al. (2025) | PIKAN (Physics-Informed Kolmogorov-Arnold Network) — replace MLP layers with B-spline/wavelet KAN layers throughout the PINN architecture. REJECT — KAN activations violate CLAUDE.md Mish/Softplus-only smoothness constraint; duplicate of N3-SPEL rejection reason. Toscano et al. survey broadly corroborates existing design choices (grey-box, AL constraints, frozen-backbone fine-tuning). | — | rejected | — | — |
 | N2-SNRDiag | Toscano et al. (2025) | Spectral normalisation of residual diagonal (SNR) — apply spectral normalisation to the output layer of the residual network to enforce Lipschitz continuity. REJECT — serves no goal.md objective; project's AL dissipativity constraint already enforces energy-consistent behaviour; adding spectral normalisation would complicate the gradient landscape without a clear physics motivation. | — | rejected | — | — |
+| N1-DeLaN4EC | Lutter, Listmann, Peters (IROS 2019) | Energy coherence loss — joint training loss enforcing T + V = H (kinetic + potential = Hamiltonian) across the Lagrangian network during rollout. REJECT — requires explicit T/V output heads that are absent from the grey-box RNEA-residual architecture; adding them would require learning H(q, qdot) explicitly, breaking the RNEA-intact invariant (Goal 1). | — | rejected | — | — |
+| N2-DeLaN4EC | Lutter, Listmann, Peters (IROS 2019) | Forward + inverse model consistency loss — enforce that the forward model (M(q)qddot = tau) and inverse model (tau_pred) agree on the same trajectory. REJECT — requires computing H^{-1}(q) at 7-DoF (7x7 matrix inversion per sample); computationally expensive and introduces the same conflict as N1-Liu (RK4 rollout) with the RNEA white-box path. | — | rejected | — | — |
+| N3-DeLaN4EC | Lutter, Listmann, Peters (IROS 2019) | Parametric Stribeck friction model — augment the Lagrangian network output with a Stribeck curve parameterised by static friction, Coulomb friction, and Stribeck velocity (tanh/sign-based). REJECT — sign(qdot) is non-smooth and violates the Mish/Softplus smoothness constraint; Stribeck static-friction peak is not present in Franka's harmonic-reducer joints; FrictionNet (N2-Liu, MERGED) already provides a structurally superior smooth dissipation parameterisation. | — | rejected | — | — |
+| N1-DeLaN | Lutter, Ritter, Peters (ICLR 2019) | Cholesky L(q)L(q)^T parameterisation for the full inertia matrix H(q) — learn a lower-triangular L(q) such that H = L L^T guarantees positive definiteness everywhere. REJECT — the project's RNEA (via Pinocchio) already provides H(q) analytically from the URDF, making a learned H superfluous; Cholesky concept already absorbed into N1-Duong and ultimately the diagonal FrictionNet (N2-Liu, MERGED). Seminal paper: original source for Cholesky+Softplus diagonal design pattern in physics-structured NNs. | — | rejected | — | — |
+| N2-DeLaN | Lutter, Ritter, Peters (ICLR 2019) | Online in-loop model update at 200 Hz — re-run a few gradient steps on the Lagrangian network during closed-loop execution to adapt to changing conditions. REJECT — breaks the stateless 1 kHz control loop invariant (no gradient computation at runtime); N3-Duong offline fine-tuning (MERGED) already covers the model-update goal without runtime overhead. | — | rejected | — | — |
+| N1-DiffNEA | Sutanto et al. (L4DC 2020) | Differentiable Newton-Euler Algorithm (DiffNEA) with learnable inertial parameters — make URDF link masses and inertias differentiable and jointly optimised with the neural residual. REJECT — violates the RNEA-intact invariant: making URDF parameters learnable destroys the white-box analytical guarantee that is the core of Goal 1 (automated URDF-to-model pipeline). | — | rejected | — | — |
+| N2-DiffNEA | Sutanto et al. (L4DC 2020) | Per-joint theta^2 viscous damping term — add a quadratic velocity-dependent damping d_i * qdot_i^2 per joint in the RNEA output. REJECT — weaker variant of the existing FrictionNet (N2-Liu, MERGED): FrictionNet learns a full nonlinear D(q, qdot, delta) * qdot dissipation, which subsumes the fixed quadratic approximation; Sutanto's quadratic form also ignores payload conditioning. | — | rejected | — | — |
+| N3-DiffNEA | Sutanto et al. (L4DC 2020) | Online payload adaptation via gradient descent on RNEA inertial parameters — update payload-related link inertias online by backpropagating through the differentiable RNEA. REJECT — subsumed by the existing dual payload-awareness mechanism: `_inject_payload()` in `rnea_wrapper.py` (white-box path) + delta conditioning of tau_res (residual path). Running gradients through RNEA at 1 kHz is computationally incompatible with real-time control. | — | rejected | — | — |
 
 ## 3a. Primary baseline — Liu et al. (2024) competitive gaps
 Liu et al. (2024): "Physics-Informed Neural Networks to Model and Control Robots:
@@ -127,6 +135,8 @@ Independent papers reviewed have produced secondary findings that strengthen exi
 3. **DeLaN-FFNN grey-box architecture independently validated** (Li et al., 2025 — compliant manipulators): Li et al. apply a DeLaN-style FFNN grey-box (analytical structured terms + neural residual) to compliant robotic manipulators and confirm it outperforms pure black-box models. This is an independent peer-reviewed validation of the grey-box design philosophy used in this project, from a different domain (compliant vs. rigid-body). Useful citation for PAPER_DRAFT.md Section 2 (Related Work).
 
 4. **Broad survey corroborates existing design choices** (Toscano et al., 2025 — PIKANs survey): A comprehensive survey of PINNs vs. PIKANs confirms that grey-box compositions with analytical physics terms, augmented Lagrangian constraint enforcement, and frozen-backbone fine-tuning are recognised best practices in the current state of the art. No architectural changes warranted; serves as a broad citation for PAPER_DRAFT.md Section 2.
+
+5. **DeLaN lineage confirms RNEA-intact superiority and FrictionNet design** (Lutter et al. IROS 2019 + ICLR 2019; Sutanto et al. L4DC 2020 — processed 2026-06-30): The three foundational papers of the Lagrangian-NN / differentiable-RNEA lineage all converge on the same limitation: learning H(q) (DeLaN) or making URDF inertias differentiable (DiffNEA) provides flexibility at the cost of breaking the analytical white-box guarantee. The project's RNEA-intact grey-box approach avoids this trade-off entirely. Secondary findings: (a) Sutanto et al. confirm Pinocchio's suitability for 7-DoF batched RNEA at training time; (b) Sutanto et al. identify a static-friction gap in their DiffNEA that the project's FrictionNet (N2-Liu, MERGED) + augmented Lagrangian dissipativity directly address; (c) Lutter ICLR 2019 is the original source for the Cholesky + Softplus-diagonal design pattern that N2-Liu FrictionNet descends from — cite in PAPER_DRAFT.md Section 2 as the lineage anchor. All three papers are cite-worthy in the Related Work section.
 
 ## 3c. Physics validator advisories (non-blocking)
 1. N4 branch — dissipativity multiplier is batch-mean (pre-existing, not introduced by N4 branch) — consider per-sample multipliers if enforcement is weak at runtime.
@@ -226,6 +236,9 @@ pinn_franka/
 |       |-- Alessi et al. (2024)...  (processed — rod models in soft/continuum robots; relevance 0, domain mismatch; no novelties)
 |       |-- Chen et al. (2025)...    (processed — data-driven soft robot modeling; relevance 0, domain mismatch; no novelties)
 |       |-- Toscano et al. (2025)... (processed — PINNs to PIKANs survey; relevance 1, N1-PIKANs + N2-SNRDiag REJECTed; secondary finding: survey corroborates grey-box + AL + frozen-backbone design; cite in Related Work Section 2)
+|       |-- Lutter, Listmann, Peters (IROS 2019)... (processed — DeLaN for energy-based control of under-actuated systems; relevance 1, all REJECTed; bibliographic value: foundational DeLaN predecessor, cite as origin of Lagrangian NN lineage)
+|       |-- Lutter, Ritter, Peters (ICLR 2019)...  (processed — Deep Lagrangian Networks seminal paper; relevance 1, all REJECTed; bibliographic value: original source for Cholesky+Softplus-diagonal PD-matrix design; cite in Related Work Section 2)
+|       |-- Sutanto et al. (L4DC 2020)...          (processed — Differentiable Newton-Euler Algorithm; relevance 1, all REJECTed; secondary findings: Pinocchio suitability for 7-DoF confirmed; static friction gap in DiffNEA validates FrictionNet + AL design)
 |
 |-- docs/
 |   |-- HOW_TO_USE.md
@@ -240,11 +253,9 @@ pinn_franka/
 
 ## 5. Open items / next steps
 
-### Done since last update (2026-06-29)
-- [x] Stage 4 grasping module scaffolded and merged to main (commit b86f335): `stage4/` directory with GraspConfig dataclass, FrankaROS2GripperController + MockGripperController, GraspExecutor 8-phase state machine, demo_targets, and 6-test dry_run suite. Fully isolated from Stages 1-3. `_move_arm()` is a stub pending Stage 2/3 end-to-end wiring.
-- [x] 5 papers processed (Ma 2025, Li 2025 compliant, Alessi 2024, Chen 2025, Toscano 2025): 0 KEEP novelties; inbox cleared
-- [x] 2 secondary findings added to section 3b (DeLaN-FFNN grey-box validation; PIKANs survey corroboration)
-- [x] 2 new Related Work citations identified: Li et al. (2025) compliant PINN and Toscano et al. (2025) survey
+### Done since last update (2026-06-30)
+- [x] 3 papers processed (Lutter IROS 2019, Lutter ICLR 2019, Sutanto L4DC 2020): 8 novelties evaluated, all REJECT; papers moved to papers/processed/; papers_review.csv updated. No new branches or implementations.
+- [x] Secondary finding 5 added (section 3b): DeLaN/DiffNEA lineage review confirms RNEA-intact superiority; identifies 3 new Related Work citations (Lutter IROS 2019, Lutter ICLR 2019, Sutanto L4DC 2020); confirms Pinocchio suitability for 7-DoF and FrictionNet design lineage.
 
 ### Blocked on GPU
 - **GPU + full convergence:** `python3 -m training.train --data data/fourier_baseline_0kg.h5 data/fourier_baseline_1kg.h5 data/fourier_baseline_3kg.h5 --epochs 200 --use_friction_net` — needs GPU for proper convergence.
@@ -261,7 +272,12 @@ pinn_franka/
 - **Inference latency benchmark:** add a timing script to confirm sub-1 ms per forward pass (required to substantiate Goal 2 claim at 1000 Hz).
 
 ### Paper / write-up
-- **Add two Related Work citations** (PAPER_DRAFT.md Section 2): Li et al. (2025) compliant PINN (DeLaN-FFNN independent validation) and Toscano et al. (2025) PIKANs survey (broad corroboration of grey-box + AL + frozen-backbone).
+- **Add Related Work citations** (PAPER_DRAFT.md Section 2):
+  - Lutter et al. (ICLR 2019) — original Cholesky+Softplus-diagonal source; lineage anchor for FrictionNet design.
+  - Lutter et al. (IROS 2019) — foundational DeLaN predecessor for energy-based control lineage.
+  - Sutanto et al. (L4DC 2020) — DiffNEA; confirm RNEA-intact advantage and FrictionNet static-friction motivation.
+  - Li et al. (2025) compliant PINN — DeLaN-FFNN independent validation.
+  - Toscano et al. (2025) PIKANs survey — broad corroboration of grey-box + AL + frozen-backbone.
 - **Dual payload-awareness competitive advantage:** document in paper that `_inject_payload()` in `rnea_wrapper.py` + delta conditioning of tau_res predates and exceeds Li et al. (2025) payload-ID and Li et al. (2025) compliant PINN single-pathway approaches.
 - **Scope physics claims to in-distribution trajectories:** following Prabhakar et al. (ICLR 2026) negative result — do not claim temporal extrapolation without empirical evidence.
 - **Physics-validator advisories to address in paper methodology section:** (1) per-sample vs. batch-mean dissipativity multiplier; (2) under-sampling risk for max_samples < 2000; (3) slower lambda_dissip growth with FrictionNet (intended — document in ablation).

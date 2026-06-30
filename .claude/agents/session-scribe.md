@@ -34,10 +34,12 @@ Rewrite SESSION.md completely with this exact structure:
 <today's date and approximate time>
 
 ## Papers processed
-| Status | File | Relevance | Novelties kept |
-|--------|------|-----------|----------------|
+| Status | File | Relevance | Novelties kept | Corroboration |
+|--------|------|-----------|----------------|---------------|
 <one row per paper ever processed — carry forward from previous SESSION.md,
- add any new ones from this session>
+ add any new ones from this session. Corroboration column: list design choices
+ confirmed by this paper (e.g. "RNEA white-box (strong), Softplus diagonal (moderate)")
+ or "none" if no corroboration found.>
 
 ## Novelties pipeline
 | ID | Description | Supervisor verdict | Implementation status |
@@ -74,6 +76,14 @@ After writing SESSION.md, update `PAPER_DRAFT.md` to reflect this session's work
 - Appendix A (Novelty Tracking): update the Status column for any novelty whose
   status changed this session (INVESTIGATE -> MERGED, etc.).
 - References: add any new paper that was processed and cited this session.
+- **Corroboration citations**: for every paper processed this session whose
+  `corroboration_value` contains entries with `cite_in_paper: yes`, add a supporting
+  citation in the suggested PAPER_DRAFT.md section. The citation should follow this
+  pattern: *"[Author et al., year] independently confirms this design choice by
+  [one-sentence evidence]."* Add it as a short sentence appended to the relevant
+  paragraph — do NOT create new paragraphs just for corroboration. If the suggested
+  section does not yet exist (e.g. a Stage 2 section), note it in Open questions
+  instead of creating placeholder sections.
 - Do NOT rewrite sections that have not changed. Only touch what is new.
 
 ## Rules

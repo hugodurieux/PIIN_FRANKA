@@ -15,7 +15,7 @@ Path: `tracking/papers_review.csv`
 If it does not exist, create it with this exact header row:
 
 ```
-date_processed,filename,title,authors,year,venue,summary_abstract,key_results,keywords,project_stage,relevance_score,potential_novelties,linked_goal,already_in_project,code_available,notes
+date_processed,filename,title,authors,year,venue,summary_abstract,key_results,keywords,project_stage,relevance_score,potential_novelties,linked_goal,already_in_project,code_available,corroboration_value,notes
 ```
 
 ## Column definitions
@@ -37,6 +37,7 @@ date_processed,filename,title,authors,year,venue,summary_abstract,key_results,ke
 | **linked_goal** | Which goal.md objective(s) each novelty serves, or "none" |
 | **already_in_project** | yes / no |
 | **code_available** | yes / no / partial — with URL if yes |
+| **corroboration_value** | Pipe-separated list of existing design choices this paper independently validates: "aspect :: evidence (strength) [cite: yes/no → Section X]". Use "none" if paper provides no confirmation of existing choices. Example: "RNEA white-box :: Sutanto 2020 shows differentiable RNEA requires runtime gradients, confirming frozen-RNEA advantage (strong) [cite: yes → Section 3.2] \| Softplus diagonal :: Cholesky+Softplus is canonical for PD matrices (moderate) [cite: yes → Related Work]" |
 | **notes** | Caveats, limitations, doubts (sim-only? gentle regime? etc.) |
 
 ## How to write a row (Python / csv — handles commas safely)
@@ -49,7 +50,7 @@ CSV = "tracking/papers_review.csv"
 HEADER = ["date_processed","filename","title","authors","year","venue",
           "summary_abstract","key_results","keywords","project_stage",
           "relevance_score","potential_novelties","linked_goal",
-          "already_in_project","code_available","notes"]
+          "already_in_project","code_available","corroboration_value","notes"]
 
 def append_paper(row: dict):
     new_file = not os.path.exists(CSV)

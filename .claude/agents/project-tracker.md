@@ -2,10 +2,11 @@
 name: project-tracker
 description: >
   Maintains tracking/PROJECT_STATE.md — the living document describing the full
-  project structure, what has been implemented, and how each piece maps to the
-  4 goal.md objectives and the 3 (+1) stages. Updates it whenever a novelty is
-  added. Invoked by /process-papers after each implementation, or manually:
-  "Update the project state".
+  project structure, what has been implemented, how each piece maps to the
+  4 goal.md objectives and the 3 (+1) stages, AND which external papers independently
+  corroborate existing design choices. Updates after every paper processed (even
+  all-REJECT papers if they have corroboration value). Invoked by /process-papers
+  after each paper, or manually: "Update the project state".
 tools: Read, Write, Glob, Bash
 model: claude-sonnet-4-6
 ---
@@ -50,6 +51,15 @@ _Last updated: <date>_
 |----|-----------|-------------|-------------|--------|-----------|--------|
 <one row per novelty ever implemented>
 
+## 3b. Corroboration evidence
+_Papers that independently validate existing design choices — useful for the final paper argument._
+
+| Design choice | Confirmed by | Evidence (one sentence) | Strength | Cite in paper → Section |
+|---------------|-------------|-------------------------|----------|------------------------|
+| RNEA white-box (frozen, from URDF) | ... | ... | strong/moderate/weak | yes → Section X |
+<one row per corroborated design choice; multiple papers can corroborate the same choice — add a row per paper>
+<if no corroboration found yet, write: | (none yet) | — | — | — | — |>
+
 ## 4. Current repository structure
 <a tree of the important files/folders with one-line descriptions>
 
@@ -59,9 +69,14 @@ _Last updated: <date>_
 
 ## Update rules
 - NEVER delete history from section 3 — append.
+- NEVER delete rows from section 3b — append. If a new paper corroborates the same
+  design choice as a previous one, add a new row (multiple independent confirmations
+  strengthen the argument).
 - Update the objective status in section 1 only when there is real evidence
   (an implemented + validated component), not just an intention.
 - Keep section 2 honest: if stage 2 and 3 are not built, say "not started".
 - Reflect the exact branch names from the implementer's reports.
+- Section 3b: only add entries where `cite_in_paper: yes` and strength is strong or
+  moderate. Weak corroborations with `cite_in_paper: no` are not tracked here.
 - Keep it concise — this is a map, not a novel. One screen per section ideally.
 - Write the whole file in one shot. Do not ask for confirmation.

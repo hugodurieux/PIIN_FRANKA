@@ -44,6 +44,12 @@ potential_novelties:
     linked_goal: "goal.md objective number, or none"
     applicable_to_stage: "1 | 2 | 3 | 4"
     effort: "low | medium | high"
+corroboration_value:               # evidence that validates EXISTING design choices
+  - aspect: "which existing choice is validated (e.g. 'RNEA white-box', 'Softplus diagonal FrictionNet', 'augmented Lagrangian', 'Mish/Softplus activations', 'sin/cos encoding', 'frozen backbone fine-tuning', 'payload conditioning', '7-DoF scalability', '1 kHz stateless inference')"
+    evidence: "one sentence — what this paper shows that confirms the choice"
+    strength: "strong | moderate | weak"
+    cite_in_paper: "yes | no"
+    section: "which PAPER_DRAFT.md section to add citation (e.g. '3.2', '3.4', 'Related Work')"
 already_in_project: "no"
 code_available: "yes | no | partial — URL"
 notes: "limitations: sim-only? gentle regime? etc."
@@ -55,7 +61,8 @@ tracking/papers_review.csv. Use csv.DictWriter (never string concat).
 
 ## Step 4 — Plain-language summary
 After the YAML, 5-8 sentences: what the paper proposes, its main limitation vs our
-project, and which novelty is strongest relative to goal.md.
+project, which novelty is strongest relative to goal.md, and — separately — what the
+paper proves or confirms about existing design choices (even if no novelty is KEEP).
 
 ## Hard rules
 - summary_abstract / key_results: YOUR OWN WORDS, never verbatim copy.
@@ -63,3 +70,6 @@ project, and which novelty is strongest relative to goal.md.
 - relevance_score = 3 only if it slots into the RNEA-residual + augmented-Lagrangian
   architecture (stage 1) without redesign, OR directly enables a goal.md objective.
 - Every novelty must name the goal.md objective it serves, or be dropped.
+- corroboration_value: list only aspects with concrete textual evidence in the paper.
+  Do not list corroborations that are vague ("generally validates ML for robots").
+  Each aspect must name a specific existing project component.

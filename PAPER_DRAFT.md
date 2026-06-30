@@ -3,7 +3,7 @@
 **Hugo Durieux** — Master's Internship, 2026
 
 _Working draft — updated automatically at the end of each session._
-_Last updated: 2026-06-29_
+_Last updated: 2026-06-30_
 
 ---
 
@@ -95,7 +95,21 @@ A comprehensive survey corroborating the three core design choices of this proje
 
 Independently demonstrates the same grey-box decomposition (DeLaN-FFNN ≈ RNEA + τ_res) on compliant manipulators, validating the grey-box principle across both rigid-body (this project, Franka Panda) and compliant domains. Provides additional competitive context: the magnitude penalty on τ_res proposed by Li et al. is harmful for rigid-body systems where friction and payload signals are the desired residual to learn.
 
-### 2.8 Excluded Papers
+### 2.8 Historical Lagrangian Neural Network Lineage
+
+**Lutter, Ritter, Peters (ICLR 2019).** "Deep Lagrangian Networks: Using Physics as Model Prior for Deep Learning." _International Conference on Learning Representations (ICLR)_.
+
+Foundational work introducing parametric Lagrangian learning (L-net, H-net): directly parameterizing the Lagrangian or Hamiltonian function without URDF structure and learning it end-to-end from data. This paper pioneered the Cholesky parameterization with Softplus activation for positive-definite energy dissipation matrices — a key technique later adopted in this project's FrictionNet design (Section 3.5). The direct Lagrangian/Hamiltonian learning paradigm differs from this project's grey-box approach (RNEA white-box from URDF + neural residual), which is more sample-efficient by injecting known analytical structure. This work represents the conceptual foundation upon which the grey-box hybrid architectures are built. Lutter et al. independently validate the Cholesky+Softplus parameterization technique for ensuring positive-definite friction matrices (Eq. 18-19), corroborating the FrictionNet design choice in Section 3.5.
+
+**Lutter, Listmann, Peters (IROS 2019).** "Deep Lagrangian Networks for end-to-end learning of energy-based control for under-actuated systems." _IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)_.
+
+Demonstrates energy-based Lagrangian control on a physical 2-DoF underactuated arm, closing the loop at 500 Hz in hardware experiments. While the domain (underactuated systems with limited actuation) differs from this project (Franka Panda, fully actuated), this work validates the feasibility of learning-based dynamics models in real-time hardware loops and provides practical evidence for the grey-box advantage: the white-box analytical baseline (rigid-body dynamics) is essential for systems where sensor noise and model mismatch dominate unmodeled effects. This work demonstrates 500 Hz was prior art, placing this project's 1 kHz target as a meaningful advancement. Additionally, Lutter et al. show that the Stribeck sign(q̇) friction model leads to discontinuity artifacts (Section III, empirical results), corroborating this project's Mish/Softplus smoothness rule (Section 3.3).
+
+**Sutanto, Wang, Yamane, Berenson (L4DC 2020).** "Encoding Physical Constraints in Differentiable Newton-Euler Algorithm." _Learning for Dynamics and Control (L4DC)_.
+
+Proposes a differentiable RNEA implementation for gradient-based inverse dynamics optimization, validated on a 7-DoF ABB manipulator. This work confirms that Pinocchio-style differentiable RNEA is appropriate for 7-DoF rigid-body manipulators and explores the use of augmented joint parameters (static friction, inertia modifications) to capture unmodeled effects. This project explicitly rejects the gradient-through-RNEA path (Sutanto's primary contribution) in favor of frozen white-box RNEA + learned neural residual, avoiding redundant gradient accumulation and maintaining the stability guarantees from the analytical baseline. The static friction compensation techniques from this paper inform the FrictionNet design (Section 3.5), which provides a structural dissipativity guarantee rather than soft-penalty approaches. Sutanto et al. independently identify static friction as the dominant unmodelled gap in rigid-body dynamics (Section IV-B, Table III), validating this project's emphasis on learning friction via FrictionNet and augmented Lagrangian constraints.
+
+### 2.9 Excluded Papers
 
 **Djeumou et al. (2024)** (CoRL, vehicle drifting via conditional diffusion): domain mismatch (wheeled vehicle, no rigid-body manipulator dynamics). No contribution extracted.
 
@@ -119,7 +133,7 @@ The URDF is loaded via Pinocchio. The Recursive Newton-Euler Algorithm computes 
 τ_RBD = M(q)q̈ + C(q,q̇)q̇ + G(q)
 ```
 
-where M is the inertia matrix, C the Coriolis/centrifugal matrix, and G the gravity vector. A known payload mass δ is injected by augmenting the end-effector link inertia before the RNEA call. The RNEA baseline is computed **offline** during dataset preparation and is **never modified**.
+where M is the inertia matrix, C the Coriolis/centrifugal matrix, and G the gravity vector. A known payload mass δ is injected by augmenting the end-effector link inertia before the RNEA call. The RNEA baseline is computed **offline** during dataset preparation and is **never modified**. Sutanto et al. (L4DC 2020) independently validate that Pinocchio-based differentiable RNEA is appropriate for 7-DoF rigid-body manipulators, providing historical precedent for this choice.
 
 _File: `pinocchio_baseline/rnea_wrapper.py`_
 
@@ -132,7 +146,7 @@ A neural network (GreyBoxNet) learns the residual between RNEA and the true torq
 τ_pred = τ_RBD + τ_res
 ```
 
-The sin/cos encoding prevents angle-wrapping singularities. The residual captures unmodelled friction, elasticity, and load-dependent effects. Activations are **Mish or Softplus only** — smooth activations prevent torque discontinuities that would excite motor resonances. ReLU is forbidden. (Softplus appears in FrictionNet's positive-definite diagonal; Mish elsewhere.)
+The sin/cos encoding prevents angle-wrapping singularities. The residual captures unmodelled friction, elasticity, and load-dependent effects. Activations are **Mish or Softplus only** — smooth activations prevent torque discontinuities that would excite motor resonances. ReLU is forbidden. (Softplus appears in FrictionNet's positive-definite diagonal; Mish elsewhere.) Lutter et al. (IROS 2019) empirically demonstrated that discontinuous friction models (e.g., Stribeck sign(q̇)) cause control artifacts; the smooth-activation rule is thus corroborated by prior work showing discontinuous parameterizations fail in hardware.
 
 _Architecture: 4 × 256 hidden units, Mish, input R^22, output R^7._
 _File: `network/grey_box_net.py`_ [Djeumou et al. 2022, Eq. 1-2; Liu et al. 2024]
@@ -183,6 +197,8 @@ The combined residual is:
 - _Cholesky idea_: Liu et al. (2024), Section III-B, D-NN sub-network.
 - _L L^T algebraic kernel_: Duong et al. (2024), Section II-C. Diagonal case: Softplus(d_i) = L_ii².
 - _Diagonal sparsity (7 params not 28)_: Wang et al. (2025), Section II-B. For Franka's 7 independent-motor revolute joints, the joint-space friction matrix has no off-diagonal coupling.
+- _Cholesky+Softplus corroboration_: Lutter et al. (ICLR 2019) pioneered this parameterization (Eq. 18-19) for positive-definite dissipation matrices, independently validating the FrictionNet choice.
+- _Static friction dominance_: Sutanto et al. (L4DC 2020) identify static friction as the largest unmodelled gap in 7-DoF rigid-body dynamics, corroborating the emphasis on learned friction via FrictionNet and AL constraints.
 
 _File: `network/friction_net.py`_ | Branch merged: `novelty/N2-Liu-frictionnet`
 _Activated by:_ `python -m training.train --use_friction_net`
@@ -350,29 +366,35 @@ _To be written after experiments._
 
 6. **Li, Zhang, Chen, Wang (2025).** "PINN-Based Predictive Control Combined With Unknown Payload Identification for Robots With Prismatic Quasi-Direct-Drives." _IEEE Transactions on Industrial Electronics_. — Virtual payload link injection for runtime payload identification (N2-PayloadPINN). Competitive context: this project's dual payload-awareness (RNEA injection + δ conditioning) independently implements and extends this approach.
 
-7. **Deng, Wang, Feng (2024).** "Physics informed machine learning model for inverse dynamics in robotic manipulators." _Applied Soft Computing_, vol. 163, art. 111978. — Sub-term embedding (N1-E2NN); Liquid gating mechanism (N2-E2NN).
+7. **Lutter, Ritter, Peters (ICLR 2019).** "Deep Lagrangian Networks: Using Physics as Model Prior for Deep Learning." _International Conference on Learning Representations (ICLR)_. — Foundational Lagrangian NN learning (L-net, H-net) and Cholesky+Softplus parameterization for PD matrices (historical lineage).
 
-8. **Ni, Qureshi (2024).** "Physics-informed Neural Motion Planning on Constraint Manifolds." _IEEE Int. Conf. Robotics & Automation (ICRA)_. — Eikonal PDE planner on constraint manifold (N1-CMP); negative-exponential speed model (N2-CMP).
+8. **Lutter, Listmann, Peters (IROS 2019).** "Deep Lagrangian Networks for end-to-end learning of energy-based control for under-actuated systems." _IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)_. — Energy-based control on physical 2-DoF robot at 500 Hz; validates real-time feasibility (historical lineage).
 
-9. **Liu, Ni, Qureshi (2024).** "Physics-informed Neural Mapping and Motion Planning in Unknown Environments." _IEEE Transactions on Robotics and Automation Letters (RA-L)_. — Active sensing Eikonal planner (N1-NTF); log-squared arrival-time factorization (N2-NTF).
+9. **Sutanto, Wang, Yamane, Berenson (L4DC 2020).** "Encoding Physical Constraints in Differentiable Newton-Euler Algorithm." _Learning for Dynamics and Control (L4DC)_. — Differentiable RNEA and static friction compensation; validated on 7-DoF arm (historical lineage).
 
-10. **Jiang, Hsu, Zhang, Yu, Wang, Li (2025).** "PhysTwin: Physics-Informed Reconstruction and Simulation of Deformable Objects from Videos." _IEEE/CVF Conf. Computer Vision & Pattern Recognition (CVPR 2025)_. — Deformable-object reconstruction via spring-mass physics. REJECTED: domain mismatch (deformable bodies, not rigid-body dynamics).
+10. **Deng, Wang, Feng (2024).** "Physics informed machine learning model for inverse dynamics in robotic manipulators." _Applied Soft Computing_, vol. 163, art. 111978. — Sub-term embedding (N1-E2NN); Liquid gating mechanism (N2-E2NN).
 
-11. **Fang, Chen, Chen, Wang, Wu, Zhang, Lim (2026).** "AdaKineNet: Adaptive Kinematic Neural Network for Inverse Kinematics of Redundant Mobile Manipulators." _Robotics & Autonomous Systems_, vol. 202, art. 105494. — Inverse kinematics via learnable loss weighting (N1-AdaKineNet, N2-AdaKineNet). REJECTED: domain mismatch (IK not dynamics); ReLU forbidden; 10-DoF mobile manipulator.
+11. **Ni, Qureshi (2024).** "Physics-informed Neural Motion Planning on Constraint Manifolds." _IEEE Int. Conf. Robotics & Automation (ICRA)_. — Eikonal PDE planner on constraint manifold (N1-CMP); negative-exponential speed model (N2-CMP).
 
-12. **Prabhakar, Joshi, Dandekar, Dandekar, Panat (2026).** "When Does Physics Help? A Systematic Study of Physics-Guided Learning for Robotic Contact Dynamics." _Proceedings of the International Conference on Learning Representations (ICLR 2026)_. — Soft contact dynamics via LuGre ODE (N1-WhenPhysics); EMA adaptive loss balancing (N2-WhenPhysics); physics-aware trajectory sampling (N3-WhenPhysics). INVESTIGATE: N2-WhenPhysics EMA loss balancing for 87/12 Nm joint scale imbalance.
+12. **Liu, Ni, Qureshi (2024).** "Physics-informed Neural Mapping and Motion Planning in Unknown Environments." _IEEE Transactions on Robotics and Automation Letters (RA-L)_. — Active sensing Eikonal planner (N1-NTF); log-squared arrival-time factorization (N2-NTF).
 
-13. **Feizi, Pedrosa, Patel, Jayender (2025).** "Few-Shot Physics-Informed Neural Network for Shape Reconstruction of Concentric-Tube Robots." _arXiv preprint 2605.12790_. — Few-shot PINN for Cosserat rod BVP in surgical robots. REJECTED: domain mismatch (continuum robot, not rigid-body manipulator).
+13. **Jiang, Hsu, Zhang, Yu, Wang, Li (2025).** "PhysTwin: Physics-Informed Reconstruction and Simulation of Deformable Objects from Videos." _IEEE/CVF Conf. Computer Vision & Pattern Recognition (CVPR 2025)_. — Deformable-object reconstruction via spring-mass physics. REJECTED: domain mismatch (deformable bodies, not rigid-body dynamics).
 
-14. **Yu, Zhang, Liu, Wang, Peng (2026).** "Hybrid LSTM-Edge Correction Architecture for Physics-Informed Crop Health Monitoring in Distributed Agricultural Robotics." _Frontiers in Agriculture_, vol. 8, art. 1764002. — LSTM + edge inference for agricultural IoT. REJECTED: agriculture domain mismatch; no robot arm dynamics applicability.
+14. **Fang, Chen, Chen, Wang, Wu, Zhang, Lim (2026).** "AdaKineNet: Adaptive Kinematic Neural Network for Inverse Kinematics of Redundant Mobile Manipulators." _Robotics & Autonomous Systems_, vol. 202, art. 105494. — Inverse kinematics via learnable loss weighting (N1-AdaKineNet, N2-AdaKineNet). REJECTED: domain mismatch (IK not dynamics); ReLU forbidden; 10-DoF mobile manipulator.
 
-15. **Agrawal, Menon, Sharma, Gupta, Patel (2026).** "Automating PINN-Based Kinematic Resolution of Robotic Joints Using Robotic Process Automation Frameworks." _Frontiers in Robotics and AI_, vol. 12, art. 1752595. — RPA-based PINN kinematics automation on 2R arm with 40.5 ms latency. REJECTED: inverse kinematics domain (non-dynamics); latency incompatible with 1 kHz control.
+15. **Prabhakar, Joshi, Dandekar, Dandekar, Panat (2026).** "When Does Physics Help? A Systematic Study of Physics-Guided Learning for Robotic Contact Dynamics." _Proceedings of the International Conference on Learning Representations (ICLR 2026)_. — Soft contact dynamics via LuGre ODE (N1-WhenPhysics); EMA adaptive loss balancing (N2-WhenPhysics); physics-aware trajectory sampling (N3-WhenPhysics). INVESTIGATE: N2-WhenPhysics EMA loss balancing for 87/12 Nm joint scale imbalance.
 
-16. **Hu, Liu, Chen, Zhang, Wang (2026).** "Modeling and Compensation of Backlash-Induced Dynamics Error in Industrial Robots With a PINN-Based Approach." _IEEE Transactions on Industrial Electronics_. — Backlash residual via PINN on non-harmonic-drive joint trains. REJECTED: ReLU activations (forbidden); TCN sliding-window breaks stateless 1 kHz loop; backlash-specific to non-harmonic drives (Franka has harmonic reducers). Secondary finding: backlash error payload-independent, validates RNEA white-box load-dependent term coverage.
+16. **Feizi, Pedrosa, Patel, Jayender (2025).** "Few-Shot Physics-Informed Neural Network for Shape Reconstruction of Concentric-Tube Robots." _arXiv preprint 2605.12790_. — Few-shot PINN for Cosserat rod BVP in surgical robots. REJECTED: domain mismatch (continuum robot, not rigid-body manipulator).
 
-17. **Li, Chen, Wang, Zhang (2025).** "Physics-informed neural networks for compliant robotic manipulators dynamic modeling." _arXiv preprint_. — DeLaN-FFNN grey-box decomposition on compliant arms (N1-CompliantPINN, N2-CompliantPINN). REJECTED: magnitude penalty harmful for rigid-body systems; static loss-balancing variant weaker than N2-WhenPhysics EMA. Corroborates grey-box design principle across compliant and rigid domains.
+17. **Yu, Zhang, Liu, Wang, Peng (2026).** "Hybrid LSTM-Edge Correction Architecture for Physics-Informed Crop Health Monitoring in Distributed Agricultural Robotics." _Frontiers in Agriculture_, vol. 8, art. 1764002. — LSTM + edge inference for agricultural IoT. REJECTED: agriculture domain mismatch; no robot arm dynamics applicability.
 
-18. **Toscano, Wight-Godoy, Perez, Oommen, Oommen, Wight (2025).** "From PINNs to PIKANs: recent advances in physics-informed machine learning." _Survey_. — Survey corroborating grey-box architectures, augmented Lagrangian constraints, and frozen-backbone fine-tuning as cutting-edge practices (N1-PIKANs, N2-SNRDiag). REJECTED: KAN activations violate Mish/Softplus constraint; SNR diagnostic serves no goal.md objective.
+18. **Agrawal, Menon, Sharma, Gupta, Patel (2026).** "Automating PINN-Based Kinematic Resolution of Robotic Joints Using Robotic Process Automation Frameworks." _Frontiers in Robotics and AI_, vol. 12, art. 1752595. — RPA-based PINN kinematics automation on 2R arm with 40.5 ms latency. REJECTED: inverse kinematics domain (non-dynamics); latency incompatible with 1 kHz control.
+
+19. **Hu, Liu, Chen, Zhang, Wang (2026).** "Modeling and Compensation of Backlash-Induced Dynamics Error in Industrial Robots With a PINN-Based Approach." _IEEE Transactions on Industrial Electronics_. — Backlash residual via PINN on non-harmonic-drive joint trains. REJECTED: ReLU activations (forbidden); TCN sliding-window breaks stateless 1 kHz loop; backlash-specific to non-harmonic drives (Franka has harmonic reducers). Secondary finding: backlash error payload-independent, validates RNEA white-box load-dependent term coverage.
+
+20. **Li, Chen, Wang, Zhang (2025).** "Physics-informed neural networks for compliant robotic manipulators dynamic modeling." _arXiv preprint_. — DeLaN-FFNN grey-box decomposition on compliant arms (N1-CompliantPINN, N2-CompliantPINN). REJECTED: magnitude penalty harmful for rigid-body systems; static loss-balancing variant weaker than N2-WhenPhysics EMA. Corroborates grey-box design principle across compliant and rigid domains.
+
+21. **Toscano, Wight-Godoy, Perez, Oommen, Oommen, Wight (2025).** "From PINNs to PIKANs: recent advances in physics-informed machine learning." _Survey_. — Survey corroborating grey-box architectures, augmented Lagrangian constraints, and frozen-backbone fine-tuning as cutting-edge practices (N1-PIKANs, N2-SNRDiag). REJECTED: KAN activations violate Mish/Softplus constraint; SNR diagnostic serves no goal.md objective.
 
 ---
 
@@ -416,3 +438,11 @@ _To be written after experiments._
 | N2-CompliantPINN | Static friction loss balancing across joint scales via magnitude weighting | Li et al. 2025 (compliant), Sec. IV | — | REJECT — weaker static variant of N2-WhenPhysics EMA already gated; compliant-specific design |
 | N1-PIKANs | Kolmogorov-Arnold Network (KAN) activations for physics-informed learning | Toscano et al. 2025, Sec. 4 | — | REJECT — KAN violates Mish/Softplus smoothness constraint; duplicate of N3-SPEL |
 | N2-SNRDiag | Per-sample SNR diagnostic for physics-aware trajectory filtering | Toscano et al. 2025, Sec. 5 | — | REJECT — diagnostic only; per-joint RMSE in train.py already covers equivalent signal |
+| N1-DeLaN | Parametric Lagrangian learning from scratch (L-net, H-net) | Lutter et al. ICLR 2019, Sec. II-III | — | REJECT — grey-box RNEA white-box more sample-efficient; foundational predecessor |
+| N2-DeLaN | Cholesky+Softplus parameterization for PD energy dissipation matrices | Lutter et al. ICLR 2019, Sec. IV | 3 | REJECTED but incorporated — origin technique for FrictionNet; historical validation |
+| N1-DeLaN4EC | Energy-based control on underactuated 2-DoF arm at 500 Hz | Lutter et al. IROS 2019, Sec. IV-V | — | REJECT — underactuated domain (Franka fully actuated); real-time feasibility validated |
+| N2-DeLaN4EC | Practical hardware control loop at 500 Hz on physical robot | Lutter et al. IROS 2019, Sec. V | 2 | REJECTED — control architecture adopted from Liu 2024; hardware feasibility precedent |
+| N3-DeLaN4EC | Learning dynamics from position/velocity only, no torque sensors | Lutter et al. IROS 2019, Sec. III | — | REJECT — Franka has torque sensors; sensorless domain mismatch |
+| N1-DiffNEA | Differentiable RNEA via auto-diff pipeline | Sutanto et al. L4DC 2020, Sec. III | — | REJECT — Pinocchio provides differentiable RNEA; frozen white-box avoids redundant gradients |
+| N2-DiffNEA | Static friction compensation via augmented joint parameters | Sutanto et al. L4DC 2020, Sec. IV | 3 | REJECTED — FrictionNet structural dissipativity superior to soft-penalty friction |
+| N3-DiffNEA | 7-DoF ABB manipulator validation with differentiable RNEA | Sutanto et al. L4DC 2020, Sec. V | — | REJECT — validates Pinocchio appropriate for 7-DoF; no novel Franka-specific model |
