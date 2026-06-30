@@ -33,10 +33,10 @@ Liu et al. (2024) demonstrated that a Lagrangian/Hamiltonian neural network trai
 
 The four project objectives, and where each is addressed and evidenced in this paper:
 
-**Goal 1 — Automated URDF-to-Model Pipeline** _(Sections 3.2, 3.3, 3.8, 3.9; Experiments 4.2)_
+**Goal 1 — Automated URDF-to-Model Pipeline** _(Sections 3.2, 3.3, 3.8, 3.10; Experiments 4.2)_
 The entire pipeline is driven by the URDF: Pinocchio reads it to produce the RNEA white-box term; the network architecture is fixed independently of the robot's kinematic structure; Sobol excitation trajectories are generated programmatically from joint limits extracted from the URDF. No manual equation derivation is required. Payload conditioning (δ ∈ {0, 1, 3} kg) is baked into every forward pass, and the `--max_samples` ablation flag (N4-Liu) measures data efficiency relative to Liu et al.'s 25k-sample black-box benchmark. Training data is generated via Isaac Sim (`generate_isaac_dataset.py`): the Franka Panda USD physics engine provides realistic tau_real (friction, damping, actuator dynamics), while tau_theo is computed from the same URDF via Pinocchio RNEA — the gap is the meaningful residual the network learns. Evidence (smoke test): multi-payload training on concatenated synthetic Fourier data (147k samples, 0/1/3 kg) converges to val RMSE ≈ 0.22 Nm in 20 CPU epochs with no physics violations; Isaac Sim GPU-scale results pending.
 
-**Goal 2 — High-Frequency Real-Time Control at 1000 Hz** _(Sections 3.6, 3.7)_
+**Goal 2 — High-Frequency Real-Time Control at 1000 Hz** _(Sections 3.6, 3.7, 3.9)_
 The Stage 3 computed-torque controller is designed for sub-millisecond inference: all `GreyBoxNet` forward passes run under `torch.no_grad()`, inputs and outputs are pure numpy, and no iterative solver is involved. Gain stability is certified analytically via Liu et al. (2024) Proposition 1: Kd = safety_margin × ε, Kp = Kd²/4 (critical damping), where ε is the per-joint model error bound from Stage 1 validation. The Stage 2 ROS2 node publishes effort commands at 1000 Hz with a hard torque-limit clamp at the publish boundary. Evidence pending: an inference latency benchmark (timing script) is needed to confirm sub-1 ms per call; gains will be recomputed from real per-joint RMSE after GPU-scale training.
 
 **Goal 3 — Scaling to 7-DoF with Physics Constraints** _(Sections 3.4, 3.5; Experiments 4.2)_
