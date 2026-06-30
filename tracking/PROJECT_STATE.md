@@ -1,5 +1,5 @@
 # Project State — PINN Franka Pipeline
-_Last updated: 2026-06-30 (3 papers processed: Lutter IROS 2019, Lutter ICLR 2019, Sutanto L4DC 2020; all novelties REJECT; DeLaN lineage secondary finding added)_
+_Last updated: 2026-06-30 (Ibarz et al. IJRR 2021 processed — relevance 0, deep RL survey / reward-maximisation paradigm, 3 novelties all REJECT, moved to papers/processed/)_
 
 ## 1. Objectives (from goal.md)
 | # | Objective | Status | Evidence / where proven |
@@ -111,6 +111,11 @@ Remaining gaps (blocked on Stages 2+3 end-to-end with trained model):
 | N1-DiffNEA | Sutanto et al. (L4DC 2020) | Differentiable Newton-Euler Algorithm (DiffNEA) with learnable inertial parameters — make URDF link masses and inertias differentiable and jointly optimised with the neural residual. REJECT — violates the RNEA-intact invariant: making URDF parameters learnable destroys the white-box analytical guarantee that is the core of Goal 1 (automated URDF-to-model pipeline). | — | rejected | — | — |
 | N2-DiffNEA | Sutanto et al. (L4DC 2020) | Per-joint theta^2 viscous damping term — add a quadratic velocity-dependent damping d_i * qdot_i^2 per joint in the RNEA output. REJECT — weaker variant of the existing FrictionNet (N2-Liu, MERGED): FrictionNet learns a full nonlinear D(q, qdot, delta) * qdot dissipation, which subsumes the fixed quadratic approximation; Sutanto's quadratic form also ignores payload conditioning. | — | rejected | — | — |
 | N3-DiffNEA | Sutanto et al. (L4DC 2020) | Online payload adaptation via gradient descent on RNEA inertial parameters — update payload-related link inertias online by backpropagating through the differentiable RNEA. REJECT — subsumed by the existing dual payload-awareness mechanism: `_inject_payload()` in `rnea_wrapper.py` (white-box path) + delta conditioning of tau_res (residual path). Running gradients through RNEA at 1 kHz is computationally incompatible with real-time control. | — | rejected | — | — |
+| N1-MR-KT | Maccio, Shaaban, Carfi, Mastrogiovanni (IEEE RO-MAN 2024, arXiv 2409.02305) | Mixed Reality kinesthetic teaching interface — use MR headset to visualise and guide kinesthetic demonstrations for robot learning from demonstration. REJECT — complete domain mismatch: HRI/Mixed Reality teaching, no dynamics model, no torque learning, no URDF pipeline, no 7-DoF inverse dynamics; zero applicability to Stage 1 PINN or any pipeline stage. | — | rejected | — | — |
+| N1-DemoModality | Li, Cui, Sadigh (arXiv 2503.07017, 2025) | Demonstration modality ablation for imitation learning — comparative study of teleop, kinesthetic, VR-based, and autonomous demonstration collection methods for behavioural-cloning / diffusion-policy robot manipulation. REJECT — complete domain mismatch: imitation learning / behavioral cloning; no dynamics model, no torques, no URDF pipeline, no physics constraints; zero applicability to Stage 1 PINN or any pipeline stage. | — | rejected | — | — |
+| N1-Ibarz | Ibarz et al. (IJRR 2021) | Residual RL policy — learn a neural correction on top of a hand-engineered base controller, structurally analogous to RNEA + tau_res. REJECT — analogy is superficial only: Ibarz operates within a reward-maximisation / MDP paradigm; no physics constraints, no torque limits in loss, no dissipativity, no URDF pipeline; full paradigm mismatch with supervised PINN dynamics identification. | — | rejected | — | — |
+| N2-Ibarz | Ibarz et al. (IJRR 2021) | Latency-aware future-state prediction for asynchronous RL — forward-simulate K steps to compensate for observation-to-action delay in the RL loop. REJECT — project has no MDP, no reward, no policy rollout; stateless 1 kHz PINN inference has no asynchronous observation latency to compensate. | — | rejected | — | — |
+| N3-Ibarz | Ibarz et al. (IJRR 2021) | Domain randomisation for sim-to-real transfer — randomise physics parameters (friction, damping, inertia) in simulation during RL training. REJECT — superseded by N3-Duong frozen-backbone fine-tuning (already MERGED to main): the project's physics-constrained fine-tuning provides a principled, sample-efficient sim-to-real bridge without requiring stochastic physics randomisation at training time; RL-specific technique, not compatible with supervised PINN training. | — | rejected | — | — |
 
 ## 3a. Primary baseline — Liu et al. (2024) competitive gaps
 Liu et al. (2024): "Physics-Informed Neural Networks to Model and Control Robots:
@@ -239,6 +244,9 @@ pinn_franka/
 |       |-- Lutter, Listmann, Peters (IROS 2019)... (processed — DeLaN for energy-based control of under-actuated systems; relevance 1, all REJECTed; bibliographic value: foundational DeLaN predecessor, cite as origin of Lagrangian NN lineage)
 |       |-- Lutter, Ritter, Peters (ICLR 2019)...  (processed — Deep Lagrangian Networks seminal paper; relevance 1, all REJECTed; bibliographic value: original source for Cholesky+Softplus-diagonal PD-matrix design; cite in Related Work Section 2)
 |       |-- Sutanto et al. (L4DC 2020)...          (processed — Differentiable Newton-Euler Algorithm; relevance 1, all REJECTed; secondary findings: Pinocchio suitability for 7-DoF confirmed; static friction gap in DiffNEA validates FrictionNet + AL design)
+|       |-- Maccio et al. (IEEE RO-MAN 2024)...    (processed — Kinesthetic Teaching via Mixed Reality, arXiv 2409.02305; relevance 0, HRI/MR domain mismatch; N1-MR-KT REJECTed; no corroboration value)
+|       |-- Li, Cui, Sadigh (arXiv 2503.07017, 2025)... (processed — Demo Modality for Imitation Learning; relevance 0, imitation learning / diffusion policy domain mismatch; N1-DemoModality REJECTed; no corroboration value)
+|       |-- Ibarz et al. (IJRR 2021)...            (processed — "How to train your robot with deep RL: lessons we have learned"; relevance 0, deep RL survey / reward-maximisation paradigm; N1-Ibarz + N2-Ibarz + N3-Ibarz all REJECTed; no corroboration value)
 |
 |-- docs/
 |   |-- HOW_TO_USE.md
@@ -254,8 +262,11 @@ pinn_franka/
 ## 5. Open items / next steps
 
 ### Done since last update (2026-06-30)
+- [x] Ibarz et al. (IJRR 2021) processed: relevance 0, deep RL survey; 3 novelties evaluated (N1-Ibarz residual RL, N2-Ibarz latency-aware future-state prediction, N3-Ibarz domain randomisation), all REJECT; moved to papers/processed/. No implementations, no new branches, no architecture changes.
 - [x] 3 papers processed (Lutter IROS 2019, Lutter ICLR 2019, Sutanto L4DC 2020): 8 novelties evaluated, all REJECT; papers moved to papers/processed/; papers_review.csv updated. No new branches or implementations.
 - [x] Secondary finding 5 added (section 3b): DeLaN/DiffNEA lineage review confirms RNEA-intact superiority; identifies 3 new Related Work citations (Lutter IROS 2019, Lutter ICLR 2019, Sutanto L4DC 2020); confirms Pinocchio suitability for 7-DoF and FrictionNet design lineage.
+- [x] Maccio et al. (IEEE RO-MAN 2024, arXiv 2409.02305) processed: relevance 0, complete HRI/Mixed Reality domain mismatch; N1-MR-KT REJECT; zero corroboration value; moved to papers/processed/.
+- [x] Li, Cui, Sadigh (arXiv 2503.07017, 2025) processed: relevance 0, complete domain mismatch (imitation learning / behavioral cloning via diffusion policy; human demonstration modalities); N1-DemoModality REJECT; zero corroboration value; moved to papers/processed/.
 
 ### Blocked on GPU
 - **GPU + full convergence:** `python3 -m training.train --data data/fourier_baseline_0kg.h5 data/fourier_baseline_1kg.h5 data/fourier_baseline_3kg.h5 --epochs 200 --use_friction_net` — needs GPU for proper convergence.
