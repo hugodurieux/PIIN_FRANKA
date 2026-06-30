@@ -46,7 +46,8 @@ Scaffolded on branch `stage3/computed-torque-pd-controller` — PHYSICS PASSED. 
 
 - `controller/model_loader.py`: loads `GreyBoxNet` checkpoint from `.pt` + `config.json`.
 - `controller/lyapunov_gains.py`: N3-Liu — computes `Kd = safety_margin * error_bound`, `Kp = Kd^2 / 4` (critical damping). `DEFAULT_ERROR_BOUND = [5,5,5,5,2,2,2]` Nm is a placeholder until real validation data from Stage 1 is available.
-- `controller/computed_torque_pd.py`: `ComputedTorquePDController.step()` — `tau = RNEA(q, qdot, qddot_des) + tau_res(q, qdot, delta) + Kp*(q_des - q) + Kd*(qdot_des - qdot)`, hard-clipped to TORQUE_LIMITS; all I/O numpy; `torch.no_grad()` for inference.
+- `controller/computed_torque_pd.py`: `ComputedTorquePDController.step()` — `tau = RNEA(q, qdot, qddot_des) + tau_res(q, qdot, delta) + Kp*(q_des - q) + Kd*(qdot_des - qdot)`, hard-clipped to TORQUE_LIMITS; all I/O numpy; `torch.no_grad()` for inference. `update_payload(delta)` updates delta at runtime (e.g. after grasping).
+- `controller/payload_identification.py`: **TODO stub** — lightweight runtime payload identification via least-squares regression on N static torque measurements. RNEA linearity in mass allows closed-form 1-unknown solve: δ̂ = (A^T b)/(A^T A), where A = g_payload(q_i) stacked and b = τ_meas_i − τ_0(q_i). Requires ~100 ms of quasi-static measurements before entering the 1 kHz loop. Algorithm is fully documented in docstring and inline comments; raises NotImplementedError until implemented. See also PAPER_DRAFT.md Section 3.9.
 - Wiring dependency: Stage 2's `TODO(stage3)` must be resolved after this branch is merged into main.
 
 ### Stage 4 — Grasping (optional)
@@ -190,7 +191,11 @@ pinn_franka/
 |   |-- __init__.py
 |   |-- model_loader.py              Loads GreyBoxNet checkpoint from .pt + config.json
 |   |-- lyapunov_gains.py            N3-Liu: Kd = safety_margin*error_bound, Kp = Kd^2/4
-|   |-- computed_torque_pd.py        ComputedTorquePDController.step(); 1 kHz torque kernel
+|   |-- computed_torque_pd.py        ComputedTorquePDController.step(); 1 kHz torque kernel;
+|   |                                update_payload() for runtime delta changes
+|   |-- payload_identification.py    TODO stub: least-squares payload ID from static torque
+|   |                                measurements; RNEA linearity in mass → 1-unknown
+|   |                                closed-form regression; call before 1 kHz loop
 |
 |-- ros2_ws/                         [branch: stage2/moveit2-ros2-humble]
 |   |-- src/pinn_franka_controller/
@@ -262,6 +267,7 @@ pinn_franka/
 ## 5. Open items / next steps
 
 ### Done since last update (2026-06-30)
+- [x] `controller/payload_identification.py` added: TODO stub for lightweight runtime payload identification. RNEA linearity in mass → 1-unknown least-squares closed-form; documents calling convention (`identify_payload()` → `update_payload()`); raises NotImplementedError until implemented. Cross-reference added to `computed_torque_pd.update_payload()` docstring. PAPER_DRAFT.md Section 3.9 added with full mathematical derivation.
 - [x] Ibarz et al. (IJRR 2021) processed: relevance 0, deep RL survey; 3 novelties evaluated (N1-Ibarz residual RL, N2-Ibarz latency-aware future-state prediction, N3-Ibarz domain randomisation), all REJECT; moved to papers/processed/. No implementations, no new branches, no architecture changes.
 - [x] 3 papers processed (Lutter IROS 2019, Lutter ICLR 2019, Sutanto L4DC 2020): 8 novelties evaluated, all REJECT; papers moved to papers/processed/; papers_review.csv updated. No new branches or implementations.
 - [x] Secondary finding 5 added (section 3b): DeLaN/DiffNEA lineage review confirms RNEA-intact superiority; identifies 3 new Related Work citations (Lutter IROS 2019, Lutter ICLR 2019, Sutanto L4DC 2020); confirms Pinocchio suitability for 7-DoF and FrictionNet design lineage.
@@ -294,5 +300,6 @@ pinn_franka/
 - **Physics-validator advisories to address in paper methodology section:** (1) per-sample vs. batch-mean dissipativity multiplier; (2) under-sampling risk for max_samples < 2000; (3) slower lambda_dissip growth with FrictionNet (intended — document in ablation).
 
 ### Future (optional)
+- **Implement `controller/payload_identification.py`**: fill in the 3-step least-squares body (replace `raise NotImplementedError`). ~10 lines numpy. Requires Franka joint-torque sensor access (libfranka or ROS2 `/joint_states` effort field). Priority: before first real-robot deployment.
 - 3 papers not yet obtained: s11433-025-2810-1, s41598-026-50630-y_reference, ssrn-6550385.
 - Real motor-babbling HDF5 recording (needed for N3-Duong fine-tuning and N3-Djeumou ablation).

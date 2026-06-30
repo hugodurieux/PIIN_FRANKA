@@ -210,6 +210,11 @@ class ComputedTorquePDController:
         payload is reflected in both the RNEA feedforward (via payload
         injection) and the learned residual (via the delta input).
 
+        If the payload mass is unknown, use
+        :func:`controller.payload_identification.identify_payload` to
+        estimate it from a brief static torque measurement before entering
+        the control loop (TODO: implement that function first).
+
         Args:
             delta: New payload mass [kg] (>= 0).
         """

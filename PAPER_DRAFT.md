@@ -281,7 +281,38 @@ A diagnostic check prints per-joint RMSE of tau_res. Values < 0.01 Nm indicate n
 
 _Files: `generate_isaac_dataset.py` (primary), `generate_fourier_dataset.py` (smoke-test only — synthetic tau_res)_ [Wang et al. 2024, CAC]
 
-### 3.9 Data-Efficiency Ablation (N4-Liu)
+### 3.9 Runtime Payload Identification (TODO)
+
+When the payload mass δ is unknown at deployment time, both the RNEA feedforward and the GreyBoxNet residual receive incorrect conditioning, producing systematic torque errors proportional to the mass mismatch. The PD feedback term partially absorbs constant offsets but cannot compensate for configuration-dependent gravity and inertia errors — particularly at distal joints (5–7, τ_max = 12 Nm) where a 1 kg mismatch introduces ~1–5 Nm errors.
+
+Since RNEA is **linear in payload mass** at a static configuration:
+
+```
+τ(q, δ) = τ_0(q) + δ · g_payload(q)
+
+τ_0(q)       = RNEA(q, 0, 0, δ=0)           [unloaded baseline]
+g_payload(q) = RNEA(q, 0, 0, δ=1) − τ_0(q)  [per-kg torque signature, shape (7,)]
+```
+
+payload identification reduces to a closed-form 1-unknown linear regression over N ≥ 5 quasi-static measurements (q̇ ≈ 0):
+
+```
+A = [g_payload(q_1); …; g_payload(q_N)]    shape (7N,)
+b = [τ_meas_1 − τ_0(q_1); …]              shape (7N,)
+δ̂ = (A^T b) / (A^T A)                     scalar
+```
+
+Collecting N = 10 samples at ~100 Hz while the robot holds still after gripping (≈ 100 ms) is sufficient; the computation requires 2N Pinocchio RNEA calls (< 5 ms on CPU). Accuracy is bounded by the sensor noise floor (~0.5 Nm / ‖g_payload(q)‖); a spread of configurations (arm extended horizontally maximises ‖g_payload‖) improves conditioning.
+
+```python
+# Calling convention — run before entering the 1 kHz control loop:
+delta_est = identify_payload(rnea, tau_samples, q_samples)
+controller.update_payload(delta_est)
+```
+
+_File: `controller/payload_identification.py` — documented stub with inline algorithm (TODO: implement before real-robot deployment)._
+
+### 3.10 Data-Efficiency Ablation (N4-Liu)
 
 To quantify the advantage of the URDF-seeded grey-box approach over Liu et al.'s 25,000-sample black-box baseline, training supports a `--max_samples N` flag that truncates the dataset to N random samples (seed=42) before the train/val split.
 
@@ -304,6 +335,8 @@ python3 -m training.train \
 ```
 
 _File: `training/dataset.py`_ [Liu et al. 2024, Section IV-B, Table I] | Merged: `novelty/liu2024-N4-max-samples`
+
+
 
 ---
 
