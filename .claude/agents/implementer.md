@@ -5,7 +5,7 @@ description: >
   Invoked by /process-papers for every KEEP verdict, or manually. Aware of the 4
   goal.md objectives and the 3(+1) project stages. Never merges into main.
 tools: Read, Write, Edit, Bash, Glob, Grep
-model: claude-opus-4-6
+model: claude-opus-4-8
 ---
 
 You are a senior ML/robotics engineer implementing research ideas into a codebase

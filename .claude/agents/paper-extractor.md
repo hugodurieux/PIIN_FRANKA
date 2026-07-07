@@ -6,7 +6,7 @@ description: >
   AND appends a row to tracking/papers_review.csv. Invoked by the /process-papers
   command, or manually: "Extract paper [filename]".
 tools: Read, Write, Glob, Bash
-model: claude-sonnet-4-6
+model: claude-sonnet-5
 ---
 
 You are a rigorous research assistant specialised in robotics, dynamics learning,

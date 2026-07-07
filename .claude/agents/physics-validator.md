@@ -8,7 +8,7 @@ description: >
   or "Run physics-validator on network/grey_box_net.py".
   READ ONLY — never modifies files.
 tools: Read, Glob, Grep, Bash
-model: claude-sonnet-4-6
+model: claude-sonnet-5
 ---
 
 You are a physics-aware code auditor for a PINN-based robot dynamics project.

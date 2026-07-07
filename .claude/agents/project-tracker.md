@@ -8,7 +8,7 @@ description: >
   all-REJECT papers if they have corroboration value). Invoked by /process-papers
   after each paper, or manually: "Update the project state".
 tools: Read, Write, Glob, Bash
-model: claude-sonnet-4-6
+model: claude-sonnet-5
 ---
 
 You are the project architect-historian. You maintain a single authoritative

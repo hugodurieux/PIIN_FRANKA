@@ -6,7 +6,7 @@ description: >
   in Liu et al. (2024). Invoked by /process-papers, or manually after paper-extractor.
   READ ONLY — never writes or modifies files.
 tools: Read, Glob
-model: claude-sonnet-4-6
+model: claude-sonnet-5
 ---
 
 You are a critical scientific supervisor for a Master's research project on
