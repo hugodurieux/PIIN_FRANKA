@@ -3,6 +3,8 @@
      Do not edit by hand. CLAUDE.md imports it at every startup. -->
 
 ## Last updated
+2026-07-15 (MACHINE MIGRATION — GPU unblocked): Project moved from Windows/WSL dev machine to a native Linux GPU workstation (user `hci-student`). New environment fully set up: Claude Code 2.1.210 installed, GitHub SSH auth configured, repo cloned to `~/projects/pinn_franka`, Python venv created, PyTorch+CUDA installed and `torch.cuda.is_available()` verified TRUE (CUDA 13.2 driver). **The long-standing GPU-access blocker is now RESOLVED.** No research/code work this session — environment bring-up only. NEXT SESSION (on GPU machine): resume the "What to do next" list below, starting at step 1 — Isaac Sim 4.x setup + multi-payload data generation (`generate_isaac_dataset.py` for payloads 0/1/3 kg), then step 2 — first real GPU training run. Note: `data/` and `models/` are gitignored (smoke-test artifacts, not migrated); regenerate on GPU. Working dir is now native Linux (`~/projects/pinn_franka`), NOT the old WSL `/mnt/c/...` path.
+
 2026-07-07 11:15 UTC (Claude Code configuration audit: fixed 5 stale agent model IDs (implementer, data-pipeline, novelty-supervisor, paper-extractor, physics-validator, project-tracker), clarified data-pipeline safety note re: never executing scripts, removed overly-broad git allow rule from settings.local.json (local-only, not committed). Agent fixes committed to main branch commit 2024868. No research work this session.)
 
 ## Papers processed
