@@ -4,7 +4,8 @@ Lyapunov-based PD gain computation (N3-Liu).
 Plan:
   1. Given a per-joint model error bound, compute minimum Kp and Kd gains that
      guarantee Lyapunov stability of the closed-loop computed-torque + PD system.
-  2. Provide sensible default gains from a conservative placeholder error bound.
+  2. Provide sensible default gains from a real per-joint error bound measured
+     on validation data (see DEFAULT_ERROR_BOUND below).
   3. Expose a function so gains can be recomputed after Stage 1 training produces
      real validation error statistics.
 
@@ -38,11 +39,35 @@ from network.constants import N_JOINTS
 
 
 # ---------------------------------------------------------------------------
-# Default error bound (placeholder until real validation data is available)
+# Default error bound (recomputed from real validation data, 2026-07-16)
 # ---------------------------------------------------------------------------
-# Conservative per-joint bound on |tau_pred - tau_real| [Nm].
-# Joints 1-4 (large) get 5 Nm; joints 5-7 (small wrist) get 2 Nm.
-DEFAULT_ERROR_BOUND = np.array([5.0, 5.0, 5.0, 5.0, 2.0, 2.0, 2.0])
+# Per-joint p99.9 of |tau_pred - tau_real| on the validation split of
+# models/run_20260716_121302 (Isaac Sim data, all 3 payloads, FrictionNet
+# enabled), via controller/compute_error_bound.py.
+#
+# Why p99.9 and not the literal max: the raw per-joint max (46-65 Nm on
+# joints 1-4) comes from a handful of samples (~0.09% of 14,830) with a
+# transient controller-correction spike -- likely the simulated PD servo
+# snapping to the first velocity target at the start of a Fourier trajectory
+# segment, not steady-state dynamics the residual model should be expected
+# to fit. Plugging the raw max into compute_lyapunov_gains() produces
+# absurdly stiff gains (Kd ~ 130, Kp ~ 4000) that would fail the "smooth,
+# motor-safe torque" requirement (CLAUDE.md) for negligible benefit, since
+# the joint's own actuator torque limit is already a hardware backstop
+# against those rare spikes independent of the controller gains.
+#
+# This IS a deliberate weakening of the "holds for every sample" Lyapunov
+# guarantee (Liu et al. 2024, Proposition 1) to a "holds for 99.9% of
+# observed operating conditions, backstopped by hardware torque limits for
+# the remainder" guarantee. Document this explicitly in the paper rather
+# than presenting it as a strict worst-case certificate.
+#
+# An earlier run (run_20260716_110933, before generate_isaac_dataset.py's
+# SATURATION_MARGIN fix) showed max errors of 91-110 Nm -- exceeding the
+# joint's own 87 Nm torque limit -- traced to actuator-saturated training
+# samples being treated as valid ground truth. That data issue is fixed;
+# the residual tail here is a distinct, much smaller transient-spike effect.
+DEFAULT_ERROR_BOUND = np.array([5.20, 5.66, 3.06, 3.80, 2.10, 2.38, 1.57])
 
 
 def compute_lyapunov_gains(

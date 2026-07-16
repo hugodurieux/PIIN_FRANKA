@@ -122,6 +122,19 @@ except ImportError:
 from network.constants import N_JOINTS, TORQUE_LIMITS  # [87,87,87,87,12,12,12] Nm
 TORQUE_LIMITS = TORQUE_LIMITS.numpy()  # this script is pure numpy, no torch elsewhere
 
+# A sample where the Isaac Sim joint drive is at/near its maxEffort clamp is not
+# valid ground truth: tau_theo is computed from qddot_REFERENCE (the analytical
+# Fourier acceleration), which assumes the servo actually achieved that
+# acceleration. When the drive saturates, it didn't -- the "measured" torque is
+# just the clamp value, not real dynamics, and comparing it to tau_theo produces
+# a huge but physically meaningless residual. Filtering only |tau| > limit lets
+# these through since a clamped sample sits exactly AT the limit. Margin found
+# empirically: post-hoc analysis of run_20260716_110933 (controller/
+# compute_error_bound.py) showed p99.9 errors of 12-21 Nm jumping to 40-110 Nm
+# at the true max, with the worst offenders' tau_real landing almost exactly on
+# TORQUE_LIMITS -- the signature of saturation, not friction/payload dynamics.
+SATURATION_MARGIN = 0.97  # drop samples within 3% of the torque limit
+
 # ---------------------------------------------------------------------------
 # Franka Panda joint limits (from URDF / Franka specs)
 # ---------------------------------------------------------------------------
@@ -361,12 +374,14 @@ def generate_and_save(payload_kg: float, out_dir: str,
         seg_qdot = np.array(seg_qdot, dtype=np.float32)
         seg_tau  = np.array(seg_tau,  dtype=np.float32)
 
-        # Filter timesteps where any joint exceeds its torque limit
-        valid   = np.all(np.abs(seg_tau) <= TORQUE_LIMITS, axis=1)
+        # Filter timesteps where any joint is at or near its torque limit --
+        # near-limit samples are actuator-saturation artifacts, not valid
+        # dynamics (see SATURATION_MARGIN comment above).
+        valid   = np.all(np.abs(seg_tau) <= SATURATION_MARGIN * TORQUE_LIMITS, axis=1)
         n_valid = int(valid.sum())
         n_filt  = N_PER_SEGMENT - n_valid
         if n_filt:
-            print(f"    seg {seg_i+1}: {n_filt} over-torque samples removed")
+            print(f"    seg {seg_i+1}: {n_filt} over-torque/near-saturation samples removed")
 
         all_q.append(seg_q[valid])
         all_qdot.append(seg_qdot[valid])

@@ -4,7 +4,7 @@ _Status: **PLAN ONLY**. Nothing here is implemented yet. This document defines e
 experiment we intend to run for the publication. Implementation comes later (blocked on
 GPU + Isaac Sim data)._
 
-_Last updated: 2026-07-09_
+_Last updated: 2026-07-16_
 
 ---
 
@@ -133,8 +133,13 @@ same optimizer, same architecture except the axis under test). Only the named ax
 | Train {0,1,3} conditioned vs 3 separate single-payload models | One-model-fits-all penalty |
 | **Interpolation:** train {0,3}, test 1 | Does δ interpolate? |
 | **Extrapolation:** train {0,1}, test 3 | Does δ extrapolate? (harder — report honestly) |
+| **Fine-grained interpolation:** train {0,1,3} (the main-model set, no retrain needed), eval-only on {0.5,1.5,2.5} test data | 3 fine-grained interpolation gap points spanning the trained δ range |
 
 - **Metrics:** per-payload RMSE, interpolation gap, extrapolation gap.
+- **Data requirement:** 3 extra eval-only Isaac Sim payload datasets — `data/isaac_0.5kg.h5`,
+  `data/isaac_1.5kg.h5`, `data/isaac_2.5kg.h5` — same `generate_isaac_dataset.py --payload <X>`
+  command as the main set. These are never used for training, only passed to evaluation, so no
+  new training run is required to get this result.
 
 ### H. Payload identification — defends Section 3.9 (requires `identify_payload` implemented)
 

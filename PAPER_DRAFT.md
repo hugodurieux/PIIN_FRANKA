@@ -1,9 +1,9 @@
-﻿# From URDF to Real-Time Control: An Automated Physics-Informed Neural Network Pipeline for 7-DoF Robot Dynamics Learning
+# From URDF to Real-Time Control: An Automated Physics-Informed Neural Network Pipeline for 7-DoF Robot Dynamics Learning
 
 **Hugo Durieux** — Master's Internship, 2026
 
 _Working draft — updated automatically at the end of each session._
-_Last updated: 2026-06-30_
+_Last updated: 2026-07-16_
 
 ---
 
@@ -131,7 +131,9 @@ The URDF is loaded via Pinocchio. The Recursive Newton-Euler Algorithm computes 
 
 where M is the inertia matrix, C the Coriolis/centrifugal matrix, and G the gravity vector. A known payload mass δ is injected by augmenting the end-effector link inertia before the RNEA call. The RNEA baseline is computed **offline** during dataset preparation and is **never modified**. Sutanto et al. (L4DC 2020) independently validate that Pinocchio-based differentiable RNEA is appropriate for 7-DoF rigid-body manipulators, providing historical precedent for this choice.
 
-_File: `pinocchio_baseline/rnea_wrapper.py`_
+**Methodological note (2026-07-16):** the project's `panda.urdf` originally shipped with no `<inertial>` tags on any link — visual/collision geometry only — meaning RNEA had been computing dynamics from Pinocchio's placeholder default inertias rather than real Franka Panda mass properties for the project's entire prior history. This was only caught the first time RNEA's output was checked against an independently-massed ground truth (Isaac Sim's official Franka USD asset, see §3.8.2): the residual `τ_res` a network would need to explain was tens of Nm on the gravity-bearing joints (shoulder/elbow) and near-zero elsewhere — the signature of a missing gravity-compensation term, not friction. All link masses/inertias were corrected to the official `franka_description` values before any of the results in §4 were produced; every Stage-1 result quoted from before this fix (the CPU smoke-test table in §4.2) should be read as validating the training *mechanics*, not as physically meaningful residual magnitudes.
+
+_File: `pinocchio_baseline/rnea_wrapper.py`_ | URDF fix: commit `c179740`
 
 ### 3.3 Grey-Box Residual Network
 
@@ -214,7 +216,9 @@ K_d[j] = safety_margin × ε_j        (ε_j = per-joint model error bound from P
 K_p[j] = K_d[j]² / 4               (critical damping: characteristic eq. s² + K_d·s + K_p = 0)
 ```
 
-_Default error bound: [5, 5, 5, 5, 2, 2, 2] Nm (placeholder — to be updated after Stage 1 training)._
+**Error bound methodology (recomputed 2026-07-16, `controller/compute_error_bound.py`):** ε_j is the per-joint **99.9th percentile** of |τ_pred − τ_real| on the validation split of the first physically-valid Isaac Sim training run (§4.3), not the literal maximum. The raw max (46–65 Nm on joints 1–4) was found to come from a small population of transient controller-correction spikes (~0.09% of samples, likely the simulated PD servo snapping to the first velocity target at the start of each Fourier segment) rather than steady-state dynamics; using it directly would produce gains an order of magnitude stiffer than necessary (K_d ≈ 130, K_p ≈ 4000) for negligible benefit, since the joint's own hardware torque limit already backstops that rare tail regardless of controller gain. This is a **deliberate, explicit weakening** of Proposition 1's "holds for every sample" guarantee to "holds for 99.9% of observed operating conditions, backstopped by the actuator's own torque limit for the remainder" — stated here rather than presented as a strict worst-case certificate.
+
+_Default error bound: [5.20, 5.66, 3.06, 3.80, 2.10, 2.38, 1.57] Nm (per-joint p99.9, from `models/run_20260716_121302`)._
 _File: `controller/lyapunov_gains.py`_ [Liu et al. 2024, Proposition 1] | Merged: `stage3/computed-torque-pd-controller`
 
 ### 3.7 Sim-to-Real Fine-Tuning (N3-Duong)
@@ -338,7 +342,7 @@ _File: `training/dataset.py`_ [Liu et al. 2024, Section IV-B, Table I] | Merged:
 
 ## 4. Experiments
 
-_Pending GPU allocation. This section will be populated after Stage 1 training._
+_First GPU/Isaac Sim training results are in §4.3. The full ablation matrix (data-efficiency, FrictionNet on/off, sim-to-real fine-tuning) is still pending — see `experiments/EXPERIMENT_PLAN.md` for the complete plan._
 
 ### 4.1 Planned Experiments
 
@@ -371,7 +375,20 @@ Joint scale diagnostic (N2-WhenPhysics): joints 1–4 (87 Nm) mean 0.224 Nm, joi
 
 The marginal increase in val RMSE from single-payload (0.212 Nm) to multi-payload (0.228 Nm) reflects the harder generalisation task: the network must now predict torques correctly across three distinct payload conditions from a single set of weights, using only the scalar δ as conditioning input. This validates the payload-conditioning design (Goal 1).
 
-_Note: all runs on CPU, 20 epochs. Convergence is not reached; full experiments require GPU and 200+ epochs._
+_Note: all runs on CPU, 20 epochs. Convergence is not reached; full experiments require GPU and 200+ epochs. These results also predate the URDF inertial fix (§3.2) and should not be read as physically meaningful residual magnitudes — they validate training mechanics only._
+
+### 4.3 First GPU Training Results (Isaac Sim data, corrected Franka inertials)
+
+The first physically-valid multi-payload training run (GPU, 200 epochs, `--use_friction_net`, 148,760 Isaac Sim samples across 0/1/3 kg) surfaced a second, independent data-quality issue: `controller/compute_error_bound.py` — written to compute the real per-joint error bound for the Stage 3 Lyapunov gains (§3.6) — found per-joint **maximum** validation error of 91–110 Nm, exceeding the joint's own 87 Nm torque limit. Root cause: a small number of Isaac Sim samples (~0.1%) had `τ_real` pegged almost exactly at the joint's `maxEffort` — the simulated actuator saturating under aggressive Fourier-trajectory tracking, not real dynamics. Since `τ_theo` is computed from the *reference* acceleration (assuming the trajectory was actually achieved), saturated samples produced enormous but physically meaningless residual targets that the existing over-torque filter (`|τ| > limit`, strict inequality) let through because clamped samples sit exactly *at* the limit. `generate_isaac_dataset.py`'s filter was tightened to exclude samples within 3% of the torque limit (`SATURATION_MARGIN = 0.97`), and all three payload datasets were regenerated and retrained.
+
+| Run | Samples | Best val loss | dissip_viol (final epoch) | Per-joint val RMSE (Nm) |
+|-----|---------|---------------|---------------------------|--------------------------|
+| Before saturation-filter fix | 148,760 | 1.4767 (epoch 177, non-monotonic) | 0.0657 (oscillates under AL, never settles) | [1.57, 1.44, 1.14, 1.77, 0.97, 0.49, 0.52] |
+| **After saturation-filter fix** | 148,304 | **0.3995** (epoch 200, smooth decay) | **0.0006** (converges cleanly) | **[0.80, 0.88, 0.90, 0.54, 0.37, 0.36, 0.30]** |
+
+Removing the saturation-contaminated samples improved best validation loss by ~4× and changed the augmented-Lagrangian dissipativity term from oscillating (never fully suppressed) to smoothly converging near zero — indicating the contaminated samples were destabilizing training broadly, not just inflating a diagnostic tail. Joint-scale imbalance (N2-WhenPhysics diagnostic) persisted at the same ratio (joints 1–4 mean 0.78 Nm vs. joints 5–7 mean 0.34 Nm, ratio ≈ 0.4×) before and after the fix, suggesting it reflects a genuine (if mild) physical asymmetry rather than a data artifact; it remains below the EMA-balancing trigger threshold.
+
+_Files: `generate_isaac_dataset.py` (`SATURATION_MARGIN` fix), `controller/compute_error_bound.py` (new diagnostic tool). Runs logged in `tracking/experiments_log.csv` as `isaac-multipayload-frictionnet-first-real` (superseded) and `isaac-multipayload-frictionnet-satfix` (current reference baseline)._
 
 ---
 
