@@ -46,6 +46,7 @@ setup(
     entry_points={
         "console_scripts": [
             "pinn_controller_node = pinn_franka_controller.pinn_controller_node:main",
+            "moveit_plan_bridge = pinn_franka_controller.moveit_plan_bridge:main",
         ],
     },
 )

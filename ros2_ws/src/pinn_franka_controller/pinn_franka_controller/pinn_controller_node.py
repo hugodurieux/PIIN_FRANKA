@@ -204,10 +204,11 @@ class PinnControllerNode(Node):
                 kd=kd,
             )
         except Exception:
+            import traceback
+
             self.get_logger().error(
                 "Failed to construct ComputedTorquePDController -- controller "
-                "disabled, publishing zero torques.",
-                exc_info=True,
+                "disabled, publishing zero torques.\n" + traceback.format_exc()
             )
             self._controller = None
             return
