@@ -57,22 +57,14 @@ You refill papers/inbox/ with new papers yourself.
 - Paper-reading / supervising agents -> read only
 - Branches are merged manually by the human after review
 
-## Running project code (Python, ROS2, training)
-- Claude may run project code directly: `python x.py`, `python -m training.train`,
-  `pytest`, `ros2 launch`/`ros2 run`, etc. — no separate human authorization
-  required. This was a stricter policy earlier in the project (hook-enforced);
-  the human explicitly asked to lift it (2026-07-16) so Claude can drive
-  multi-terminal ROS2/Isaac Sim workflows without relaying every command.
-- Real limitation, not a policy one: Claude cannot see GUI windows (Isaac Sim's
-  viewport, RViz). Visual verification of robot motion still needs the human —
-  run headless/log-based checks (`ros2 topic echo`, checkpoints, exit codes)
-  wherever possible, and ask the human to confirm anything that can only be
-  judged visually.
-- Still exercise normal judgment around expensive/long-running jobs (e.g. full
-  GPU training runs) and anything that could command real hardware in the
-  future — prefer reporting the plan and a quick sanity run before launching
-  something large or irreversible, same as the general "Executing actions with
-  care" guidance.
+## NEVER run Python code without explicit human authorization
+- You may WRITE, EDIT, and READ Python files freely.
+- You may run `python -m py_compile <file>` to check syntax (does NOT execute code).
+- You must NEVER run Python code: no `python x.py`, no `python -m training.train`,
+  no `pytest`, no `ipython`. The human runs all code themselves.
+- This is enforced by a PreToolUse hook that blocks execution, but respect it
+  by default so the hook never has to fire. When code is ready to run, tell the
+  human the exact command to run, and let them run it.
 
 ## Session state (auto-updated)
 @SESSION.md

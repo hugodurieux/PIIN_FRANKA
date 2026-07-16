@@ -19,7 +19,6 @@
   <exec_depend>trajectory_msgs</exec_depend>
   <exec_depend>control_msgs</exec_depend>
   <exec_depend>builtin_interfaces</exec_depend>
-  <exec_depend>moveit_msgs</exec_depend>
 
   <!--
     franka_msgs is optional: only needed when running on real hardware with
