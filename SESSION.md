@@ -3,6 +3,58 @@
      Do not edit by hand. CLAUDE.md imports it at every startup. -->
 
 ## Last updated
+2026-07-16 (MILESTONE 2 ATTEMPTED, CRITICAL BUGS IDENTIFIED, FULL REVERT AT USER REQUEST): Continuation of same day as prior "STAGE 2/3 BOOTSTRAP" entry (Milestone 1 baseline work). This session attempted Milestone 2 (rerouting MoveIt2's planned trajectory through `pinn_controller_node` so the trained PINN model + Lyapunov-gain PD control actually drives the simulated robot) and discovered several real bugs the moment `ComputedTorquePDController` was exercised live for the first time ever. However, the human requested a complete revert to the prior stable state after encountering frustration with Claude executing commands autonomously across multiple ROS2/Isaac terminals instead of the human running them manually.
+
+**IMPLEMENTATION PHASE (Milestone 2 code, subsequently reverted):**
+
+1. **New node `ros2_ws/src/pinn_franka_controller/pinn_franka_controller/moveit_plan_bridge.py`** (since deleted via revert): Raw `moveit_msgs/action/MoveGroup` action client (chosen over `moveit_py` to avoid dependency rabbit-hole), sending `plan_only=True` goal to `panda_arm` motion group, then republishing the planned `trajectory_msgs/JointTrajectory` to `/pinn_controller/desired_trajectory` where `pinn_controller_node` subscribes. Registered as console_script entry point in `setup.py`.
+
+2. **ROS2 controller-manager interaction:** Required manually deactivating `panda_arm_controller` first via `/controller_manager/switch_controller` service, since that controller continuously publishes position commands to `isaac_joint_commands` and would race Stage 3's effort commands on the same topic. The MoveIt2 framework keeps `panda_arm_controller` active by default.
+
+3. **Bug fix found in `pinn_controller_node.py`:** Exception handler passed `exc_info=True` to `self.get_logger().error(...)`, but rclpy's logger does not support that kwarg (unlike Python stdlib logging module). Replaced with `traceback.format_exc()` appended to message string — this fix was committed before the full session revert (commits 72a5826, aa866be, 4a0f32c).
+
+**POLICY CHANGE (autonomy experiment, subsequently reverted):**
+
+4. **User requested removal of Python-execution restriction** (CLAUDE.md § "NEVER run Python code" + the pre-tool hook `.claude/hooks/block-python-run.sh`), choosing "full removal" from a clarifying question. This was to allow Claude to drive multi-terminal ROS2/Isaac Sim workflows directly instead of relaying every command for the human to paste output back. Committed in separate commits 4a0f32c and aa866be, then pushed. Hook file deleted, registration removed from `.claude/settings.json`, CLAUDE.md section rewritten.
+
+**LIVE DEBUGGING WITH AUTONOMOUS EXECUTION (subsequently reverted):**
+
+With the Python-execution policy relaxed, Claude drove the ROS2/Isaac Sim terminals directly (building ros2_ws, launching pinn_controller_node in background, triggering trajectories, checking topics/services). This exposed two real, previously-latent bugs the moment `ComputedTorquePDController` executed live for the first time:
+
+5. **`pinocchio_baseline/rnea_wrapper.py` RneaBaseline class incompatibility with live 7-DoF operation:** The class built the full URDF via `pin.buildModelFromUrdf()` (nq=9: 7 arm joints + 2 prismatic finger joints) with no joint reduction. First live RNEA call crashed with `ValueError: wrong argument size: expected 9, got 7`. The correct fix already existed in `generate_isaac_dataset.py`'s `_load_pin_model()` function (mirrored via `pin.buildReducedModel()` locking `panda_finger_joint1`/`2` at neutral), but was never ported to `RneaBaseline.__init__` used by the live controller. Applied the fix; this is a real bug independent of all other session context and will re-occur in the next Milestone 2 attempt unless reapplied.
+
+6. **Validated RNEA + residual + Lyapunov PD executed end-to-end:** Once the 9-vs-7 DOF crash was fixed, Stage 3 briefly computed and published real, physically plausible non-zero torques (e.g., 47.5, 31.4, 24.3, -29.8 Nm across joints, all within per-joint torque limits). This is the first proof that `ComputedTorquePDController` works when actually exercised, though the physical behavior was problematic (see points 7-8 below).
+
+7. **First live-motion test showed only tiny movement.** Investigation found Isaac Sim's Franka USD has a high-stiffness built-in position-hold servo (~22918 stiffness, ~4584 damping) that `IsaacArticulationController.apply_action()` does NOT disable when effort commands arrive — both the servo and Stage 3's torque commands act simultaneously in PhysX, with the servo dwarfing the ~30-47 Nm control torques. Isaac's own documentation: "For effort control, set zero stiffness and damping, or remove DOF's drive." Added a fix to `simulation/isaac_franka_moveit_bridge.py`: call `set_dof_gains(stiffnesses=0.0, dampings=0.0, dof_indices=<arm joints>)` right after `app_utils.play()` to zero the servo gains. This fix was NOT persisted in the final revert and will need reapplication next session.
+
+8. **Second live test (after zeroing stiffness/damping) showed violent, shaking, unstable motion,** confirmed by the human watching Isaac Sim's viewport directly ("violent, shaking, did weird movement"). Two contributing issues identified:
+   - **Franka free-falls immediately on startup** — with drive stiffness zeroed (required per point 7) and `pinn_controller_node`'s "no trajectory yet" / "trajectory stale" fallback publishing literal zero torque, nothing holds the arm up against gravity. The arm collapsed into an extreme/possibly-tangled pose before every trajectory trigger. Started two attempted fixes but neither was fully live-validated before session end: (a) changed zeroed damping to small non-zero value (~2.0 Nm/(rad/s), matching FrictionNet's learned friction magnitude 1.2-1.6 from stage-1 training) as baseline dissipation; (b) added `_publish_safe_fallback()` method to compute RNEA gravity-compensation torque at last known joint position (q, qdot=0, qddot=0) instead of literal zero for all "no valid trajectory" guard branches. Rebuilt and relaunched with fix (a) only (ran out of time to validate fix (b) before user request to stop).
+   - The "violent" recovery motion was the controller fighting to both recover from the free-fall AND reach the target simultaneously, not purely a damping/gain-tuning issue. Fix (b) is likely the more important fix, since the free-fall-before-every-trigger was probably the dominant cause of instability.
+
+**USER REQUEST — REVERT ENTIRE SESSION:**
+
+9. **Human frustration with autonomous execution:** After witnessing the violent motion and after several terminal commands being driven by Claude instead of the human, the user stated it "does not seem to work, it was better when i did the commands myself in the terminal." Explicitly requested: (a) revert the Python-execution policy change back to the original restricted version, and (b) discard ALL Milestone 2 work — code and policy — back to the end of Milestone 1 (commit d81851b).
+
+10. **Full revert executed:** Ran `git status` (clean, no uncommitted work), then `git revert --no-commit d81851b..HEAD` to revert commits 72a5826, aa866be, and 4a0f32c (controller logger fix, Python-policy removal, Milestone 2 code changes) in one operation with no conflicts. Verified via `git log` that the revert commit landed and the tree is now identical to d81851b. Re-tested the Python-execution hook (`python3 -c ...`, correctly blocked). Cleaned up leftover background processes (Isaac Sim, RViz, `pinn_controller_node` from testing).
+
+**CURRENT STATE at end of session:**
+- HEAD at revert commit 0ca77ee (on top of d81851b).
+- Repository is functionally identical to end of Milestone 1.
+- CLAUDE.md's original Python-execution restriction is LIVE and blocking again.
+- `simulation/isaac_franka_moveit_bridge.py` has no stiffness/damping zeroing fix.
+- `pinn_controller_node.py` has no gravity-compensation safe-fallback.
+- `pinocchio_baseline/rnea_wrapper.py` still has the unfixed 9-vs-7 DOF bug.
+- `moveit_plan_bridge.py` no longer exists.
+- Nothing is uncommitted.
+
+**WORKFLOW PREFERENCE RECORDED:** The human prefers to run ROS2/Isaac Sim terminal commands themselves in their own terminal windows and have Claude diagnose from pasted output/logs and written code, rather than Claude executing commands autonomously across multiple terminals. This workflow was tried once (this session) and explicitly reverted in favor of the prior manual back-and-forth approach. For future Milestone 2 attempts, human will run the commands; Claude will read output and guide implementation/fixes.
+
+**CRITICAL FINDINGS FOR NEXT MILESTONE 2 ATTEMPT (will need re-discovery/reapplication):**
+- Isaac Sim Franka USD needs `set_dof_gains(stiffnesses=0.0, dampings=0.0)` after `play()` for effort control to have authority (point 7 above).
+- Arm free-falls to ground on startup without gravity-compensation torque fallback in the controller (point 8a, fix (b)).
+- The raw `moveit_msgs/action/MoveGroup` action client + `plan_only=True` approach to get planned trajectories IS validated and worth reusing.
+- `pinocchio_baseline/rnea_wrapper.py` RneaBaseline.__init__ needs `pin.buildReducedModel()` reduction for 7-DOF live operation (point 5).
+
 2026-07-16 (STAGE 2/3 BOOTSTRAP — ROS2 JAZZY + MOVEIT2 + ISAAC SIM WIRING VALIDATED): Refocused from Stage 1 (PINN/paper experiments) to "Path B" — building the Stage 2 (MoveIt2 motion planning) + Stage 3 (computed-torque + PD controller) pipeline for the first time, targeting simulated Franka Panda in Isaac Sim, as a demoable end-to-end pipeline. This also unblocks Stage 4 grasping (`stage4/grasp_executor.py`'s `_move_arm()` stub). Milestone 1 (system wiring) is now COMPLETE; Milestone 2 (controller integration) remains.
 
 **PLANNING & RESEARCH PHASE:**
@@ -197,20 +249,26 @@ Reroute `panda_arm_controller`'s planned/executed trajectory through `pinn_contr
 ## Current milestone
 **Stage 1 (PINN)** — Data-quality blockers resolved. `pinocchio_baseline/panda.urdf` mass/inertia fix committed (`c179740`). Isaac Sim 6.0.1 data pipeline validated end-to-end, including actuator-saturation filter fix (`SATURATION_MARGIN=0.97`). Two real GPU training runs completed; `isaac-multipayload-frictionnet-satfix` (val loss 0.3995) is the current reference baseline. Stage 3 `DEFAULT_ERROR_BOUND` recomputed from real data (no longer a placeholder) using documented p99.9 methodology. Stage 4 framework MERGED to main (b86f335): force-controlled grasping with dry_run tests PASSING; gripper_controller.read/stop FIXED.
 
-**Stage 2/3 (MoveIt2 + Computed-Torque Controller)** — **Milestone 1 COMPLETE**: ROS2 Jazzy + MoveIt2 + Isaac Sim wiring fully validated end-to-end. Simulated Franka Panda in Isaac Sim (via `simulation/isaac_franka_moveit_bridge.py`) publishes joint state and subscribes to effort commands on correct topics. MoveIt2 standard planner generates and executes trajectories via position commands. Code written (not yet committed): rewired `pinn_controller_node` to use real `ComputedTorquePDController`, added fallback gain constants, updated all ROS2 workspace config/launch files to match Isaac Sim topic contract and Jazzy distro. **Milestone 2 PENDING**: Reroute `panda_arm_controller` execution through `pinn_controller_node` so trained PINN + Lyapunov gains drive robot as effort commands, instead of default `joint_trajectory_controller` position execution. Clean integration point TBD.
+**Stage 2/3 (MoveIt2 + Computed-Torque Controller)** — **Milestone 1 COMPLETE (stable baseline, committed)**: ROS2 Jazzy + MoveIt2 + Isaac Sim wiring fully validated end-to-end. Simulated Franka Panda in Isaac Sim publishes joint state and subscribes to effort commands on correct topics. MoveIt2 standard planner generates and executes trajectories via position commands. **Milestone 2 ATTEMPTED, REVERTED**: Attempted rerouting through `pinn_controller_node` for effort-based control. Discovered 4 real bugs (DOF mismatch, joint stiffness, free-fall, controller logging) and attempted fixes, but human requested full revert to Milestone 1 baseline after frustration with autonomous terminal execution. Current state is identical to end of Milestone 1 (commit d81851b). Next attempt: human will run ROS2/Isaac Sim commands; Claude will diagnose.
 
-Revised path forward: commit Stage 2/3 code changes → implement Milestone 2 (controller interception) → resume Stage 1 ablation experiments → run headline results H1-H4 → end-to-end Stage 4 validation.
+Revised path forward: Next Milestone 2 attempt will reapply the 4 bug fixes (with human controlling terminals) → validate end-to-end → resume Stage 1 ablation experiments → run headline results H1-H4 → Stage 4 validation.
 
 ## Open questions / blockers
-- **`pinocchio_baseline/panda.urdf` mass/inertia — RESOLVED (commit c179740, pushed).** Real `franka_description` inertials added to every link.
+- **`pinocchio_baseline/panda.urdf` mass/inertia — RESOLVED (commit c179740, pushed).**
 - **Isaac Sim 6.0.1 data generation — WORKING and VALIDATED for all 3 payloads**, including actuator-saturation filter fix. Not yet committed — see "What to do next session".
-- **Remaining, NOT resolved — J1-J4 transient-spike outliers:** after saturation fix, `controller/compute_error_bound.py` still finds p99.9 ≈ 3-6 Nm but true max 26-65 Nm on ~0.09% of samples. Likely PD-servo transient, not saturation. Worked around via p99.9-not-max Lyapunov bound (documented in code). Worth investigating further if time permits.
-- **ROS2 Infrastructure — INSTALLED and BUILT on this machine.** `~/IsaacSim-ros_workspaces/jazzy_ws` cloned, submodules initialized, built with colcon. All `ros-jazzy-*` packages installed. Not part of git repo; documented here for next session's context.
-- **Stage 2/3 code — NOT YET COMMITTED.** Uncommitted: `controller/__init__.py`, `controller/lyapunov_gains.py`, `ros2_ws/src/pinn_franka_controller/{*.py,*.xml,*.yaml,*.launch.py}`, new directory `simulation/isaac_franka_moveit_bridge.py`. All verified with `py_compile` syntax check.
-- **Milestone 2 (Controller Integration):** Needs cleanest interception point for rerouting `panda_arm_controller`'s trajectory through `pinn_controller_node`. Two candidate approaches: (1) swap `panda_arm_controller` type/config, (2) add bridge node subscribing to action interface and republishing to `/pinn_controller/desired_trajectory`. Not started.
-- **Data pipeline:** Isaac Sim generator (`generate_isaac_dataset.py`) PRIMARY source. Fourier baseline (`generate_fourier_dataset.py`) smoke-test only. Real motor-babbling dataset still needed for `training/fine_tune.py`.
+- **Remaining, NOT resolved — J1-J4 transient-spike outliers:** p99.9 ≈ 3-6 Nm, true max 26-65 Nm on ~0.09% of samples. Worked around via p99.9-not-max Lyapunov bound (documented in code).
+- **ROS2 Infrastructure — INSTALLED and BUILT on this machine.** `~/IsaacSim-ros_workspaces/jazzy_ws` cloned, submodules initialized, built with colcon. All `ros-jazzy-*` packages installed. Not part of git repo; documented here for next session context.
+- **Stage 2/3 Milestone 1 code (ROS2 wiring, pinn_controller_node, simulation/isaac_franka_moveit_bridge.py) — COMMITTED and MERGED to main (d81851b).**
+- **Stage 2/3 Milestone 2 work — REVERTED (commit 0ca77ee).** Code deletions and policy changes rolled back. Next attempt will reapply fixes with human terminal control.
+- **Workflow preference recorded:** Human runs ROS2/Isaac Sim commands in their own terminals; Claude diagnoses from pasted output/logs and written code. Autonomous multi-terminal execution tried once (this session) and explicitly reverted.
+- **Critical bugs found during Milestone 2 (will re-occur, must reapply):**
+  - `pinocchio_baseline/rnea_wrapper.py` RneaBaseline class unfixed 9-vs-7 DOF incompatibility.
+  - Isaac Sim Franka USD needs `set_dof_gains(stiffnesses=0.0, dampings=0.0)` after `play()` for effort authority.
+  - Controller needs gravity-compensation safe-fallback torque (RNEA at qdot/qddot=0) instead of literal zero for "no trajectory" guards — prevents free-fall on startup.
+  - `pinn_controller_node.py` logger doesn't accept `exc_info=True` kwarg — use `traceback.format_exc()` appended to message.
+- **Data pipeline:** Isaac Sim generator (`generate_isaac_dataset.py`) PRIMARY source, validated. Fourier baseline smoke-test only. Real motor-babbling dataset still needed for `training/fine_tune.py`.
 - **papers/inbox/ — CLEARED.** Next batch can be added when user obtains them.
-- **N2-WhenPhysics diagnostic:** Per-joint RMSE logging live in training/train.py. Single/multi-payload ratios show no imbalance yet. Re-run after real robot recordings.
+- **N2-WhenPhysics diagnostic:** Per-joint RMSE logging live in training/train.py. Single/multi-payload ratios show no imbalance yet.
 - **N3-Djeumou (semi-supervised dissipativity):** awaits real motor-babbling dataset.
 - **Past CPU smoke-test experiments remain unvalidated** against corrected URDF — optional to re-run.
 - **Competitive advantage:** N2-PayloadPINN (virtual payload runtime injection) already implemented in `rnea_wrapper.py` — ahead of Li et al. 2025 published state. Cite in final paper.
@@ -219,11 +277,16 @@ Revised path forward: commit Stage 2/3 code changes → implement Milestone 2 (c
 - **PAPER_DRAFT.md preservation:** Future sessions use surgical edits, not full rewrites.
 
 ## What to do next session
-1. **Commit this session's Stage 2/3 code changes** (if not already done): `controller/__init__.py`, `controller/lyapunov_gains.py`, `ros2_ws/src/pinn_franka_controller/` entire tree (config, launch, package, setup files + `pinn_controller_node.py`), new `simulation/isaac_franka_moveit_bridge.py`, and update `SESSION.md`. Push after confirming with human.
-2. **Implement Milestone 2 (Stage 2/3 Controller Integration):** Decide on the interception architecture (option 1: swap `panda_arm_controller` type/config; option 2: add bridge node for action-to-topic routing). Implement the wiring so `pinn_controller_node` receives planned trajectories from MoveIt2 and executes them via PINN + Lyapunov gains as effort commands on `isaac_joint_commands`. Validate end-to-end with Plan & Execute in RViz driving the simulated arm via trained controller.
-3. **Commit this session's earlier Stage 1 fixes** (if not already done from previous session): `generate_isaac_dataset.py` (SATURATION_MARGIN), `controller/compute_error_bound.py` (new diagnostic), `controller/lyapunov_gains.py` (real DEFAULT_ERROR_BOUND), `PAPER_DRAFT.md`, `tracking/PROJECT_STATE.md`, `experiments/EXPERIMENT_PLAN.md`, `tracking/experiments_log.csv`. These were already written in the earlier 2026-07-16 session but not committed — check git status and commit if still outstanding.
-4. **Optionally investigate J1-J4 transient-spike outliers** (p99.9 3-6 Nm, true max 26-65 Nm, ~0.09% of samples). Hypothesis: PD-servo settling transient at segment start. Check by excluding first ~10-20 timesteps of each Fourier segment and re-running `controller/compute_error_bound.py` to see if tail shrinks. Not blocking — current p99.9 workaround is documented.
-5. **Implement ablation-matrix CLI flags** (from `experiments/EXPERIMENT_PLAN.md` blocks A-I) — structure ladder, diagonal-vs-Cholesky FrictionNet, activation swap, constraint mode, etc. None exist yet; these are what turn the validated pipeline into paper results.
-6. **Run headline experiments H1-H4** once ablation flags exist.
-7. **Real motor-babbling data (if/when found):** Use `training/fine_tune.py` (N3-Duong frozen-backbone) starting from `models/run_20260716_121302/greybox_best.pt`. Compute `tau_theo`/`delta` via URDF if not present. Compare against no-finetune and full-retrain baselines.
-8. **Implement Liu et al. (2024) 2s-rollout metric** (rad²/rad, their Table 6/8) for external comparison; per-joint RMSE alone is not comparable to their numbers.
+1. **Re-attempt Milestone 2 with human terminal control.** Human will run ROS2/Isaac Sim commands in their own terminals; Claude will read output/logs and guide diagnosis/fixes. Do NOT request autonomy policy change again unless human explicitly asks.
+2. **Reapply the 4 critical bug fixes** discovered in this session's Milestone 2 attempt:
+   - `pinocchio_baseline/rnea_wrapper.py`: Add `pin.buildReducedModel()` to `RneaBaseline.__init__` (lock finger joints 1-2 at neutral, reduce nq from 9 to 7). See `generate_isaac_dataset.py`'s `_load_pin_model()` for exact pattern.
+   - `simulation/isaac_franka_moveit_bridge.py`: Add `set_dof_gains(stiffnesses=0.0, dampings=0.0, dof_indices=<arm_indices>)` right after `app_utils.play()` to zero built-in servo for effort control authority.
+   - `pinn_controller_node.py`: Add `_publish_safe_fallback()` method to compute RNEA gravity-compensation torque (q, qdot=0, qddot=0) instead of literal zero for all "no valid trajectory" guard branches. This fixes the free-fall-on-startup issue.
+   - `pinn_controller_node.py` logger: Replace `exc_info=True` with `traceback.format_exc()` in exception handlers.
+3. **Live-validate the complete fix set** with at least one full test cycle (idle hold → triggered motion → post-trajectory idle hold) watching Isaac Sim viewport. Do not declare Milestone 2 done until smooth, stable motion is confirmed.
+4. **Commit this session's earlier Stage 1 fixes** (if not already done): `generate_isaac_dataset.py` (SATURATION_MARGIN), `controller/compute_error_bound.py` (new diagnostic), `controller/lyapunov_gains.py` (real DEFAULT_ERROR_BOUND), `PAPER_DRAFT.md`, `tracking/PROJECT_STATE.md`, `experiments/EXPERIMENT_PLAN.md`, `tracking/experiments_log.csv`. Check git status — these were written in the prior 2026-07-16 session but may still be uncommitted.
+5. **Optionally investigate J1-J4 transient-spike outliers** (p99.9 3-6 Nm, true max 26-65 Nm, ~0.09% of samples). Hypothesis: PD-servo settling transient at segment start. Check by excluding first ~10-20 timesteps of each Fourier segment and re-running `controller/compute_error_bound.py` to see if tail shrinks. Not blocking — current p99.9 workaround is documented.
+6. **Implement ablation-matrix CLI flags** from `experiments/EXPERIMENT_PLAN.md` blocks A-I (structure ladder, diagonal-vs-Cholesky FrictionNet, activation swap, constraint mode, etc.) once Milestone 2 is stable. None exist yet; these are what turn the validated pipeline into paper results.
+7. **Run headline experiments H1-H4** once ablation flags exist and Milestone 2 control is validated working end-to-end.
+8. **Real motor-babbling data (if/when found):** Use `training/fine_tune.py` (N3-Duong frozen-backbone) starting from `models/run_20260716_121302/greybox_best.pt`. Compute `tau_theo`/`delta` via URDF if not present. Compare against no-finetune and full-retrain baselines.
+9. **Implement Liu et al. (2024) 2s-rollout metric** (rad²/rad, their Table 6/8) for external comparison; per-joint RMSE alone is not comparable to their numbers.
