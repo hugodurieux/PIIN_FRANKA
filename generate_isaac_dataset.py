@@ -63,11 +63,15 @@ import numpy as np
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_ROOT)
 
-# omni imports — only valid after SimulationApp() is constructed
-from omni.isaac.core import World
-from omni.isaac.core.articulations import Articulation, ArticulationAction
-from omni.isaac.core.utils.stage import add_reference_to_stage
-from omni.isaac.core.utils.nucleus import get_assets_root_path
+# isaacsim imports — only valid after SimulationApp() is constructed
+# NOTE: Isaac Sim 5.0+/6.x renamed omni.isaac.* -> isaacsim.*.
+# Articulation (single-robot) moved to isaacsim.core.prims.SingleArticulation;
+# get_assets_root_path moved to isaacsim.storage.native.nucleus.
+from isaacsim.core.api import World
+from isaacsim.core.prims import SingleArticulation as Articulation
+from isaacsim.core.utils.types import ArticulationAction
+from isaacsim.core.utils.stage import add_reference_to_stage
+from isaacsim.storage.native.nucleus import get_assets_root_path
 from pxr import UsdPhysics
 
 try:
@@ -83,14 +87,40 @@ try:
 except ImportError:
     _HAS_SCIPY = False
 
+
+# `pin` (pinocchio) ships prebundled with the isaacsim.robot_motion.pink
+# extension via the `cmeel` build system: the real package lives under
+# .../pip_prebundle/cmeel.prefix/lib/python3.X/site-packages/pinocchio, and
+# cmeel.pth (in pip_prebundle) is what's supposed to add that nested dir to
+# sys.path via `import cmeel_pth`. setup_python_env.sh already puts
+# pip_prebundle itself on PYTHONPATH (confirmed: cmeel_pth.py sits directly
+# inside it), but plain PYTHONPATH entries don't trigger .pth processing, so
+# the nested site-packages dir never gets added and `import pinocchio` fails.
+# Since cmeel_pth is already reachable on sys.path, import it directly —
+# this is exactly what cmeel.pth would do, without relying on
+# site.addsitedir()'s .pth auto-processing (which proved unreliable here).
+try:
+    import cmeel_pth  # noqa: F401  (side effect: extends sys.path for pinocchio)
+except ImportError:
+    import site
+    _ISAAC_PATH = os.environ.get("ISAAC_PATH", "")
+    for _ext in ("isaacsim.robot_motion.pink", "isaacsim.robot_motion.cumotion"):
+        _prebundle = os.path.join(_ISAAC_PATH, "exts", _ext, "pip_prebundle")
+        if os.path.isdir(_prebundle):
+            site.addsitedir(_prebundle)
+
 try:
     import pinocchio as pin
 except ImportError:
-    print("ERROR: pinocchio not installed inside Isaac Sim Python.")
-    print("       Run: ./python.sh -m pip install pin")
-    sys.exit(1)
+    print("ERROR: pinocchio not importable inside Isaac Sim Python.")
+    print(f"       ISAAC_PATH={os.environ.get('ISAAC_PATH', '<unset>')}")
+    print("       sys.path:")
+    for _p in sys.path:
+        print(f"         {_p}")
+    raise
 
 from network.constants import N_JOINTS, TORQUE_LIMITS  # [87,87,87,87,12,12,12] Nm
+TORQUE_LIMITS = TORQUE_LIMITS.numpy()  # this script is pure numpy, no torch elsewhere
 
 # ---------------------------------------------------------------------------
 # Franka Panda joint limits (from URDF / Franka specs)
@@ -109,7 +139,7 @@ WARMUP_STEPS  = 200              # steps before recording (physics settle)
 
 ARM_JOINT_NAMES = [f"panda_joint{i}" for i in range(1, 8)]
 EE_LINK_NAME    = "panda_hand"
-FRANKA_USD_REL  = "/Isaac/Robots/Franka/franka.usd"
+FRANKA_USD_REL  = "/Isaac/Robots/FrankaRobotics/FrankaPanda/franka.usd"
 FRANKA_PRIM     = "/World/Franka"
 
 
@@ -161,7 +191,17 @@ def _fourier_segment(q_center: np.ndarray, n_steps: int,
 # ===========================================================================
 
 def _load_pin_model(urdf_path: str, payload_kg: float):
-    model = pin.buildModelFromUrdf(urdf_path)
+    full_model = pin.buildModelFromUrdf(urdf_path)
+
+    # panda.urdf has 7 revolute arm joints + 2 prismatic finger joints (nq=9).
+    # Isaac Sim commands the fingers to stay fixed at 0 throughout data
+    # generation (see q_cmd/qdot_cmd, only arm_idx is driven), so the RNEA
+    # model must match: lock both finger joints at 0 to reduce nq -> 7 and
+    # line up with the 7-column q/qdot/qddot arrays collected from the sim.
+    finger_joints = ["panda_finger_joint1", "panda_finger_joint2"]
+    joints_to_lock = [full_model.getJointId(j) for j in finger_joints]
+    reference_q = pin.neutral(full_model)
+    model = pin.buildReducedModel(full_model, joints_to_lock, reference_q)
     data  = model.createData()
     if payload_kg > 0.0:
         ee_id   = model.getFrameId(EE_LINK_NAME)
@@ -261,6 +301,16 @@ def generate_and_save(payload_kg: float, out_dir: str,
     arm_idx = _arm_indices(robot)
     print(f"      {n_dof} DoF  |  arm indices: {arm_idx.tolist()}")
 
+    # Live joint-drive gains — a stiff position/velocity servo can turn a small
+    # tracking error into a large "measured" torque that looks like residual
+    # dynamics but is really PD correction, not physical friction/compliance.
+    dof_props = robot.dof_properties
+    print("      joint drive gains (stiffness, damping) per arm joint:")
+    for j, idx in enumerate(arm_idx):
+        print(f"        J{j+1}: stiffness={dof_props['stiffness'][idx]:.1f}  "
+              f"damping={dof_props['damping'][idx]:.1f}  "
+              f"maxEffort={dof_props['maxEffort'][idx]:.1f}")
+
     # -- Trajectory generation --
     print("\n[3/4] Simulating Fourier+Sobol trajectories")
     q_centers = _sobol_q_centers(N_SEGMENTS,
@@ -269,6 +319,7 @@ def generate_and_save(payload_kg: float, out_dir: str,
 
     all_q, all_qdot, all_qddot = [], [], []
     all_tau_real, all_delta    = [], []
+    all_q_ref, all_qdot_ref    = [], []  # commanded reference, for tracking-error diagnostic
 
     for seg_i, q_center in enumerate(q_centers):
         q_ref, qdot_ref, qddot_ref = _fourier_segment(
@@ -322,12 +373,14 @@ def generate_and_save(payload_kg: float, out_dir: str,
         all_qddot.append(qddot_ref[valid])  # analytical from Fourier parametrisation
         all_tau_real.append(seg_tau[valid])
         all_delta.append(np.full(n_valid, payload_kg, dtype=np.float32))
+        all_q_ref.append(q_ref[valid])
+        all_qdot_ref.append(qdot_ref[valid])
 
         total = sum(len(a) for a in all_q)
         print(f"    seg {seg_i+1:2d}/{N_SEGMENTS}  valid={n_valid:5d}  "
               f"cumulative={total:6d}")
 
-    world.close()
+    world.stop()
 
     # -- Concatenate --
     q_all        = np.concatenate(all_q)
@@ -335,6 +388,21 @@ def generate_and_save(payload_kg: float, out_dir: str,
     qddot_all    = np.concatenate(all_qddot)
     tau_real_all = np.concatenate(all_tau_real)
     delta_all    = np.concatenate(all_delta)
+    q_ref_all    = np.concatenate(all_q_ref)
+    qdot_ref_all = np.concatenate(all_qdot_ref)
+
+    # -- Tracking-error diagnostic --
+    # tau_theo is computed from (q_actual, qdot_actual, qddot_REFERENCE) — a mix
+    # of simulated state and analytical Fourier acceleration. That's only a
+    # valid approximation if the Isaac Sim joint drive tracks the Fourier
+    # reference tightly. Large tracking error would leak into tau_res as an
+    # artifact, not real unmodelled physics — check before trusting residuals.
+    q_track_rmse    = np.sqrt(np.mean((q_all - q_ref_all)**2, axis=0))
+    qdot_track_rmse = np.sqrt(np.mean((qdot_all - qdot_ref_all)**2, axis=0))
+    print("\n[diagnostic] trajectory tracking error (actual vs. Fourier reference):")
+    for j in range(N_JOINTS):
+        print(f"    J{j+1}: q_rmse={q_track_rmse[j]:.4f} rad   "
+              f"qdot_rmse={qdot_track_rmse[j]:.4f} rad/s")
 
     # -- Pinocchio RNEA → tau_theo --
     print(f"\n[4/4] Pinocchio RNEA for {len(q_all):,} samples ...")
