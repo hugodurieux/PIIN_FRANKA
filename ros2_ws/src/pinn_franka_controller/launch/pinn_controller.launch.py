@@ -1,5 +1,5 @@
 """
-Stage 2 -- ROS2 Humble launch file for the PINN Franka controller node.
+Stage 2 -- ROS2 Jazzy launch file for the PINN Franka controller node.
 
 Usage
 -----
@@ -8,25 +8,34 @@ Usage
         checkpoint_path:=/path/to/model.pt \
         delta:=0.0
 
-To launch alongside franka_ros2 and MoveIt2
---------------------------------------------
-In a separate terminal (or via a top-level launch file that includes this one):
+To launch alongside Isaac Sim + MoveIt2 (current simulation target)
+---------------------------------------------------------------------
+In separate terminals:
 
-    # 1. Start the franka_ros2 hardware interface:
-    ros2 launch franka_bringup franka.launch.py robot_ip:=<ROBOT_IP>
+    # 1. Start Isaac Sim with the Franka scene + ROS2 bridge:
+    ~/isaac-sim/python.sh /path/to/simulation/isaac_franka_moveit_bridge.py
 
-    # 2. Start MoveIt2 (generates trajectories on
-    #    /pinn_controller/desired_trajectory):
-    ros2 launch franka_moveit_config moveit.launch.py
+    # 2. Start MoveIt2 (isaac_moveit config, plans against the isaac_joint_*
+    #    topics the bridge script above publishes/subscribes):
+    ros2 launch isaac_moveit isaac_moveit.launch.py
 
-    # 3. Start this controller node:
+    # 3. Start this controller node -- subscribes to isaac_joint_states and
+    #    /pinn_controller/desired_trajectory, publishes effort commands on
+    #    isaac_joint_commands (Isaac's ArticulationController accepts effort
+    #    commands directly):
     ros2 launch pinn_franka_controller pinn_controller.launch.py \
         urdf_path:=/path/to/franka.urdf \
         checkpoint_path:=/path/to/model.pt
 
-You may also remap topics if your MoveIt2 setup publishes trajectories on a
-different topic, e.g. by adding:
-    --ros-args --remap /pinn_controller/desired_trajectory:=/your/topic
+Note: as of the current Stage 2/3 integration, MoveIt2's default execution
+path drives Isaac Sim directly via isaac_joint_commands (position control),
+bypassing this node. Routing MoveIt2's planned trajectory into this node's
+/pinn_controller/desired_trajectory topic instead (so the Stage 3 PINN
+controller is what actually commands the robot) is tracked as follow-up work.
+
+For a future real-hardware target (franka_ros2), remap both topics, e.g.:
+    --ros-args --remap isaac_joint_states:=/franka/joint_states \
+               --remap isaac_joint_commands:=/franka/effort_joint_trajectory_controller/commands
 """
 
 from launch import LaunchDescription

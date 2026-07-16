@@ -18,9 +18,10 @@ pinn_franka_controller:
     # Must be set by the user after Stage 1 training completes.
     checkpoint_path: ""
 
-    # Payload conditioning parameter delta in [0, 1].
-    #   0.0 = no payload (0 kg)
-    #   Intermediate values map linearly to PAYLOADS in constants.py.
+    # Payload mass [kg] attached to the end-effector. NOT normalized -- this is
+    # the literal kg value fed to RNEA and the residual model's delta input.
+    # Training data was generated at network/constants.PAYLOADS = (0.0, 1.0, 3.0);
+    # values in between/beyond are extrapolation (see EXPERIMENT_PLAN.md block G).
     delta: 0.0
 
     # Control loop frequency [Hz].

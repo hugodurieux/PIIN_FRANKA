@@ -4,7 +4,7 @@
   <name>pinn_franka_controller</name>
   <version>0.1.0</version>
   <description>
-    ROS2 Humble node bridging MoveIt2 trajectory output to the PINN-based
+    ROS2 Jazzy node bridging MoveIt2 trajectory output to the PINN-based
     computed-torque + PD controller for the Franka Panda 7-DoF arm.
     Stage 2 of the PINN Franka pipeline (see goal.md).
   </description>
@@ -17,7 +17,6 @@
   <exec_depend>rclpy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>trajectory_msgs</exec_depend>
-  <exec_depend>std_msgs</exec_depend>
   <exec_depend>control_msgs</exec_depend>
   <exec_depend>builtin_interfaces</exec_depend>
 

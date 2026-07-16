@@ -1,5 +1,5 @@
 """
-Stage 2 -- ROS2 Humble package setup for pinn_franka_controller.
+Stage 2 -- ROS2 Jazzy package setup for pinn_franka_controller.
 
 This package provides the ROS2 node that bridges MoveIt2 trajectory planning
 with the Stage 3 computed-torque + PD controller backed by the PINN dynamics
@@ -40,7 +40,7 @@ setup(
     zip_safe=True,
     maintainer="Hugo Durieux",
     maintainer_email="hugodurieuxh@gmail.com",
-    description="PINN-based torque controller node for Franka Panda (ROS2 Humble)",
+    description="PINN-based torque controller node for Franka Panda (ROS2 Jazzy)",
     license="MIT",
     tests_require=["pytest"],
     entry_points={

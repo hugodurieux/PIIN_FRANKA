@@ -1,11 +1,11 @@
-﻿# Project State — PINN Franka Pipeline
-_Last updated: 2026-07-16 (GPU machine: panda.urdf mass/inertia fix + Isaac Sim 6.0.1 data pipeline validated end-to-end for all 3 payloads; first two real training runs completed, second one (post actuator-saturation-filter fix) is the current reference baseline; Stage 3 Lyapunov gains recomputed from real data, no longer a placeholder)_
+# Project State — PINN Franka Pipeline
+_Last updated: 2026-07-16 (Stage 2 + Stage 3 integration session: first working MoveIt2 motion-planning setup targeting simulated Franka Panda in Isaac Sim, Stage 3 ComputedTorquePDController wired into the ROS2 node for the first time, Milestone 1 of Stage 2/3 end-to-end integration achieved and confirmed working — changes NOT YET COMMITTED)_
 
 ## 1. Objectives (from goal.md)
 | # | Objective | Status | Evidence / where proven |
 |---|-----------|--------|-------------------------|
 | 1 | Automated "URDF-to-Model" Pipeline — accept any URDF, auto-extract kinematics via Pinocchio, generate network, produce trained dynamic model | in progress | `pinocchio_baseline/rnea_wrapper.py` (URDF -> RNEA); `network/grey_box_net.py` + `training/train.py` (architecture + training loop). N4 data-efficiency ablation flag (`--max_samples`) merged. **`pinocchio_baseline/panda.urdf` mass/inertia fix (2026-07-16, commit c179740):** the URDF shipped with zero `<inertial>` tags on any link; RNEA had been running on Pinocchio's placeholder inertias, not real Franka mass properties, for the project's entire prior history. Fixed with official `franka_description` values; discovered via first-ever comparison against an independently-massed physics engine (Isaac Sim). **Isaac Sim 6.0.1 data pipeline VALIDATED end-to-end** (`generate_isaac_dataset.py`, GPU machine): all 3 payloads (0/1/3 kg, ~49k samples each) generated with corrected URDF. A second data-quality issue (actuator-saturation-contaminated samples inflating the residual tail) was found and fixed — see Stage 1 section below. **First real (GPU) training runs DONE**: see `tracking/experiments_log.csv` — `isaac-multipayload-frictionnet-satfix` is the current reference baseline (val RMSE 0.80/0.88/0.90/0.54/0.37/0.36/0.30 Nm per joint). Li et al. (2025) payload-ID review and Li et al. (2025) compliant-PINN review both independently confirm dual payload-awareness (RNEA white-box + tau_res delta input) is ahead of the published art. |
-| 2 | High-Frequency Real-Time Control at 1000 Hz (MPC integration, microsecond inference) | in progress | Stage 2: ROS2 Humble node on `stage2/moveit2-ros2-humble` publishes effort commands at 1000 Hz with MoveIt2 trajectory bridge. Stage 3: `ComputedTorquePDController.step()` on `stage3/computed-torque-pd-controller` is the 1 kHz torque computation kernel. Both scaffolded; wiring pending trained Stage 1 model. |
+| 2 | High-Frequency Real-Time Control at 1000 Hz (MPC integration, microsecond inference) | in progress | Stage 2: MoveIt2 motion planning working end-to-end against a simulated Franka Panda in Isaac Sim (Milestone 1, this session — see Stage 2 section). Stage 3: `ComputedTorquePDController` is now wired into `pinn_controller_node.py`'s control loop for the first time (this session), closing a gap where the node previously always published zero torques. **Not yet proven at 1000 Hz driven by the trained model** — Milestone 1's Plan & Execute currently runs through MoveIt2's own default `joint_trajectory_controller` (position commands), not through `pinn_controller_node`/Stage 3; that routing is Milestone 2, not yet done. Inference-latency benchmark still not written. |
 | 3 | Scaling to 7-DoF — Augmented Lagrangian constraints + residual friction on a full Franka Panda | in progress | `training/constraints.py` implements AL penalties (torque limits + dissipativity) for all 7 joints. Stage 3 hard-clips to per-joint TORQUE_LIMITS. N2-Liu FrictionNet IMPLEMENTED (`network/friction_net.py`): structural dissipativity guarantee via Softplus-diagonal D matrix; hard guarantee `tau_friction · qdot <= 0` always; 6,087 params; physics PASSED. Hu et al. (2026) review passively validates that RNEA covers load-dependent terms and tau_res captures motion-state residuals. |
 | 4 | Standardized Sim-to-Real Gap resolution via physics-constrained fine-tuning | in progress | `training/fine_tune.py` on branch `novelty/duong2024-N3-simtoreal-finetune` — PASSED physics validation. Loads pre-trained GreyBoxNet, freezes all layers except last 2 nn.Linear modules, fine-tunes under full PINN loss (MSE + AL). First code implementation of Goal 4. Real data pipeline (HDF5) not yet built. |
 
@@ -35,23 +35,29 @@ Data pipeline:
 - **Fourier baseline** (`generate_fourier_dataset.py`) — SMOKE-TEST ONLY. tau_res = synthetic Coulomb+viscous (hand-tuned). Useful for CPU pipeline validation; does not produce paper-quality residuals. Outputs `data/fourier_baseline_{payload}kg.h5`.
 
 ### Stage 2 — Motion planning (MoveIt2 / ROS2)
-Scaffolded on branch `stage2/moveit2-ros2-humble` — PHYSICS PASSED (after fix). Awaiting merge and Stage 1 trained model.
+**First working implementation this session (2026-07-16), NOT YET COMMITTED to git.** Targets a *simulated* Franka Panda in Isaac Sim, not real hardware yet.
 
-- `ros2_ws/src/pinn_franka_controller/` — full ROS2 Humble package.
-- `pinn_controller_node.py`: subscribes to `/franka/joint_states` and `/pinn_controller/desired_trajectory`; publishes to `/franka/effort_joint_trajectory_controller/commands` at 1000 Hz; zero-torque safe fallback; TORQUE_LIMITS clamp at publish boundary.
-- `trajectory_interpolator.py`: linear interpolation of (q_des, qdot_des, qddot_des) from JointTrajectory messages.
-- `launch/pinn_controller.launch.py` and `config/controller_params.yaml`.
-- Integration point: `TODO(stage3)` marker in `_compute_torques()` and `_try_load_controller()` — Stage 3 `ComputedTorquePDController` plugs in here once that branch is merged.
+- **MoveIt2 config source changed:** instead of a hand-built SRDF/kinematics config, this now uses NVIDIA's official `IsaacSim-ros_workspaces` (`jazzy_ws/isaac_moveit` package) directly. Deliberate simplification per CLAUDE.md's "keep it simple, just enough to showcase Stage 1" directive for Stage 2 — avoids maintaining a duplicate hand-authored MoveIt2 config for a robot NVIDIA already ships one for.
+- **ROS2 distro corrected:** runs on **ROS2 Jazzy**, matching this machine's Ubuntu 24.04. The project's earlier ROS2 scaffold (branch `stage2/moveit2-ros2-humble`, see below) had incorrectly assumed Humble.
+- **New `simulation/` top-level directory** (untracked, new): `simulation/isaac_franka_moveit_bridge.py` — an Isaac Sim standalone script exposing the Franka Panda over ROS2 topics `isaac_joint_states` (state, published) / `isaac_joint_commands` (position/velocity/effort, subscribed). This is the "simulated hardware" counterpart that `isaac_moveit` needs to talk to; adapted from NVIDIA's own bundled reference example rather than written from scratch.
+- **Milestone 1 — ACHIEVED and confirmed working end-to-end this session:** MoveIt2 Plan & Execute in RViz successfully drives the simulated Franka Panda in Isaac Sim via this bridge. Currently this goes through MoveIt2's own default `joint_trajectory_controller` (position commands) — **NOT yet through `pinn_controller_node`/Stage 3.** That routing is Milestone 2 (see below), not yet started.
+- Pre-existing scaffold (branch `stage2/moveit2-ros2-humble`, `ros2_ws/src/pinn_franka_controller/`) still exists on disk and has been edited this session (see Stage 3 below for what changed in `pinn_controller_node.py`) but is not yet the thing MoveIt2 talks to for Milestone 1 — it becomes relevant again at Milestone 2.
+- `trajectory_interpolator.py`: linear interpolation of (q_des, qdot_des, qddot_des) from JointTrajectory messages — unchanged this session.
+- `launch/pinn_controller.launch.py` and `config/controller_params.yaml` — both edited this session (see git diff; ROS2 Jazzy path/parameter updates).
+
+**Milestone 2 (immediate next step, not yet started):** route MoveIt2's planned trajectory through `pinn_controller_node` so that Stage 3's trained-model-driven torque control — not MoveIt2's default position execution — actually drives the simulated robot.
 
 ### Stage 3 — Controller + integration
-Scaffolded on branch `stage3/computed-torque-pd-controller` — PHYSICS PASSED. Awaiting merge and Stage 1 trained model.
+`ComputedTorquePDController` (fully implemented and tested since the earlier `stage3/computed-torque-pd-controller` merge) **is now wired into the ROS2 node for the first time this session** — the integration gap is closed, but NOT YET COMMITTED.
 
-- `controller/model_loader.py`: loads `GreyBoxNet` checkpoint from `.pt` + `config.json`.
-- `controller/lyapunov_gains.py`: N3-Liu — computes `Kd = safety_margin * error_bound`, `Kp = Kd^2 / 4` (critical damping). `DEFAULT_ERROR_BOUND = [5.20, 5.66, 3.06, 3.80, 2.10, 2.38, 1.57]` Nm, recomputed 2026-07-16 from real validation data (`models/run_20260716_121302`, per-joint p99.9 of \|tau_pred - tau_real\|, not the literal max — see Stage 1 section for why). No longer a placeholder.
-- `controller/compute_error_bound.py`: **NEW (2026-07-16)** — reconstructs the exact train/val split used by `training/train.py`, evaluates a checkpoint (GreyBoxNet + optional FrictionNet) on the validation set, and reports per-joint RMSE, percentiles (p50/p90/p99/p99.9/max), and the worst-5-samples-per-joint (full state dump) for diagnosing error-bound outliers before they're fed into `compute_lyapunov_gains()`. Written to investigate the actuator-saturation finding above; reusable for any future checkpoint.
-- `controller/computed_torque_pd.py`: `ComputedTorquePDController.step()` — `tau = RNEA(q, qdot, qddot_des) + tau_res(q, qdot, delta) + Kp*(q_des - q) + Kd*(qdot_des - qdot)`, hard-clipped to TORQUE_LIMITS; all I/O numpy; `torch.no_grad()` for inference. `update_payload(delta)` updates delta at runtime (e.g. after grasping).
-- `controller/payload_identification.py`: **TODO stub** — lightweight runtime payload identification via least-squares regression on N static torque measurements. RNEA linearity in mass allows closed-form 1-unknown solve: δ̂ = (A^T b)/(A^T A), where A = g_payload(q_i) stacked and b = τ_meas_i − τ_0(q_i). Requires ~100 ms of quasi-static measurements before entering the 1 kHz loop. Algorithm is fully documented in docstring and inline comments; raises NotImplementedError until implemented. See also PAPER_DRAFT.md Section 3.9.
-- Wiring dependency: Stage 2's `TODO(stage3)` must be resolved after this branch is merged into main.
+- `controller/model_loader.py`: loads `GreyBoxNet` checkpoint from `.pt` + `config.json`. Unchanged this session.
+- `controller/lyapunov_gains.py`: N3-Liu — computes `Kd = safety_margin * error_bound`, `Kp = Kd^2 / 4` (critical damping). `DEFAULT_ERROR_BOUND = [5.20, 5.66, 3.06, 3.80, 2.10, 2.38, 1.57]` Nm, recomputed 2026-07-16 (earlier session) from real validation data. **This session added `MANUAL_ERROR_BOUND = [5,5,5,5,2,2,2]` Nm + `MANUAL_PD_KP`/`MANUAL_PD_KD` (safety_margin=1.0)** — a conservative fixed fallback run through the same critical-damping formula, used by the ROS2 node when its `use_lyapunov_gains` parameter is `False`. Previously that parameter had no effect (the node had no fallback gains to switch to); now it does.
+- `controller/compute_error_bound.py`: reconstructs the exact train/val split used by `training/train.py`, evaluates a checkpoint (GreyBoxNet + optional FrictionNet) on the validation set, and reports per-joint RMSE, percentiles (p50/p90/p99/p99.9/max), and worst-5-samples-per-joint. Unchanged this session.
+- `controller/computed_torque_pd.py`: `ComputedTorquePDController.step()` — `tau = RNEA(q, qdot, qddot_des) + tau_res(q, qdot, delta) + Kp*(q_des - q) + Kd*(qdot_des - qdot)`, hard-clipped to TORQUE_LIMITS; all I/O numpy; `torch.no_grad()` for inference. `update_payload(delta)` updates delta at runtime (e.g. after grasping). Unchanged this session.
+- `controller/payload_identification.py`: still a TODO stub, unchanged this session.
+- **`ros2_ws/src/pinn_franka_controller/pinn_franka_controller/pinn_controller_node.py` — wiring closed this session.** Previously this file had a `TODO(stage3)` stub in `_compute_torques()` that always published zero torques regardless of the loaded model or gains — `ComputedTorquePDController` existed as a tested class but was never actually invoked by the control loop. That gap is now closed: the node instantiates and calls `ComputedTorquePDController.step()` per control tick, selecting Lyapunov-computed gains (`DEFAULT_KP`/`DEFAULT_KD`) or the new manual fallback gains (`MANUAL_PD_KP`/`MANUAL_PD_KD`) based on the `use_lyapunov_gains` parameter.
+- **Not yet proven under real load:** this wiring has NOT yet been exercised end-to-end against Isaac Sim — Milestone 1 (this session) used MoveIt2's own default `joint_trajectory_controller`, not `pinn_controller_node`. Milestone 2 (routing through `pinn_controller_node`) is the test that will actually exercise this new code path.
+- Files touched this session (uncommitted): `controller/__init__.py`, `controller/lyapunov_gains.py`, `ros2_ws/src/pinn_franka_controller/pinn_franka_controller/pinn_controller_node.py`, `ros2_ws/src/pinn_franka_controller/config/controller_params.yaml`, `ros2_ws/src/pinn_franka_controller/launch/pinn_controller.launch.py`, `ros2_ws/src/pinn_franka_controller/package.xml`, `ros2_ws/src/pinn_franka_controller/setup.py`.
 
 ### Stage 4 — Grasping (optional)
 Scaffolded and merged to main (commit b86f335). Fully isolated — zero modifications to Stages 1-3.
@@ -62,7 +68,9 @@ Scaffolded and merged to main (commit b86f335). Fully isolated — zero modifica
 - `stage4/demo_targets.py`: named poses (box_center, box_left, box_right, place_tray, home); orientations TOP_DOWN and TILTED_30; `get_target(name)` returns (4,4) homogeneous transform in Franka base frame.
 - `stage4/dry_run.py`: 6 offline tests (successful pick+place, gripper failure, abort, GraspConfig defaults, demo_targets validation, MockGripperController transitions) — all pass without hardware / ROS2 / trained model. Run with: `python -m stage4.dry_run`.
 
-Remaining gaps (blocked on Stages 2+3 end-to-end with trained model):
+**Progress note (2026-07-16, this session):** `_move_arm()`'s blocker was "Stage 2+3 validated end-to-end integration." Milestone 1 of that integration (MoveIt2 Plan & Execute driving simulated Franka Panda in Isaac Sim) is now done — Stage 4 is one step closer. Still blocked on Milestone 2 (routing through the actual trained-model-driven `pinn_controller_node`, not just MoveIt2's default execution) before `_move_arm()` can be implemented against a real control path rather than a placeholder.
+
+Remaining gaps (blocked on Stages 2+3 Milestone 2):
 - `_move_arm()` in `grasp_executor.py` raises `NotImplementedError`; needs IK (Pinocchio or MoveIt2) + trajectory generation (Stage 2) + 1 kHz execution via Stage 3. `TODO(stage4-arm-motion)` marks the integration point.
 - Stage 4 ROS2 orchestration node (joint-state subscriber + full grasp sequence).
 
@@ -74,7 +82,7 @@ Remaining gaps (blocked on Stages 2+3 end-to-end with trained model):
 | N3-Djeumou | Djeumou et al. (2022) | Semi-supervised constraint enforcement on unlabeled joint-space points to extend dissipativity guarantees beyond training trajectories. INVESTIGATE — ablation study needed. | Goal 3, Goal 4 | not started | not validated | not merged |
 | N1-Liu | Liu et al. (2024) | RK4 rollout loss — augment the training loss with a 4th-order Runge-Kutta forward simulation residual. REJECT — conflicts with RNEA grey-box architecture; would destroy primary novelty. | — | rejected | — | — |
 | N2-Liu | Liu et al. (2024) | Cholesky dissipativity structural constraint — FrictionNet sub-module with Softplus-diagonal D matrix; tau_friction = -D_diag * qdot; hard structural guarantee tau_friction · qdot <= 0 always. Synthesises N2-Liu (Cholesky concept) + N1-Duong (L L^T algebraic kernel, diagonal case) + N1-SPEL (revolute-joint sparsity: diagonal D, not full 28-entry Cholesky). KEEP — IMPLEMENTED in `network/friction_net.py`; `--use_friction_net` flag in `training/train.py`; logs D_diag mean per joint; saves `friction_net_best.pt`. 6,087 parameters. Physics validator advisory: lambda_dissip grows more slowly when active (intended). | Goal 3 | `novelty/N2-Liu-frictionnet` | PASSED (physics validator) | **MERGED to main (commit ebc2ba3)** |
-| N3-Liu | Liu et al. (2024) | Lyapunov stability template for Stage 3 controller — `Kd = safety_margin * error_bound`, `Kp = Kd^2/4` (critical damping), `DEFAULT_ERROR_BOUND = [5,5,5,5,2,2,2]` Nm placeholder. KEEP — implemented in `controller/lyapunov_gains.py`. DEFAULT_KP/DEFAULT_KD are placeholders; call `compute_lyapunov_gains(real_error_bound)` after Stage 1 training. | Goal 2 | `stage3/computed-torque-pd-controller` | PASSED (physics validator) | **MERGED to main** |
+| N3-Liu | Liu et al. (2024) | Lyapunov stability template for Stage 3 controller — `Kd = safety_margin * error_bound`, `Kp = Kd^2/4` (critical damping), `DEFAULT_ERROR_BOUND = [5,5,5,5,2,2,2]` Nm placeholder. KEEP — implemented in `controller/lyapunov_gains.py`. DEFAULT_KP/DEFAULT_KD recomputed from real data (2026-07-16); a separate `MANUAL_PD_KP`/`MANUAL_PD_KD` fallback (fixed, safety_margin=1.0) was added this session for `use_lyapunov_gains=False` deployments — see Stage 3 section. | Goal 2 | `stage3/computed-torque-pd-controller` | PASSED (physics validator) | **MERGED to main** |
 | N4-Liu | Liu et al. (2024) | `--max_samples` data-efficiency ablation flag — truncate training data to N random samples (seed=42, before train/val split) to quantify how few samples are needed vs. Liu's 25k-sample benchmark. KEEP — implemented. | Goal 1 | `novelty/liu2024-N4-max-samples` | PASSED (physics validator, non-blocking advisories) | **MERGED to main** |
 | N1-Duong | Duong et al. (2024) | Cholesky-factored inverse mass sub-network — L L^T + eps*I algebraic trick (28 lower-triangular entries for 7x7 matrix, Softplus on diagonal) guarantees positive-definiteness. INVESTIGATE — algebraic input to N2-Liu FrictionNet design (diagonal case used). Folds into N2-Liu; implemented there. | Goal 3 | folds into N2-Liu | folded into N2-Liu PASSED | not separate |
 | N2-Duong | Duong et al. (2024) | Separate dissipation sub-network. REJECT — duplicate of N1-Duong's algebraic core; no independent contribution beyond what N1-Duong and N2-Liu already capture. | — | rejected | — | — |
@@ -114,7 +122,7 @@ A Theoretical and Experimental Investigation" — the primary state-of-the-art r
 | # | Gap in Liu et al. | This project's answer |
 |---|-------------------|----------------------|
 | 1 | No URDF-to-model automation — equations manually derived per robot | Goal 1: fully automated URDF -> Pinocchio -> network pipeline |
-| 2 | Control at 500 Hz only, no MPC integration | Goal 2: targets 1000 Hz; Stage 2 ROS2 node + Stage 3 controller scaffolded |
+| 2 | Control at 500 Hz only, no MPC integration | Goal 2: targets 1000 Hz; Stage 2 MoveIt2 planning working end-to-end against simulated Franka in Isaac Sim (Milestone 1, 2026-07-16); Stage 3 controller wired into the ROS2 node (2026-07-16); Milestone 2 (routing planned trajectories through the trained-model controller) not yet done |
 | 3 | No payload conditioning | Payload delta in R^1 baked into every network input ([sin(q), cos(q), qdot, delta]); tested at 0 / 1 / 3 kg |
 | 4 | No sim-to-real transfer protocol | Goal 4: 2-step pre-train (sim) + fine-tune (real motor-babbling) under PINN loss; `training/fine_tune.py` implements this (N3-Duong) |
 | 5 | No torque / velocity limits in loss | AL constraints enforce torque limits and dissipativity for all 7 joints; Stage 3 hard-clips at publish boundary |
@@ -136,7 +144,7 @@ Independent papers reviewed have produced secondary findings that strengthen exi
 ## 3c. Physics validator advisories (non-blocking)
 1. N4 branch — dissipativity multiplier is batch-mean (pre-existing, not introduced by N4 branch) — consider per-sample multipliers if enforcement is weak at runtime.
 2. N4 branch — at very small max_samples (< ~2000 from a 25k dataset), random draw may under-sample high-velocity excitation regions — document this in ablation study.
-3. N3-Liu (Stage 3) — DEFAULT_KP/DEFAULT_KD are placeholders computed from `DEFAULT_ERROR_BOUND = [5,5,5,5,2,2,2]` Nm. Gains must be recomputed via `compute_lyapunov_gains(real_error_bound)` once Stage 1 produces validation error statistics.
+3. N3-Liu (Stage 3) — DEFAULT_KP/DEFAULT_KD are placeholders computed from `DEFAULT_ERROR_BOUND = [5,5,5,5,2,2,2]` Nm. Gains must be recomputed via `compute_lyapunov_gains(real_error_bound)` once Stage 1 produces validation error statistics. **RESOLVED 2026-07-16** — see Stage 1/Stage 3 sections; a separate fixed `MANUAL_PD_KP`/`MANUAL_PD_KD` fallback was added this session (uncommitted) for the `use_lyapunov_gains=False` path, which previously had no gains to fall back to.
 4. N3-Duong (`training/fine_tune.py`) — freeze logic uses `named_modules()` to select "last 2" nn.Linear modules. If a future architecture revision adds skip-connection Linear layers outside `self.net`, the count could shift. Document this assumption when the architecture evolves.
 5. N2-Liu FrictionNet — `lambda_dissip` in AugmentedLagrangian will grow more slowly when `--use_friction_net` is active, because FrictionNet structurally absorbs part of the dissipativity constraint. This is intended and correct behaviour; document in ablation comparison between runs with and without the flag.
 6. Prabhakar et al. (ICLR 2026) key negative result: physics constraints HURT temporal extrapolation beyond the training window (+6-10% error increase). Scope project claims to in-distribution trajectory following accordingly; do not claim out-of-distribution extrapolation without evidence.
@@ -176,31 +184,51 @@ pinn_franka/
 |   |                                (_inject_payload / _restore_payload); ahead of Li 2025
 |   |-- __init__.py
 |
-|-- controller/                      [branch: stage3/computed-torque-pd-controller]
-|   |-- __init__.py
+|-- controller/                      [branch: stage3/computed-torque-pd-controller; wiring
+|   |                                  changes 2026-07-16 UNCOMMITTED, see Stage 3 section]
+|   |-- __init__.py                  UNCOMMITTED changes this session (2026-07-16)
 |   |-- model_loader.py              Loads GreyBoxNet checkpoint from .pt + config.json
-|   |-- lyapunov_gains.py            N3-Liu: Kd = safety_margin*error_bound, Kp = Kd^2/4
+|   |-- lyapunov_gains.py            N3-Liu: Kd = safety_margin*error_bound, Kp = Kd^2/4;
+|   |                                UNCOMMITTED this session: added MANUAL_ERROR_BOUND +
+|   |                                MANUAL_PD_KP/MANUAL_PD_KD fallback gains (safety_margin=1.0)
 |   |-- computed_torque_pd.py        ComputedTorquePDController.step(); 1 kHz torque kernel;
-|   |                                update_payload() for runtime delta changes
+|   |                                update_payload() for runtime delta changes; NOW WIRED
+|   |                                into pinn_controller_node.py (2026-07-16, uncommitted)
 |   |-- payload_identification.py    TODO stub: least-squares payload ID from static torque
 |   |                                measurements; RNEA linearity in mass → 1-unknown
 |   |                                closed-form regression; call before 1 kHz loop
 |
-|-- ros2_ws/                         [branch: stage2/moveit2-ros2-humble]
+|-- simulation/                      NEW this session (2026-07-16), UNTRACKED/UNCOMMITTED
+|   |-- isaac_franka_moveit_bridge.py  Isaac Sim standalone script: exposes Franka Panda
+|                                      over ROS2 topics isaac_joint_states (state, pub) /
+|                                      isaac_joint_commands (pos/vel/effort, sub); adapted
+|                                      from NVIDIA's bundled IsaacSim-ros_workspaces example;
+|                                      "simulated hardware" counterpart to isaac_moveit
+|
+|-- ros2_ws/                         [branch: stage2/moveit2-ros2-humble — distro now
+|   |                                  actually ROS2 Jazzy on this machine; NOT the primary
+|   |                                  MoveIt2 path for Milestone 1, see Stage 2 section]
 |   |-- src/pinn_franka_controller/
-|       |-- pinn_controller_node.py  ROS2 node: 1000 Hz effort publisher; TODO(stage3) hook
-|       |-- trajectory_interpolator.py  Linear interp of (q_des, qdot_des, qddot_des)
+|       |-- pinn_controller_node.py  UNCOMMITTED this session: TODO(stage3) stub RESOLVED —
+|       |                            now instantiates + calls ComputedTorquePDController.step()
+|       |                            per tick; selects Lyapunov vs manual gains via
+|       |                            use_lyapunov_gains param
+|       |-- trajectory_interpolator.py  Linear interp of (q_des, qdot_des, qddot_des);
+|       |                            unchanged this session
 |       |-- launch/
-|       |   |-- pinn_controller.launch.py
+|       |   |-- pinn_controller.launch.py   UNCOMMITTED changes this session
 |       |-- config/
-|           |-- controller_params.yaml
+|           |-- controller_params.yaml      UNCOMMITTED changes this session
 |
 |-- stage4/                          [merged to main: commit b86f335]
 |   |-- grasp_config.py              GraspConfig dataclass: all grasping parameters
 |   |-- gripper_controller.py        BaseGripperController ABC; FrankaROS2GripperController
 |   |                                (ROS2 Humble action clients); MockGripperController
 |   |-- grasp_executor.py            GraspExecutor state machine: pick()/place(), 8 phases;
-|   |                                calls arm.update_payload() after successful grasp
+|   |                                calls arm.update_payload() after successful grasp;
+|   |                                _move_arm() still NotImplementedError — one step closer
+|   |                                after Stage 2/3 Milestone 1 (2026-07-16), still blocked
+|   |                                on Milestone 2
 |   |-- demo_targets.py              Named poses + orientations; get_target() -> (4,4) SE3
 |   |-- dry_run.py                   6 offline tests; run: python -m stage4.dry_run
 |
@@ -240,7 +268,19 @@ pinn_franka/
 
 ## 5. Open items / next steps
 
-### Done since last update (2026-07-16)
+### Done since last update (2026-07-16, Stage 2/3 integration session)
+- [x] **Stage 2 first working implementation** — MoveIt2 motion planning against a *simulated* Franka Panda in Isaac Sim, using NVIDIA's official `IsaacSim-ros_workspaces` (`jazzy_ws/isaac_moveit`) rather than a hand-built SRDF/kinematics config; ROS2 Jazzy (correcting the earlier scaffold's incorrect Humble assumption).
+- [x] **New `simulation/isaac_franka_moveit_bridge.py`** — Isaac Sim standalone bridge exposing Franka Panda over `isaac_joint_states`/`isaac_joint_commands` ROS2 topics, the counterpart `isaac_moveit` needs.
+- [x] **Milestone 1 achieved and confirmed working**: MoveIt2 Plan & Execute in RViz successfully drives the simulated Franka Panda in Isaac Sim (via the default `joint_trajectory_controller`, not yet via Stage 3).
+- [x] **Stage 3 `ComputedTorquePDController` wired into `pinn_controller_node.py` for the first time** — the previous `TODO(stage3)` zero-torque stub is resolved; the node now actually calls `.step()` per control tick.
+- [x] **`controller/lyapunov_gains.py`: added `MANUAL_PD_KP`/`MANUAL_PD_KD` fallback gains** (fixed conservative error bound, safety_margin=1.0) for the node's `use_lyapunov_gains=False` path, which previously had no effect.
+- [ ] **NOT YET COMMITTED** — all of the above is still in the working tree: `controller/__init__.py`, `controller/lyapunov_gains.py`, `ros2_ws/src/pinn_franka_controller/pinn_franka_controller/pinn_controller_node.py`, `ros2_ws/src/pinn_franka_controller/config/controller_params.yaml`, `ros2_ws/src/pinn_franka_controller/launch/pinn_controller.launch.py`, `ros2_ws/src/pinn_franka_controller/package.xml`, `ros2_ws/src/pinn_franka_controller/setup.py`, and the new untracked `simulation/` directory. Commit and push before starting further Stage 2/3 work.
+
+### Immediate next step — Stage 2/3 Milestone 2 (not yet started)
+- **Route MoveIt2's planned trajectory through `pinn_controller_node`** so that Stage 3's trained-model-driven torque control — not MoveIt2's default position execution via `joint_trajectory_controller` — actually drives the simulated robot. This is what will, for the first time, exercise the newly-wired `ComputedTorquePDController` end-to-end against a live (simulated) robot rather than only in isolated tests.
+- Once Milestone 2 is done, revisit `stage4/grasp_executor.py`'s `_move_arm()` — it can then be implemented against the real Stage 2/3 control path instead of remaining a `NotImplementedError` stub.
+
+### Done since prior update (2026-07-16, earlier Stage 1 session)
 - [x] **`pinocchio_baseline/panda.urdf` mass/inertia fix** — added real Franka `franka_description` inertials to every link; RNEA was previously running on Pinocchio placeholder inertias. Commit `c179740`, pushed to `origin/main`.
 - [x] **Isaac Sim 6.0.1 data pipeline validated end-to-end** — namespace migration (`isaacsim.*`), pinocchio/cmeel import fix, Franka USD asset path, `TORQUE_LIMITS` dtype, `world.stop()` API, RNEA reduced-model (locking finger joints), tracking-error + drive-gain diagnostics. Same commit as above.
 - [x] **First two real GPU training runs completed and logged** (`tracking/experiments_log.csv`): initial run found an actuator-saturation data-quality bug via a newly-written diagnostic tool (`controller/compute_error_bound.py`); fixed in `generate_isaac_dataset.py` (`SATURATION_MARGIN = 0.97`); re-generated + retrained. `isaac-multipayload-frictionnet-satfix` is now the reference baseline (best val loss 0.3995, see Stage 1 section for full writeup).
@@ -252,7 +292,7 @@ pinn_franka/
 - None — GPU access is unblocked and in active use on the `hci-student` machine.
 
 ### Not yet done (successor to the old "blocked on GPU" items)
-- **Full ablation matrix** (`experiments/EXPERIMENT_PLAN.md` blocks A-I, headline H1-H4) — plan exists, CLI flags for new ablation axes (structure variants, diagonal-vs-Cholesky, activation swap, constraint mode) not yet implemented.
+- **Full ablation matrix** (`experiments/EXPERIMENT_PLAN.md` blocks A-I, headline H1-H4) — plan exists, CLI flags for new ablation axes (structure variants, diagonal-vs-Cholesky, activation swap, constraint mode) not yet implemented. Redirected this session in favor of Stage 2/3 integration work; resume once Milestone 2 is done or in parallel.
 - **Liu et al. (2024) 2s-rollout metric** — required for the external comparison claim, not yet implemented (per-joint RMSE in Nm alone is not comparable to their rad²/rad metric).
 - **Remaining J1-J4 transient-spike outliers** (p99.9 3-6 Nm, true max 26-65 Nm on ~0.09% of validation samples) — not blocking, but root cause (suspected: PD servo snapping to the first velocity target at each Fourier segment start) not yet confirmed or fixed. Revisit if time permits; currently worked around via the p99.9-not-max Lyapunov bound methodology.
 - **Re-run one prior CPU smoke-test experiment** on the corrected URDF for a clean before/after comparison at matched settings (optional — the two real GPU runs already provide a clean before/after story for the saturation fix specifically).
@@ -262,10 +302,10 @@ pinn_franka/
 - N3-Djeumou (semi-supervised dissipativity): design and run ablation study.
 - N2-WhenPhysics: re-run diagnostic on real data — real per-joint friction differences may trigger EMA balancing (ratio 1.0× on synthetic, may differ on hardware).
 
-### Stage wiring (pending Stage 1 convergence)
-- Resolve `TODO(stage3)` markers in `pinn_controller_node.py` (`_compute_torques()` and `_try_load_controller()`) to wire in `ComputedTorquePDController` after Stage 1 model is converged.
-- Resolve `TODO(stage4-arm-motion)` in `stage4/grasp_executor.py` (`_move_arm()`) once Stage 2/3 are wired end-to-end with a trained model.
-- **Inference latency benchmark:** add a timing script to confirm sub-1 ms per forward pass (required to substantiate Goal 2 claim at 1000 Hz).
+### Stage wiring (pending Stage 1 convergence / Milestone 2)
+- ~~Resolve `TODO(stage3)` markers in `pinn_controller_node.py`~~ **DONE this session (2026-07-16, uncommitted)** — `ComputedTorquePDController` now wired in; see Stage 3 section. Remaining: exercise this wiring end-to-end via Milestone 2 (routing MoveIt2 trajectories through this node rather than the default `joint_trajectory_controller`).
+- Resolve `TODO(stage4-arm-motion)` in `stage4/grasp_executor.py` (`_move_arm()`) — one step closer after Milestone 1, still blocked on Milestone 2.
+- **Inference latency benchmark:** add a timing script to confirm sub-1 ms per forward pass (required to substantiate Goal 2 claim at 1000 Hz). Still not started; more relevant now that Stage 3 is actually wired into the control loop.
 
 ### Paper / write-up
 - **Add Related Work citations** (PAPER_DRAFT.md Section 2):
@@ -277,6 +317,7 @@ pinn_franka/
 - **Dual payload-awareness competitive advantage:** document in paper that `_inject_payload()` in `rnea_wrapper.py` + delta conditioning of tau_res predates and exceeds Li et al. (2025) payload-ID and Li et al. (2025) compliant PINN single-pathway approaches.
 - **Scope physics claims to in-distribution trajectories:** following Prabhakar et al. (ICLR 2026) negative result — do not claim temporal extrapolation without empirical evidence.
 - **Physics-validator advisories to address in paper methodology section:** (1) per-sample vs. batch-mean dissipativity multiplier; (2) under-sampling risk for max_samples < 2000; (3) slower lambda_dissip growth with FrictionNet (intended — document in ablation).
+- **Document the Stage 2 simplification decision:** using NVIDIA's official `isaac_moveit` MoveIt2 config instead of a hand-authored one — justify in the methodology section as a deliberate scope decision (CLAUDE.md "keep it simple") rather than an oversight.
 
 ### Future (optional)
 - **Implement `controller/payload_identification.py`**: fill in the 3-step least-squares body (replace `raise NotImplementedError`). ~10 lines numpy. Requires Franka joint-torque sensor access (libfranka or ROS2 `/joint_states` effort field). Priority: before first real-robot deployment.

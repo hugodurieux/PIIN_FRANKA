@@ -1,29 +1,35 @@
 """
-Stage 2 -- ROS2 Humble controller node for the PINN Franka pipeline.
+Stage 2 -- ROS2 Jazzy controller node for the PINN Franka pipeline.
 
 PLAN (3 sentences):
 This node bridges MoveIt2 trajectory output with the PINN-based torque controller
 by subscribing to joint states and desired trajectories, interpolating the desired
 state at each control tick, and publishing effort commands.  It serves goal.md
 objective #2 (high-frequency real-time control at 1000 Hz) by running a timer-driven
-control loop at the configured rate.  The actual torque computation is delegated to
-Stage 3's ComputedTorquePDController (placeholder until that branch is merged).
+control loop at the configured rate.  Torque computation is delegated to Stage 3's
+ComputedTorquePDController.
 
 Topics
 ------
 Subscribes:
-    /franka/joint_states                                 (sensor_msgs/JointState)
-    /pinn_controller/desired_trajectory                  (trajectory_msgs/JointTrajectory)
+    isaac_joint_states                    (sensor_msgs/JointState)
+    /pinn_controller/desired_trajectory   (trajectory_msgs/JointTrajectory)
 Publishes:
-    /franka/effort_joint_trajectory_controller/commands   (std_msgs/Float64MultiArray)
+    isaac_joint_commands                  (sensor_msgs/JointState, effort field only)
+
+Default topic names match Isaac Sim's ROS2 bridge (isaacsim.ros2.bridge
+ROS2PublishJointState / ROS2SubscribeJointState -> IsaacArticulationController,
+which accepts effort commands directly). Remap both via --ros-args --remap for a
+different target (e.g. a future real-hardware franka_ros2 setup).
 
 Parameters
 ----------
     urdf_path          (str)   -- path to the Franka URDF (needed by the controller)
     checkpoint_path    (str)   -- path to the trained PINN checkpoint (.pt)
-    delta              (float) -- payload parameter in [0, 1], default 0.0
+    delta              (float) -- payload mass in kg, default 0.0 (see network/constants.PAYLOADS)
     control_rate_hz    (int)   -- control loop frequency, default 1000
-    use_lyapunov_gains (bool)  -- whether Stage 3 should use Lyapunov-based gains
+    use_lyapunov_gains (bool)  -- whether Stage 3 should use Lyapunov-derived gains
+                                  (True) or the conservative manual fallback (False)
 """
 
 from __future__ import annotations
@@ -34,7 +40,6 @@ from rclpy.node import Node
 from rclpy.time import Time
 
 from sensor_msgs.msg import JointState
-from std_msgs.msg import Float64MultiArray
 from trajectory_msgs.msg import JointTrajectory
 
 from pinn_franka_controller.trajectory_interpolator import TrajectoryInterpolator
@@ -49,6 +54,10 @@ except ImportError:
     _N_JOINTS = 7
     _TORQUE_LIMITS_NP = np.array([87.0, 87.0, 87.0, 87.0, 12.0, 12.0, 12.0])
 
+# Franka Panda arm joint names, matching pinocchio_baseline/panda.urdf and the
+# Isaac Sim Franka USD asset.
+_JOINT_NAMES = [f"panda_joint{i}" for i in range(1, 8)]
+
 # Maximum age (seconds) for a joint-state message before it is considered stale.
 _JOINT_STATE_TIMEOUT_SEC = 0.1
 
@@ -61,9 +70,9 @@ class PinnControllerNode(Node):
 
     The node interpolates a desired trajectory at each control tick, feeds the
     desired and measured states into the controller, and publishes the resulting
-    joint torques.  If the controller is not yet available (Stage 3 not merged)
-    or no valid trajectory/state is present, it publishes zero torques as a safe
-    fallback.
+    joint torques.  If the controller failed to load (bad/missing checkpoint or
+    URDF path) or no valid trajectory/state is present yet, it publishes zero
+    torques as a safe fallback.
     """
 
     def __init__(self) -> None:
@@ -104,7 +113,7 @@ class PinnControllerNode(Node):
         self._controller = None  # Will hold the Stage 3 controller instance
 
         # -----------------------------------------------------------------
-        # Attempt to load the controller (Stage 3 placeholder)
+        # Attempt to load the Stage 3 controller
         # -----------------------------------------------------------------
         self._try_load_controller()
 
@@ -113,7 +122,7 @@ class PinnControllerNode(Node):
         # -----------------------------------------------------------------
         self._sub_joint_state = self.create_subscription(
             JointState,
-            "/franka/joint_states",
+            "isaac_joint_states",
             self._joint_state_cb,
             10,
         )
@@ -128,8 +137,8 @@ class PinnControllerNode(Node):
         # Publisher
         # -----------------------------------------------------------------
         self._pub_torques = self.create_publisher(
-            Float64MultiArray,
-            "/franka/effort_joint_trajectory_controller/commands",
+            JointState,
+            "isaac_joint_commands",
             10,
         )
 
@@ -150,19 +159,12 @@ class PinnControllerNode(Node):
     # -----------------------------------------------------------------
 
     def _try_load_controller(self) -> None:
-        """Attempt to instantiate the Stage 3 ComputedTorquePDController.
+        """Instantiate the Stage 3 ComputedTorquePDController.
 
-        TODO(stage3): Once the ``stage3/computed-torque-pd-controller`` branch
-        is merged, replace the placeholder below with::
-
-            from controller import ComputedTorquePDController, load_grey_box_model
-            from controller import compute_lyapunov_gains
-
-            model = load_grey_box_model(self._urdf_path, self._checkpoint_path)
-            gains = compute_lyapunov_gains() if self._use_lyapunov_gains else None
-            self._controller = ComputedTorquePDController(model, gains=gains)
-
-        Until then the node sends zero torques (gravity-compensated safe mode).
+        Falls back to zero-torque safe mode (self._controller stays None) if
+        the required parameters are missing or loading fails -- a bad
+        checkpoint/URDF path should never crash the node, it should just
+        withhold torque commands.
         """
         if not self._checkpoint_path:
             self.get_logger().warn(
@@ -171,15 +173,50 @@ class PinnControllerNode(Node):
             )
             return
 
-        # ------------------------------------------------------------------
-        # PLACEHOLDER: Stage 3 controller not yet available.
-        # ------------------------------------------------------------------
-        self.get_logger().warn(
-            "Stage 3 controller (ComputedTorquePDController) is not yet "
-            "integrated.  The node will publish zero torques until Stage 3 "
-            "is merged.  See the TODO in _try_load_controller()."
+        if not self._urdf_path:
+            self.get_logger().error(
+                "checkpoint_path is set but urdf_path is empty -- controller "
+                "disabled, publishing zero torques.  Set the 'urdf_path' "
+                "parameter (needed by RNEA)."
+            )
+            return
+
+        from controller import (
+            ComputedTorquePDController,
+            DEFAULT_KP,
+            DEFAULT_KD,
+            MANUAL_PD_KP,
+            MANUAL_PD_KD,
         )
-        self._controller = None
+
+        kp, kd = (DEFAULT_KP, DEFAULT_KD) if self._use_lyapunov_gains else (
+            MANUAL_PD_KP,
+            MANUAL_PD_KD,
+        )
+
+        try:
+            self._controller = ComputedTorquePDController(
+                urdf_path=self._urdf_path,
+                checkpoint_path=self._checkpoint_path,
+                delta=self._delta,
+                device="cpu",
+                kp=kp,
+                kd=kd,
+            )
+        except Exception:
+            self.get_logger().error(
+                "Failed to construct ComputedTorquePDController -- controller "
+                "disabled, publishing zero torques.",
+                exc_info=True,
+            )
+            self._controller = None
+            return
+
+        self.get_logger().info(
+            f"Stage 3 controller loaded "
+            f"(urdf={self._urdf_path}, checkpoint={self._checkpoint_path}, "
+            f"gains={'lyapunov' if self._use_lyapunov_gains else 'manual'})."
+        )
 
     # -----------------------------------------------------------------
     # Subscriber callbacks
@@ -271,7 +308,7 @@ class PinnControllerNode(Node):
         self._publish_torques(torques)
 
     # -----------------------------------------------------------------
-    # Torque computation (placeholder for Stage 3)
+    # Torque computation (Stage 3)
     # -----------------------------------------------------------------
 
     def _compute_torques(
@@ -283,10 +320,6 @@ class PinnControllerNode(Node):
         qddot_des: np.ndarray,
     ) -> np.ndarray:
         """Compute joint torques using the Stage 3 controller.
-
-        TODO(stage3): Replace the zero-torque fallback with a call to
-        ``self._controller.compute(q_meas, qdot_meas, q_des, qdot_des,
-        qddot_des, self._delta)`` once the Stage 3 branch is merged.
 
         Parameters
         ----------
@@ -307,8 +340,9 @@ class PinnControllerNode(Node):
             Joint torques [Nm].
         """
         if self._controller is not None:
-            # TODO(stage3): self._controller.compute(...)
-            pass
+            return self._controller.step(
+                q_meas, qdot_meas, q_des, qdot_des, qddot_des
+            )
 
         # Safe fallback: zero torques (robot holds position via its own
         # gravity compensation if available, or is e-stopped).
@@ -319,10 +353,14 @@ class PinnControllerNode(Node):
     # -----------------------------------------------------------------
 
     def _publish_torques(self, torques: np.ndarray) -> None:
-        """Publish a Float64MultiArray with the 7 joint torques."""
+        """Publish a JointState with the 7 joint efforts (positions/velocities
+        left empty so Isaac's ArticulationController only applies the effort
+        command)."""
         torques = np.clip(torques, -_TORQUE_LIMITS_NP, _TORQUE_LIMITS_NP)
-        msg = Float64MultiArray()
-        msg.data = torques.tolist()
+        msg = JointState()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.name = _JOINT_NAMES
+        msg.effort = torques.tolist()
         self._pub_torques.publish(msg)
 
     def _publish_zero_torques(self) -> None:

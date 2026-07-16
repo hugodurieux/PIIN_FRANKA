@@ -131,6 +131,20 @@ DEFAULT_KP, DEFAULT_KD = compute_lyapunov_gains(DEFAULT_ERROR_BOUND)
 
 
 # ---------------------------------------------------------------------------
+# Manual (non-Lyapunov) fallback gains
+# ---------------------------------------------------------------------------
+# For Stage 2/3 deployments that set use_lyapunov_gains=False (e.g. block I's
+# "Lyapunov-certified vs manual PD" ablation, or a quick sanity run before a
+# trained checkpoint's error bound is trusted). Deliberately not derived from
+# validation data -- a fixed, conservative error-bound placeholder run through
+# the same critical-damping formula, softer than DEFAULT_KP/DEFAULT_KD.
+MANUAL_ERROR_BOUND = np.array([5.0, 5.0, 5.0, 5.0, 2.0, 2.0, 2.0])
+MANUAL_PD_KP, MANUAL_PD_KD = compute_lyapunov_gains(
+    MANUAL_ERROR_BOUND, safety_margin=1.0
+)
+
+
+# ---------------------------------------------------------------------------
 # Smoke test
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
