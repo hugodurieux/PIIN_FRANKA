@@ -1,0 +1,46 @@
+# Stage 2/3 -- effort controller for the Stage 3 computed-torque + PD path.
+#
+# Loaded as a SEPARATE ParameterFile alongside moveit_resources_panda_moveit_config's
+# own config/ros2_controllers.yaml (which still defines panda_arm_controller,
+# panda_hand_controller, joint_state_broadcaster, unchanged) -- ROS2 merges
+# controller_manager.ros__parameters across parameter files as long as the
+# controller-name keys don't collide, so this only needs to add the one new
+# controller, not duplicate the existing ones.
+#
+# panda_effort_controller claims the 'effort' command_interface declared per
+# joint in panda_mujoco.ros2_control.xacro, writing straight through to the
+# motor (torque) actuator defined in mujoco/franka_emika_panda/panda_arm_mujoco.xml.
+# This is what pinn_controller_node publishes std_msgs/Float64MultiArray to, on
+# /panda_effort_controller/commands, replacing the old raw isaac_joint_commands
+# topic shortcut.
+#
+# update_rate override: this file is loaded SECOND (see mujoco_franka_moveit.launch.py's
+# ros2_control_node parameters list), so this value wins over
+# moveit_resources_panda_moveit_config's ros2_controllers.yaml, which sets
+# update_rate: 100 Hz -- fine for that package's own mock_components demo (no
+# real physics, no stability concerns) but far too slow once coupled to real
+# MuJoCo physics: live-diagnosed a persistent small buzzing/oscillation in
+# panda_arm_controller's position hold that repeated across several very
+# different P/D gain magnitudes and even got WORSE, never better, as gains
+# were tuned -- the common factor turned out not to be the gains at all, but
+# a 100 Hz control loop (a derivative term reading velocity only every 10ms)
+# sampling underneath MuJoCo's own faster physics stepping. Raised to 1000 Hz
+# to match this project's actual target control rate (see CLAUDE.md).
+controller_manager:
+  ros__parameters:
+    update_rate: 1000  # Hz
+
+    panda_effort_controller:
+      type: forward_command_controller/ForwardCommandController
+
+panda_effort_controller:
+  ros__parameters:
+    interface_name: effort
+    joints:
+      - panda_joint1
+      - panda_joint2
+      - panda_joint3
+      - panda_joint4
+      - panda_joint5
+      - panda_joint6
+      - panda_joint7

@@ -1,0 +1,1 @@
+export PYTHONPATH="/home/hci-student/projects/pinn_franka:/home/hci-student/projects/pinn_franka/.venv/lib/python3.12/site-packages:/home/hci-student/projects/pinn_franka/.venv/lib/python3.12/site-packages/cmeel.prefix/lib/python3.12/site-packages:${PYTHONPATH}"

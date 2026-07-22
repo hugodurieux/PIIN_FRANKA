@@ -12,15 +12,20 @@ ComputedTorquePDController.
 Topics
 ------
 Subscribes:
-    isaac_joint_states                    (sensor_msgs/JointState)
+    joint_states                          (sensor_msgs/JointState)
     /pinn_controller/desired_trajectory   (trajectory_msgs/JointTrajectory)
 Publishes:
-    isaac_joint_commands                  (sensor_msgs/JointState, effort field only)
+    /panda_effort_controller/commands     (std_msgs/Float64MultiArray, one value
+                                            per joint in _JOINT_NAMES order)
 
-Default topic names match Isaac Sim's ROS2 bridge (isaacsim.ros2.bridge
-ROS2PublishJointState / ROS2SubscribeJointState -> IsaacArticulationController,
-which accepts effort commands directly). Remap both via --ros-args --remap for a
-different target (e.g. a future real-hardware franka_ros2 setup).
+Default topic names match mujoco_ros2_control's ros2_control setup (see
+ros2_ws/src/pinn_franka_controller/launch/mujoco_franka_moveit.launch.py):
+joint_states is published by the standard joint_state_broadcaster, and
+/panda_effort_controller/commands is claimed by a
+forward_command_controller/ForwardCommandController (interface_name: effort,
+see config/mujoco_effort_controller.yaml) that writes straight through to the
+MuJoCo motor actuators. Remap both via --ros-args --remap for a different
+target (e.g. a future real-hardware franka_ros2 setup).
 
 Parameters
 ----------
@@ -34,12 +39,15 @@ Parameters
 
 from __future__ import annotations
 
+import traceback
+
 import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.time import Time
 
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Float64MultiArray
 from trajectory_msgs.msg import JointTrajectory
 
 from pinn_franka_controller.trajectory_interpolator import TrajectoryInterpolator
@@ -54,8 +62,10 @@ except ImportError:
     _N_JOINTS = 7
     _TORQUE_LIMITS_NP = np.array([87.0, 87.0, 87.0, 87.0, 12.0, 12.0, 12.0])
 
-# Franka Panda arm joint names, matching pinocchio_baseline/panda.urdf and the
-# Isaac Sim Franka USD asset.
+# Franka Panda arm joint names, matching pinocchio_baseline/panda.urdf. Also
+# the joint order expected by panda_effort_controller's Float64MultiArray
+# commands (config/mujoco_effort_controller.yaml's `joints:` list), since that
+# message type carries no per-element names -- order is the only contract.
 _JOINT_NAMES = [f"panda_joint{i}" for i in range(1, 8)]
 
 # Maximum age (seconds) for a joint-state message before it is considered stale.
@@ -108,6 +118,10 @@ class PinnControllerNode(Node):
         # -----------------------------------------------------------------
         self._joint_state: JointState | None = None
         self._joint_state_stamp: Time | None = None
+        # Cache mapping _JOINT_NAMES -> indices into the JointState arrays.
+        # Rebuilt whenever the incoming name list changes (see _arm_indices()).
+        self._arm_index_cache: list[int] | None = None
+        self._arm_index_cache_names: tuple[str, ...] | None = None
         self._trajectory_interpolator: TrajectoryInterpolator | None = None
         self._trajectory_stamp: Time | None = None
         self._controller = None  # Will hold the Stage 3 controller instance
@@ -122,7 +136,7 @@ class PinnControllerNode(Node):
         # -----------------------------------------------------------------
         self._sub_joint_state = self.create_subscription(
             JointState,
-            "isaac_joint_states",
+            "joint_states",
             self._joint_state_cb,
             10,
         )
@@ -137,8 +151,8 @@ class PinnControllerNode(Node):
         # Publisher
         # -----------------------------------------------------------------
         self._pub_torques = self.create_publisher(
-            JointState,
-            "isaac_joint_commands",
+            Float64MultiArray,
+            "/panda_effort_controller/commands",
             10,
         )
 
@@ -206,8 +220,7 @@ class PinnControllerNode(Node):
         except Exception:
             self.get_logger().error(
                 "Failed to construct ComputedTorquePDController -- controller "
-                "disabled, publishing zero torques.",
-                exc_info=True,
+                "disabled, publishing zero torques.\n" + traceback.format_exc()
             )
             self._controller = None
             return
@@ -242,6 +255,40 @@ class PinnControllerNode(Node):
         )
 
     # -----------------------------------------------------------------
+    # Joint-state extraction (name-based, NOT positional)
+    # -----------------------------------------------------------------
+
+    def _arm_indices(self, msg: JointState) -> list[int] | None:
+        """Return the indices of the 7 arm joints (in _JOINT_NAMES order)
+        within the JointState message arrays, looked up BY NAME.
+
+        The /joint_states topic aggregates every joint in the controller
+        manager -- for this system that is the two mock gripper prismatic
+        joints (panda_finger_joint1, panda_finger_joint2) AND the 7 arm
+        joints. Critically, the broadcaster orders them with the finger
+        joints FIRST (alphabetically 'panda_finger_*' < 'panda_joint*'), so a
+        naive ``position[:7]`` slice returns
+        [finger1, finger2, joint1..joint5] -- the wrong joints -- feeding RNEA
+        a garbage pose. This method maps by joint name instead, and caches the
+        resulting index list until the incoming name ordering changes.
+
+        Returns None if any required arm joint name is absent from the message.
+        """
+        names = tuple(msg.name)
+        if names != self._arm_index_cache_names:
+            try:
+                self._arm_index_cache = [names.index(j) for j in _JOINT_NAMES]
+            except ValueError:
+                self._arm_index_cache = None
+                self.get_logger().error(
+                    "joint_states is missing one of the arm joints "
+                    f"{_JOINT_NAMES}; got names={list(names)}.",
+                    throttle_duration_sec=1.0,
+                )
+            self._arm_index_cache_names = names
+        return self._arm_index_cache
+
+    # -----------------------------------------------------------------
     # Control loop
     # -----------------------------------------------------------------
 
@@ -259,10 +306,11 @@ class PinnControllerNode(Node):
         if js_age_sec > _JOINT_STATE_TIMEOUT_SEC:
             self.get_logger().warn(
                 f"Joint state stale ({js_age_sec:.3f}s > "
-                f"{_JOINT_STATE_TIMEOUT_SEC}s) -- sending zero torques.",
+                f"{_JOINT_STATE_TIMEOUT_SEC}s) -- holding at last known "
+                f"position via gravity compensation.",
                 throttle_duration_sec=1.0,
             )
-            self._publish_zero_torques()
+            self._publish_safe_fallback()
             return
 
         # --- Guard: no trajectory received yet ------------------------
@@ -270,7 +318,7 @@ class PinnControllerNode(Node):
             self._trajectory_interpolator is None
             or self._trajectory_stamp is None
         ):
-            self._publish_zero_torques()
+            self._publish_safe_fallback()
             return
 
         # --- Guard: trajectory too old --------------------------------
@@ -278,10 +326,11 @@ class PinnControllerNode(Node):
         if traj_age_sec > _TRAJECTORY_STALE_SEC:
             self.get_logger().warn(
                 f"Trajectory stale ({traj_age_sec:.1f}s > "
-                f"{_TRAJECTORY_STALE_SEC}s) -- sending zero torques.",
+                f"{_TRAJECTORY_STALE_SEC}s) -- holding at last known "
+                f"position via gravity compensation.",
                 throttle_duration_sec=1.0,
             )
-            self._publish_zero_torques()
+            self._publish_safe_fallback()
             return
 
         # --- Interpolate desired state --------------------------------
@@ -291,12 +340,17 @@ class PinnControllerNode(Node):
             t_traj
         )
 
-        # --- Extract measured state -----------------------------------
+        # --- Extract measured state (BY NAME, not by slice) -----------
+        idx = self._arm_indices(self._joint_state)
+        if idx is None:
+            # Required arm joints not present in this message -- hold safely.
+            self._publish_safe_fallback()
+            return
         q_meas = np.array(
-            self._joint_state.position[:_N_JOINTS], dtype=np.float64
+            [self._joint_state.position[i] for i in idx], dtype=np.float64
         )
         qdot_meas = np.array(
-            self._joint_state.velocity[:_N_JOINTS], dtype=np.float64
+            [self._joint_state.velocity[i] for i in idx], dtype=np.float64
         )
 
         # --- Compute torques ------------------------------------------
@@ -353,19 +407,59 @@ class PinnControllerNode(Node):
     # -----------------------------------------------------------------
 
     def _publish_torques(self, torques: np.ndarray) -> None:
-        """Publish a JointState with the 7 joint efforts (positions/velocities
-        left empty so Isaac's ArticulationController only applies the effort
-        command)."""
+        """Publish a Float64MultiArray of the 7 joint efforts, in _JOINT_NAMES
+        order, to panda_effort_controller's command topic (Float64MultiArray
+        carries no per-element names -- order is the only contract, matching
+        the `joints:` list in config/mujoco_effort_controller.yaml)."""
         torques = np.clip(torques, -_TORQUE_LIMITS_NP, _TORQUE_LIMITS_NP)
-        msg = JointState()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.name = _JOINT_NAMES
-        msg.effort = torques.tolist()
+        msg = Float64MultiArray()
+        msg.data = torques.tolist()
         self._pub_torques.publish(msg)
 
     def _publish_zero_torques(self) -> None:
         """Publish zero torques (safe fallback)."""
         self._publish_torques(np.zeros(_N_JOINTS, dtype=np.float64))
+
+    def _publish_safe_fallback(self) -> None:
+        """Publish gravity-compensation torque at the last known joint
+        position (qdot=0, qddot=0), instead of literal zero.
+
+        Zero torque with no drive holding the arm up causes it to free-fall
+        under gravity while waiting for a trajectory. RNEA at qdot=qddot=0
+        reduces to exactly the gravity term, so this holds position without
+        needing any tracking error or trajectory. Falls back to literal zero
+        if the controller (and therefore RNEA) never loaded, or no joint
+        state has been observed yet.
+        """
+        if self._controller is None or self._joint_state is None:
+            self._publish_zero_torques()
+            return
+
+        idx = self._arm_indices(self._joint_state)
+        if idx is None:
+            self._publish_zero_torques()
+            return
+        q = np.array(
+            [self._joint_state.position[i] for i in idx], dtype=np.float64
+        )
+        zeros = np.zeros(_N_JOINTS, dtype=np.float64)
+        try:
+            tau_grav = self._controller.rnea.compute_tau_theoretical(
+                q[np.newaxis, :],
+                zeros[np.newaxis, :],
+                zeros[np.newaxis, :],
+                delta=self._controller.delta,
+            ).squeeze(0)
+        except Exception:
+            self.get_logger().error(
+                "Gravity-compensation fallback failed -- sending zero "
+                "torques instead.\n" + traceback.format_exc(),
+                throttle_duration_sec=1.0,
+            )
+            self._publish_zero_torques()
+            return
+
+        self._publish_torques(tau_grav)
 
 
 def main(args=None) -> None:

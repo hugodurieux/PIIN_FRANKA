@@ -35,6 +35,26 @@ setup(
             os.path.join("share", package_name, "config"),
             glob(os.path.join("config", "*.yaml")),
         ),
+        # Install URDF/xacro files (Stage 2/3 robot description for RViz/MoveIt2)
+        (
+            os.path.join("share", package_name, "urdf"),
+            glob(os.path.join("urdf", "*.xacro"))
+            + glob(os.path.join("urdf", "*.xml"))
+            + glob(os.path.join("urdf", "*.urdf")),
+        ),
+        # Install the vendored Franka MJCF + LICENSE (Stage 2/3 MuJoCo physics,
+        # see urdf/panda_mujoco.ros2_control.xacro's mujoco_model param)
+        (
+            os.path.join("share", package_name, "mujoco", "franka_emika_panda"),
+            glob(os.path.join("mujoco", "franka_emika_panda", "*.xml"))
+            + glob(os.path.join("mujoco", "franka_emika_panda", "LICENSE")),
+        ),
+        # Mesh assets referenced by panda_arm_mujoco.xml's meshdir="assets" --
+        # must land in the same relative subdirectory as the MJCF above.
+        (
+            os.path.join("share", package_name, "mujoco", "franka_emika_panda", "assets"),
+            glob(os.path.join("mujoco", "franka_emika_panda", "assets", "*")),
+        ),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -46,6 +66,7 @@ setup(
     entry_points={
         "console_scripts": [
             "pinn_controller_node = pinn_franka_controller.pinn_controller_node:main",
+            "moveit_plan_bridge = pinn_franka_controller.moveit_plan_bridge:main",
         ],
     },
 )
