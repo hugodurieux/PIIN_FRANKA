@@ -33,6 +33,25 @@
 
   <option integrator="implicitfast" impratio="10"/>
 
+  <!-- 2026-07-22: scene environment (skybox/ground plane/headlight) + a graspable object,
+       added directly into the robot file rather than a separate wrapping scene.xml (the
+       ros2_control mujoco_model hardware param takes exactly one file, and a
+       <include>-based split isn't worth the risk on an already-validated working model for
+       a first version). Values (skybox/groundplane textures, headlight) copied from the
+       generic, non-robot-specific scene wrapper this project vendored during an earlier,
+       since-abandoned attempt at runtime URDF-to-MJCF conversion
+       (urdf/panda_mujoco_scene_info.xml, itself copied near-verbatim from
+       mujoco_ros2_control_demos' own scene_info.xml) — reused here since that content was
+       already proven generic/robot-agnostic, just never actually wired into the static MJCF
+       path this project actually uses. -->
+  <statistic center="0.3 0 0.3" extent="1.2"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.1 0.1 0.1" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="120" elevation="-20"/>
+  </visual>
+
   <default>
     <default class="panda">
       <material specular="0.5" shininess="0.25"/>
@@ -72,6 +91,11 @@
   </default>
 
   <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5"/>
+
     <material class="panda" name="white" rgba="1 1 1 1"/>
     <material class="panda" name="off_white" rgba="0.901961 0.921569 0.929412 1"/>
     <material class="panda" name="dark_grey" rgba="0.25 0.25 0.25 1"/>
@@ -163,6 +187,8 @@
 
   <worldbody>
     <light name="top" pos="0 0 2" mode="trackcom"/>
+    <light name="scene" pos="0 0 1.5" dir="0 0 -1" directional="true"/>
+    <geom name="floor" type="plane" size="0 0 0.05" material="groundplane"/>
     <body name="link0" childclass="panda">
       <inertial mass="0.629769" pos="-0.041018 -0.00014 0.049974"
         fullinertia="0.00315 0.00388 0.004285 8.2904e-7 0.00015 8.2299e-6"/>
@@ -314,6 +340,19 @@
           </body>
         </body>
       </body>
+    </body>
+    <!-- 2026-07-22: first graspable object for Stage 4. A free-floating 4cm cube, density-based
+         mass (1000 kg/m^3 -> ~64g, well within the gripper's ~20N force budget and the finger
+         span of 0-0.08m), resting on the floor at x=0.5m (well inside the Franka's ~0.855m
+         reach) directly in front of the base. Explicit friction matches MuJoCo's own default
+         (1 0.005 0.0001), stated for clarity since grip friction specifically matters here.
+         No freejoint initial-position override is set here beyond this body's own pos — it
+         starts exactly where placed, MuJoCo integrates gravity/contact normally from there
+         (it will simply rest on the floor at sim start, already at its listed pos since z=0.02
+         already accounts for the half-height sitting on the z=0 floor). -->
+    <body name="grasp_object" pos="0.5 0 0.02">
+      <freejoint/>
+      <geom type="box" size="0.02 0.02 0.02" density="1000" friction="1 0.005 0.0001" rgba="0.8 0.25 0.1 1"/>
     </body>
   </worldbody>
 
