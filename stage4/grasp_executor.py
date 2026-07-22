@@ -11,9 +11,19 @@ State machine:
     -> RELEASING     (gripper opens, arm returns to pre-approach)
     -> IDLE
 
-The executor delegates arm motion to Stage 3's ComputedTorquePDController and
-gripper commands to a BaseGripperController backend.  It never modifies any
-Stage 1/2/3 code — it only calls their public interfaces.
+The executor delegates arm motion to an ArmMotionClient (stage4/arm_motion_client.py,
+which plans via MoveIt2 and hands off to Stage 3's ComputedTorquePDController
+through the already-running pinn_controller_node) and gripper commands to a
+BaseGripperController backend.  It never modifies any Stage 1/2/3 code — it
+only calls their public interfaces.
+
+Known gap (2026-07-22, not yet solved): update_payload() calls below are
+guarded by hasattr(self.arm, "update_payload") and silently skipped for
+ArmMotionClient, which has no such method -- Stage 3's live payload estimate
+lives inside pinn_controller_node's own in-process ComputedTorquePDController,
+not reachable from this external process without a new ROS2 interface
+(service/topic/param) on that node. Grasping still works without it; the
+controller just won't know a payload was picked up.
 
 Usage (with mock, no hardware):
     from stage4.grasp_config import GraspConfig
@@ -66,8 +76,8 @@ class GraspExecutor:
 
     Args:
         config: GraspConfig with all tuning parameters.
-        gripper: A BaseGripperController backend (ROS2 or Mock).
-        arm_controller: A ComputedTorquePDController instance (Stage 3).
+        gripper: A BaseGripperController backend (MuJoCo, real hardware, or Mock).
+        arm_controller: An ArmMotionClient instance (stage4/arm_motion_client.py).
             Pass None for dry-run / testing without arm hardware.
     """
 
@@ -238,8 +248,10 @@ class GraspExecutor:
         Command the arm to move to `target_pose`.
 
         In this scaffolded implementation the arm motion is a no-op when
-        self.arm is None (dry-run / mock mode).  Real integration with
-        Stage 3 / Stage 2 trajectory generation happens here.
+        self.arm is None (dry-run / mock mode). Otherwise self.arm is
+        expected to be an ArmMotionClient (see stage4/arm_motion_client.py),
+        which plans a Cartesian-goal MoveIt2 request and hands the resulting
+        trajectory to the already-running pinn_controller_node (Stage 3).
 
         Returns None on success, or a GraspResult on failure.
         """
@@ -252,21 +264,12 @@ class GraspExecutor:
             time.sleep(0.01)
             return None
 
-        # --- Real arm motion (stub for Stage 2/3 integration) ---
-        # When Stage 2 (MoveIt2) and Stage 3 (ComputedTorquePDController) are
-        # available, this method should:
-        #   1. Convert target_pose to a joint configuration via IK (Stage 2).
-        #   2. Generate a trajectory to that configuration (Stage 2 / MoveIt2).
-        #   3. Execute the trajectory using Stage 3's controller.step() at 1 kHz.
-        #
-        # The TODO marker below is the integration point.
-        # TODO(stage4-arm-motion): call Stage 2 IK + trajectory generation,
-        #   then execute via Stage 3 ComputedTorquePDController.
-        raise NotImplementedError(
-            "Real arm motion not yet wired. "
-            "Pass arm_controller=None for dry-run, or implement the "
-            "Stage 2/3 integration at the TODO marker in _move_arm()."
+        ok = self.arm.move_to(
+            target_pose, speed=speed, timeout=self.config.arm_motion_timeout
         )
+        if not ok:
+            return self._fail(GraspResult.ARM_TIMEOUT, "arm did not reach target pose")
+        return None
 
     def _pre_approach_pose(self, grasp_pose: np.ndarray) -> np.ndarray:
         z_axis = grasp_pose[:3, 2]

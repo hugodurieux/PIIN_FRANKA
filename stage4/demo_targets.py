@@ -57,6 +57,15 @@ _TILTED_30 = np.array([
 # ---------------------------------------------------------------------------
 
 TARGETS: dict[str, np.ndarray] = {
+    # The actual grasp_object cube added to the MuJoCo scene 2026-07-22
+    # (mujoco/franka_emika_panda/panda_arm_mujoco.xml): a 4cm cube resting on
+    # the floor at x=0.5, y=0, center height z=0.02. NOTE: z here targets the
+    # tip_link (panda_link8, the flange -- see arm_motion_client.py's own
+    # docstring), not the fingertip TCP, so this will very likely need
+    # recalibrating once a real pick is actually attempted and the offset
+    # between flange and fingertip is empirically visible; not resolved yet.
+    "grasp_object": _pose(x=0.5, y=0.0, z=0.02, rotation=_TOP_DOWN),
+
     # A small box placed roughly in front of the robot at table height
     "box_center": _pose(x=0.45, y=0.0,  z=0.12, rotation=_TOP_DOWN),
 
