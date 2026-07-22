@@ -1,6 +1,22 @@
 <?xml version="1.0"?>
 <!--
-Stage 2/3: MuJoCo ros2_control hardware block for the Franka Panda arm.
+Stage 2/3: MuJoCo ros2_control hardware block for the Franka Panda arm AND hand/fingers.
+
+2026-07-22: panda_finger_joint1/2 were added directly into this SAME <ros2_control>
+"system" block (sharing this one "PandaMujocoSystem" hardware component), rather
+than as a separate hand-specific ros2_control block the way
+moveit_resources_panda_moveit_config's own panda_hand.ros2_control.xacro is used
+elsewhere (previously instantiated separately here too, as "PandaHandMockSystem",
+mock_components-only). This is required, not a style choice:
+MujocoSystemInterface::on_init() does `simulation_ = std::make_unique<MujocoSimulation>()`
+per hardware-component instance (confirmed by reading mujoco_system_interface.cpp from
+github.com/ros-controls/mujoco_ros2_control directly) — a second <ros2_control> "system"
+block using the mujoco plugin, even pointed at the same mujoco_model file, would spin up
+a SECOND, entirely disconnected physics simulation, with the hand's fingers floating in
+their own private void, mechanically detached from the arm they're physically bolted to
+in reality. Since the hand/fingers are already part of the same body tree in
+panda_arm_mujoco.xml as the arm, they must be driven by the arm's own single
+MujocoSystemInterface instance to end up in the same physical world.
 
 Clone of moveit_resources_panda_moveit_config's panda.ros2_control.xacro (same
 macro name/params, so it's a drop-in swap in a top-level xacro), adding a
@@ -52,14 +68,14 @@ Gazebo's URDF+SDF has), not a workaround.
           - 'effort': declares ONLY the 'effort' command interface and omits the
             pids_config_file. In this mode MoveIt2's default position-mode
             panda_arm_controller CANNOT run (no position command interface for it
-            to claim) -- use this only when Milestone 1's path isn't needed.
+            to claim) — use this only when Milestone 1's path isn't needed.
 
         2026-07-21/22 correction: an earlier version of this comment claimed that
         in 'both' mode mujoco_ros2_control permanently locks each motor actuator
         into position-PID control at registration time, silently discarding all
         effort commands (logged as a fixed per-joint "position control enabled
         (velocity, effort disabled)" state immune to controller-manager switching)
-        -- and blamed this for a session where Stage 3 effort commands produced
+        — and blamed this for a session where Stage 3 effort commands produced
         substantial, correctly time-varying torque but the arm stayed bit-for-bit
         frozen in position. That claim was written before the diagnostic it
         depended on (grepping ros2_control_node's startup log for per-joint
@@ -68,7 +84,7 @@ Gazebo's URDF+SDF has), not a workaround.
         (github.com/ros-controls/mujoco_ros2_control) genuinely and correctly
         switches each joint from "position control enabled" to "effort control
         enabled" at runtime on controller switch, in 'both' mode, exactly as its
-        source implements -- confirmed by both the live log (a single switch
+        source implements — confirmed by both the live log (a single switch
         event, followed by "effort control enabled" persisting unchanged across a
         reset_world call and a full unload of panda_arm_controller, for the entire
         remainder of that session) and by reading write()'s actual ctrl-writing
@@ -120,6 +136,33 @@ Gazebo's URDF+SDF has), not a workaround.
             <xacro:panda_arm_joint joint_name="panda_joint5"/>
             <xacro:panda_arm_joint joint_name="panda_joint6"/>
             <xacro:panda_arm_joint joint_name="panda_joint7"/>
+
+            <!-- Gripper: added 2026-07-22, see this file's header comment for why these
+                 live in this same <ros2_control> block instead of a separate one. Mirrors
+                 moveit_resources_panda_moveit_config's own panda_hand.ros2_control.xacro
+                 (command_interface only on finger_joint1, state-only on finger_joint2 —
+                 finger_joint2 is a physically-coupled follower via the MJCF's <equality>
+                 constraint, not independently commanded), except initial_value is 0.04
+                 (fully open) here rather than upstream's hardcoded 0.0 (closed): a safer
+                 default starting state for an eventual grasp demo, matching the MJCF
+                 "home" keyframe and MockGripperController's own default-open assumption. -->
+            <joint name="panda_finger_joint1">
+                <command_interface name="position"/>
+                <state_interface name="position">
+                  <param name="initial_value">0.04</param>
+                </state_interface>
+                <state_interface name="velocity">
+                    <param name="initial_value">0.0</param>
+                </state_interface>
+            </joint>
+            <joint name="panda_finger_joint2">
+                <state_interface name="position">
+                  <param name="initial_value">0.04</param>
+                </state_interface>
+                <state_interface name="velocity">
+                    <param name="initial_value">0.0</param>
+                </state_interface>
+            </joint>
         </ros2_control>
     </xacro:macro>
 </robot>

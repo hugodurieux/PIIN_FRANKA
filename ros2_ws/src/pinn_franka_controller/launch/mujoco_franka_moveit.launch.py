@@ -217,6 +217,23 @@ def generate_launch_description():
         ],
     )
 
+    # 2026-07-22: panda_finger_joint1/2 now have real physics (panda_arm_mujoco.xml,
+    # panda_mujoco.ros2_control.xacro) instead of the old mock_components hand system,
+    # so panda_hand_controller (position_controllers/GripperActionController, already
+    # defined in moveit_resources_panda_moveit_config's ros2_controllers.yaml, loaded
+    # above) can now actually be spawned and claim a real command_interface. Not
+    # gated on arm_control_mode -- the gripper is independent of the arm's
+    # position/effort switch. This is also what MoveIt2's own gripper_moveit_controllers.yaml
+    # (loaded via .trajectory_execution() above) expects to talk to for its GripperCommand
+    # action (panda_hand_controller / gripper_cmd), so this alone should make
+    # MoveIt2's own gripper planning/execution work, independent of any future
+    # MuJoCo-native gripper_controller.py Stage 4 work.
+    panda_hand_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["panda_hand_controller", "-c", "/controller_manager"],
+    )
+
     return LaunchDescription(
         [
             headless,
@@ -230,5 +247,6 @@ def generate_launch_description():
             joint_state_broadcaster_spawner,
             panda_arm_controller_spawner,
             panda_effort_controller_spawner,
+            panda_hand_controller_spawner,
         ]
     )

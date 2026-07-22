@@ -6,16 +6,17 @@ Modeled directly on IsaacSim-ros_workspaces/jazzy_ws's own panda_isaac.urdf.xacr
 (same shape: base panda.urdf unchanged, only the ros2_control include/instantiation
 swapped out).
 
-The hand IS instantiated as a ros2_control system (unlike panda_isaac.urdf.xacro,
-which dropped it for an Isaac-specific mimic-joint bug), but hardcoded to
-mock_components regardless of the arm's ros2_control_hardware_type arg: Stage 2/3
-only ever drives the 7 arm joints (pinn_controller_node's _JOINT_NAMES), so the
-gripper doesn't need real MuJoCo physics, but it DOES need a state_interface for
-panda_finger_joint1/2, or planning_scene_monitor never considers the robot's state
-"complete" (missing panda_finger_joint1) and MoveIt2's RViz plugin never renders
-anything at all, even though the arm joints are tracked fine. mock_components
-trivially mirrors commanded position back as state, exactly what's needed for a
-part of the robot this migration doesn't otherwise touch.
+2026-07-22: the hand/fingers are no longer a separate mock_components ros2_control
+system here. They previously were (hardcoded mock_components, "PandaHandMockSystem"),
+justified at the time by Stage 2/3 only ever driving the 7 arm joints — but mock
+joints are entirely synthetic (commanded position trivially mirrored back as state,
+zero physical presence), which became a real blocker once Stage 4 needed a gripper
+that can actually open/close/contact an object in the same physics world as the arm.
+panda_finger_joint1/2 are now declared inside panda_mujoco.ros2_control.xacro's own
+single <ros2_control> block instead (see that file's header comment for why: a
+second mujoco-plugin hardware component would spin up a second, disconnected
+simulation). The upstream panda_hand.ros2_control.xacro include below this comment
+is therefore no longer used.
 
 initial_positions_file is unchanged from moveit_resources_panda_moveit_config's own
 config/initial_positions.yaml (arm-only content, simulator-agnostic).
@@ -39,12 +40,8 @@ own header comment for details. -->
     <!-- Import our patched panda urdf file (real inertials added, see file header) -->
     <xacro:include filename="$(find pinn_franka_controller)/urdf/panda_mujoco_description.urdf" />
 
-    <!-- Import our MuJoCo ros2_control description (arm) -->
+    <!-- Import our MuJoCo ros2_control description (arm AND hand/fingers, see file header) -->
     <xacro:include filename="$(find pinn_franka_controller)/urdf/panda_mujoco.ros2_control.xacro" />
 
-    <!-- Hand: mock_components always, see file header -->
-    <xacro:include filename="$(find moveit_resources_panda_moveit_config)/config/panda_hand.ros2_control.xacro" />
-
     <xacro:panda_ros2_control name="PandaMujocoSystem" initial_positions_file="$(arg initial_positions_file)" ros2_control_hardware_type="$(arg ros2_control_hardware_type)" arm_control_mode="$(arg arm_control_mode)"/>
-    <xacro:panda_hand_ros2_control name="PandaHandMockSystem" ros2_control_hardware_type="mock_components"/>
 </robot>
