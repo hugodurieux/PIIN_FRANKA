@@ -66,5 +66,17 @@ You refill papers/inbox/ with new papers yourself.
   by default so the hook never has to fire. When code is ready to run, tell the
   human the exact command to run, and let them run it.
 
+## Giving terminal commands to the human (ROS2 / multi-terminal work)
+- When a task spans multiple terminals (e.g. bringing up MuJoCo + MoveIt2 in one,
+  `pinn_controller_node` in another, ad-hoc `ros2 service call`/`ros2 topic echo`
+  diagnostics in a third), always label which terminal each command goes in
+  (e.g. "**Terminal 2**:"). Never say "run that" or "run this" without saying where.
+- Always give the full, ready-to-paste command — including `source`/`cd` and any
+  other setup — never a partial command or a reference to "the usual setup". Assume
+  each terminal may be fresh and needs full environment setup repeated.
+- Keep each command on its own single line (no multi-line backslash continuations)
+  — long or multi-line pasted commands have previously been corrupted by terminal
+  line-wrapping (see SESSION.md's Lesson #2), silently dropping arguments.
+
 ## Session state (auto-updated)
 @SESSION.md
