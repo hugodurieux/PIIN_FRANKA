@@ -818,7 +818,28 @@ class ArmMotionClient(Node):
 
         goal = MoveGroup.Goal()
         goal.request.group_name = self._group_name
-        goal.request.num_planning_attempts = 1
+        # 2026-07-29: 1 -> 10. Each attempt re-samples the GOAL STATE via IK, and
+        # the stock config gives that sampling almost no budget: MoveIt2 resolves
+        # panda_arm with kdl_kinematics_plugin at kinematics_solver_timeout=0.05s
+        # (moveit_resources_panda_moveit_config/config/kinematics.yaml). KDL is
+        # iterative and randomly seeded, so near a singularity it converges only
+        # some of the time within 50 ms -- and with a single attempt one unlucky
+        # seed fails the whole move.
+        #
+        # Observed live on the last pre-approach sub-step, whose goal is
+        # (0.5, 0.0, 0.3299) with the gripper pointing straight down: y=0 puts it
+        # exactly on the robot's x-axis with a vertical wrist, right in the
+        # Panda's singular region. Same goal pose, three runs, two outcomes:
+        # test_grasp_pick_run20.log planned it fine; run21 and run22 both failed
+        # with GOAL_STATE_INVALID after burning the full 5s planning budget, and
+        # move_group's own log gives the mechanism outright --
+        # "RRTConnect: Unable to sample any valid states for goal tree". That is
+        # the IK sampler giving up, NOT a collision: a goal in collision is
+        # rejected in milliseconds (cf. the 1.6ms attached-object rejection in
+        # run20), whereas exhausting the sampler burns the whole budget first.
+        # Scene geometry was ruled out separately -- shrinking the grasp_object
+        # box 0.12 -> 0.06 and dropping the floor box 3cm changed nothing.
+        goal.request.num_planning_attempts = 10
         goal.request.allowed_planning_time = self._planning_time
         goal.request.max_velocity_scaling_factor = self._VELOCITY_SCALING
         goal.request.max_acceleration_scaling_factor = self._ACCELERATION_SCALING

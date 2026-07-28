@@ -3,6 +3,76 @@
      Do not edit by hand. CLAUDE.md imports it at every startup. -->
 
 ## Last updated
+2026-07-29 (STAGE 4 SOLVED AND WORKING END-TO-END — "JOINT 4/6/7 FREEZE" ROOT CAUSE FOUND: `ResetWorld` SILENTLY REVERTS mujoco_ros2_control TO ITS INTERNAL POSITION PID. FIVE FURTHER BUGS FIXED BEHIND IT. FULL pick() SUCCEEDS 2/2 AT x=0.65: CUBE GRASPED AND LIFTED.)
+
+**Goal for the day:** Re-test the untested `initial_positions.yaml` fix with correct rebuild/restart methodology, then get a working Stage 4 pick.
+
+**High-level outcome: THE WEEK-LONG "panda_joint4/6/7 FREEZE" IS SOLVED, AND `pick()` NOW COMPLETES END-TO-END — cube grasped and lifted, twice in a row.** The freeze was never physics, never the MJCF, never the trained model, and NOT the `mujoco_ros2_control` command pathway either (the 2026-07-28 conclusion — see the correction banner below). It is this:
+
+> **`mujoco_ros2_control`'s `ResetWorld` service silently reverts every joint to its INTERNAL position PID** (`config/mujoco_pid.yaml`). It does not route the change through `perform_command_mode_switch()`, so **nothing reports it**: the plugin logs no mode line, `controller_manager` still lists `panda_effort_controller` as ACTIVE, `ros2 control list_controllers` looks healthy, commands still publish and `ros2 topic echo` shows them, and the arm holds itself up convincingly. Every torque published to `/panda_effort_controller/commands` is discarded. The arm settles at `(home_keyframe - tau_gravity / p_position_pid)`, pinned to ~1e-5 rad.
+
+**Why it survived a week:**
+1. **All seven joints freeze**, but only joints whose target is far from home LOOK frozen. The symptom therefore presented as a "joint 4/6/7" problem and sent three sessions hunting for what those three joints have in common. They have nothing in common — 4/6/7 simply had far targets. Joints 1/2/3/5 were equally frozen.
+2. **Every status layer reports healthy.** The only signal that ever contradicted it was arithmetic: `p * (home - measured)` reproducing the measured effort.
+3. **`reset_world_home` is exactly what you run between tests to get a clean start** — so the more carefully a test was isolated, the more reliably the bug was reintroduced.
+
+**Decisive evidence (all live):**
+- Runs 13/14/15 (2026-07-24) hold **bit-identical** positions across three separate runs, each equal to `home - tau_gravity/p`, on three joints with two different gains, agreeing to **1e-5 rad**:
+  `joint4: 22.351/500 -> -1.61549 (logged -1.61540)`, `joint6: 2.085/150 -> +1.55689 (logged +1.55691)`, `joint7: 0.000/150 -> -0.78530 (logged -0.78529)`.
+- Raw 40 Nm to joint4 after a reset: **commanded 40 Nm, measured effort +23.5 Nm** = `500 * (home - current)`, i.e. the position PID, not the command. Joints 1/3 commanded 0 Nm read **±87 Nm saturated** and oscillated — the same PID unstable.
+- Running `force_effort_mode.sh` with the controller stopped made the arm **go limp instantly**. Same sim, same second, opposite behaviour. That is the proof.
+
+**Why `switch_to_effort.sh` cannot fix it:** `panda_effort_controller` is still ACTIVE from `controller_manager`'s point of view, so a switch activating it is rejected as a no-op (`ok=False, "already active"`) and `perform_command_mode_switch()` is never called. Only a real deactivate -> activate cycle works.
+
+### Fixes made (all live-validated unless stated)
+
+**1. The freeze — `ros2_ws/force_effort_mode.sh` (NEW).** Forces effort -> position -> effort so the plugin re-runs `perform_command_mode_switch()`. Verifies against the PLUGIN'S OWN LOG (`controller_manager` is the layer that lies). **`ros2_ws/reset_world_home.sh` now calls it automatically** whenever `panda_effort_controller` is active — the trap is defused where it cannot be forgotten. (It fired a third time mid-session and silently invalidated run26 before this was added.)
+
+**2. Steady-state tracking — `gain_safety_margin_override:=4.0`.** Flange error 0.054 m -> 0.005-0.027 m; worst joint 0.10 rad -> ~0.01-0.05. Predicted from `e_ss = tau_residual/Kp` and matched to three decimals. Passed via `ros2_ws/launch_pinn_controller_boosted.sh 4.0`. NOT yet made the default in `controller/lyapunov_gains.py`.
+
+**3. Latent crash in the gain-override path — `pinn_controller_node.py`.** `get_logger().warn()` was called with logging-style lazy `%s` args; rclpy's `RcutilsLogger` takes ONE pre-formatted string and raises `TypeError`. This killed the node at startup, so `launch_pinn_controller_boosted.sh` had been **dead on arrival since it was written on 2026-07-24** — the "do stronger gains move joints 4/6/7?" experiment was never actually run.
+
+**4. Leaked planning-scene attachment — `stage4/test_grasp_pick.py`.** `pick()` attaches `grasp_object` before the approach and, on an `ARM_TIMEOUT` there, aborts without reaching `_detach_object()`. The planning scene lives in `move_group`, so the attachment survives every restart of the test script. Confirmed via `/get_planning_scene`: a phantom box hanging **0.307 m** off `panda_hand` at a tumbled orientation, riding along with every plan and rejecting goals `run20` had planned fine minutes earlier. Now cleared defensively at startup (`detach_object` + `remove_collision_object`).
+
+**5. Attach-before-descent vs the floor box — floor registration REMOVED.** `_attach_object()` runs at the pre-approach pose while the cube is still on the floor, so MoveIt stores it at `0.02 - 0.3299 = -0.3099 m` below the flange. On the descent the *phantom* cube follows the gripper down to `z = -0.08`, through any floor box. There is no floor height both deep enough to clear it and shallow enough to be useful. The floor box was itself added 2026-07-24 for the disproven freeze theory; MuJoCo's real floor plane still stops the arm physically. **Proper fix, deferred:** do not attach before the descent — attach only after the gripper closes (what MoveIt's own pick pipeline does, and what is physically true), then the floor box can return.
+
+**6. IK reliability at longer reach — `config/kinematics.yaml` (NEW), wired via `MoveItConfigsBuilder.robot_description_kinematics()`.** Stock KDL gets `kinematics_solver_timeout: 0.05`; near-singular top-down goals at x=0.65 then failed intermittently with `Unable to sample any valid states for goal tree` (run25 planned approach 1/2 and failed 2/2; run27 failed 1/2 — same poses). Raised to 0.25 s + explicit attempts. `num_planning_attempts` 1 -> 10 in `arm_motion_client.py` as well (not sufficient alone — every attempt re-samples through the same under-budgeted solver).
+
+**7. Flange-to-fingertip offset — `stage4/demo_targets.py`, 0.2099 -> 0.1029 m.** The chain opened with "panda_link8 -> panda_hand = 0.107", but that 0.107 is `panda_link7 -> panda_link8`. In `pinocchio_baseline/panda.urdf` the hand is mounted on link8 with `xyz="0 0 0"` — **zero translation**, pure -45 deg rotation. Since the IK target IS link8, the term was counted twice and held the fingertips ~10 cm too high. Measured live: run28 closed to **0.0336 m** through empty air.
+
+**8. Gripper 45 deg mount — `_TOP_DOWN_FINGERS_ALIGNED` in `demo_targets.py`.** The fingers slide along `panda_hand`'s y-axis, but the grasp target is specified for `panda_link8`, and the hand carries a -45 deg twist (`rpy="0 0 -0.785398"`). Plain `_TOP_DOWN` therefore presents the fingers **diagonally across** the cube. Measured live: run29 stopped at **0.0526 m** = the cube's diagonal (`0.04*sqrt(2) = 0.0566`) less corner squeeze. Right-multiplying by `Rz(+45 deg)` makes the HAND axis-aligned while leaving the approach axis at `(0,0,-1)`.
+
+**Note that bugs 7 and 8 both come from ONE line of the robot description** — `panda_hand_joint`, `xyz="0 0 0" rpy="0 0 -0.785398"`. Zero translation caused the height error; the rotation caused the diagonal grasp.
+
+### Result: Stage 4 pick() WORKS
+
+Cube moved 0.50 -> **0.65 m** (5 sites kept in sync: MJCF body pos, MJCF `home` keyframe freejoint qpos, `demo_targets.py`, and two in `test_grasp_pick.py`).
+
+| | run30 | run31 |
+|---|---|---|
+| All 5 pre-approach sub-steps | converged | converged |
+| Approach 1/2, 2/2 | converged | converged |
+| Final grasp error | **0.0066 m** (tol 0.0200) | **0.0186 m** (tol 0.0200) |
+| Gripper width (target 0.040) | **0.03999612** | **0.03990805** |
+| Lift 0.150 m | converged | converged |
+| Result | **SUCCESS** | **SUCCESS** |
+
+Gripper width worked as a measuring instrument across the diagnosis: `0.0336` (air, too high) -> `0.0526` (diagonal corners) -> `0.0400` (flat faces, held).
+
+### Corrections to prior sessions' recorded conclusions
+- **2026-07-28's "the bug IS in `mujoco_ros2_control` plugin / ros2_control command pathway" is WRONG.** It rested on Test F, whose measured joint4 position (-1.61542) IS the discarded-torque fingerprint (-1.61549). The evidence for the plugin theory was the bug itself. Static source reading found nothing wrong with the plugin because nothing is wrong with the plugin.
+- **The `initial_positions.yaml` fix is real but was NOT the freeze fix.** It genuinely seeds MuJoCo's `qpos` (joint7's `+0.785` sign flip proves it — the arm rests at the YAML pose, see run16), so keeping it is correct hygiene. It does not cause or cure the freeze.
+- **2026-07-24's `safety_margin` 2.0 -> 4.0 revert was based on a misattribution** — already retracted in `lyapunov_gains.py`'s own 2026-07-27 note. Margin 4.0 is now live-validated as good.
+- **The `_transit_waypoints`, floor-box and `conaffinity="0"` mitigations were all aimed at the disproven freeze theory.** `conaffinity="0"` is retained (harmless, arguably correct); the floor box is now removed; `_transit_waypoints` is retained as generically good practice.
+- **The 2026-07-27 diagnosis in `switch_to_effort.sh`'s header was RIGHT ALL ALONG** — including the numeric fingerprint — and was discarded the next day. The answer sat in the repo for two days.
+
+### Repo state
+Branch `fix/effort-mode-actuator-lock`, not merged to main. Everything from 2026-07-23/24/28/29 committed together this session (see commit message for the full list). `school_report/rapport/main.tex` §5.4 still describes the freeze with the physics/plugin framing and **still needs a prose rewrite** — deliberately left for a dedicated pass.
+
+---
+
+[Session continuation entry: 2026-07-28 — **CONCLUSION SUPERSEDED, SEE 2026-07-29 ABOVE.** This entry's headline finding ("the bug is in the mujoco_ros2_control plugin or the ros2_control command pathway") is incorrect; it was derived from a test that was itself measuring the discarded-torque bug. The diagnostic tools built here (`debug_mujoco_internals.py`, `test_direct_joint_bypass.py`) remain useful and are kept. Original text preserved below for the record.]
+
 2026-07-28 (STAGE 4 — BREAKTHROUGH: ROOT CAUSE MOVED FROM PHYSICS/MODEL TO MUJOCO_ROS2_CONTROL PLUGIN; STANDALONE MJCF TEST PROVES JOINT MOVES FREELY OUTSIDE ROS2; INITIAL_POSITIONS.YAML DISCREPANCY FOUND AND FIXED VIA PROJECT-LOCAL CONFIG; FIX TEST INVALIDATED BY SIM-RESTART ORDERING ERROR; COMMIT AND PUSH AUTHORIZED)
 
 **Goal for the day:** Continue the 2026-07-24 joint4/6/7 freeze investigation by testing two specific hypotheses from prior sessions: (1) does motion planning (MoveIt2/OMPL) cause the freeze, or could the issue be somewhere else? (2) is the trained PINN residual model responsible? Build deterministic diagnostic tools to isolate variables and avoid the intermittency trap that made random re-tests uninterpretable.
@@ -220,42 +290,51 @@ Entirely separately from Stage 4 work: `school_report/rapport/main.tex` (a Frenc
 
 **Stage 2/3 (ROS2 + MoveIt2 + Controller):** **Milestone 1 and 2 FULLY CLOSED.** Position-mode MoveIt2 execution and Stage 3 effort-mode trajectory tracking are both empirically validated.
 
-**Stage 4 (grasping) — IN PROGRESS, 2026-07-28: ROOT CAUSE DEFINITIVELY IDENTIFIED AND MOVED TO MUJOCO_ROS2_CONTROL PLUGIN LAYER.** MoveIt2/OMPL IK variability RULED OUT. Trained PINN residual RULED OUT. **CRITICAL BREAKTHROUGH:** Standalone `debug_mujoco_internals.py` script (loading MJCF directly via raw mujoco Python package, bypassing ROS2 entirely) applied 40 Nm to joint4 → **joint4 moved +1.50 rad freely**. Identical model file, identical torque, **but joint moves freely outside ROS2 and is frozen inside ROS2**. This DEFINITIVELY proves the issue is NOT physics, NOT MJCF, NOT MuJoCo. **The bug is in `mujoco_ros2_control` plugin or the ros2_control command pathway for joints 4/6/7 specifically.** Configuration discrepancy found: `initial_positions.yaml` mismatches MJCF `home` keyframe (joints 2, 4, 6, 7 affected). Project-local fix created (`ros2_ws/src/pinn_franka_controller/config/initial_positions.yaml` wired into launch.py via xacro:arg override). **CRITICAL:** Fix was never properly live-tested (testing methodology error: sim never restarted after fix written, so test ran 100% old code). Must re-test FIRST thing next session with correct ordering (full rebuild → full sim restart → re-test). All diagnostic tools and config ready; investigation now belongs to `mujoco_ros2_control` plugin C++ internals or ROS2 control command pathway — static source reading has not yet found the mechanism.
+**Stage 4 (grasping) — WORKING END-TO-END as of 2026-07-29.** `pick()` completes successfully: cube grasped and lifted, **2/2 consecutive runs** (`test_grasp_pick_run30/31.log`), with the cube at x=0.65 m (30% farther than the original 0.50 m placement). Final grasp convergence 0.0066 / 0.0186 m against a 0.0200 m tolerance; gripper closes to 0.03999612 / 0.03990805 m against a 0.040 m target; `is_grasped=True`.
+
+The blocking "panda_joint4/6/7 freeze" is SOLVED: **`mujoco_ros2_control`'s `ResetWorld` silently reverts every joint to its internal position PID**, bypassing `perform_command_mode_switch()` so no layer reports it, and every effort command is discarded. Fixed by `ros2_ws/force_effort_mode.sh`, now called automatically from `reset_world_home.sh`. The 2026-07-28 conclusion (plugin command pathway) was **wrong** — see the correction section in the 2026-07-29 entry. Five further bugs were fixed behind it, each only reachable once the previous was cleared: the gain-override startup crash, a leaked planning-scene attachment, the attach-before-descent floor conflict, KDL IK budget at longer reach, and two gripper-geometry errors (both traceable to `panda_hand_joint`'s `xyz="0 0 0" rpy="0 0 -0.785"`).
 
 ## Open questions / blockers
 - **Milestone 1 and 2:** FULLY CLOSED (Stage 2/3, unrelated to this session's work).
-- **Stage 4 (grasping) — IN PROGRESS, ROOT CAUSE IDENTIFIED AS ROS2/PLUGIN LAYER (2026-07-28 breakthrough):**
-  - Gripper joints, scene/object, `MuJoCoGripperController`, `ArmMotionClient`/`_move_arm()`: all DONE and validated as of 2026-07-22.
-  - 8 bugs from 2026-07-23 all FIXED: reset_world keyframe, flange target calibration, gripper grasp() stale-read, insufficient grip force, arm/hand self-collision excludes, TrajectoryInterpolator joint_names handling, joint-space convergence tolerance (three compounding issues), and MoveIt2 obstacle registration. All confirmed working.
-  - **DEFINITIVELY RULED OUT (2026-07-28 breakthrough evidence):** Physics, MJCF model file, MuJoCo itself (proven by `debug_mujoco_internals.py`: identical model + identical torque = joint moves freely outside ROS2, frozen inside ROS2).
-  - **CONFIRMED (2026-07-28):** Bug is in `mujoco_ros2_control` plugin or ros2_control command pathway. Static C++ source reading has not found the exact mechanism yet. Runtime investigation or upstream issue filing may be warranted.
-  - **UNTESTED, READY FOR NEXT SESSION (HIGH PRIORITY):** `initial_positions.yaml` fix — real config discrepancy found and project-local override created, but was never properly live-tested due to testing methodology error (sim never restarted). Must re-run with correct full rebuild + full sim restart first thing.
-  - Stage 4 ROS2 orchestration node still doesn't exist — blocked behind a confirmed, reliable working pick() first.
-- **Workflow improvements documented (carry forward):**
-  - **(2026-07-28 critical lesson)** Testing methodology errors can invalidate results: when code/config changes require a full rebuild and running-process restart, ensure the restart actually happens and is verified (e.g., via `ps aux` or `ros2 node list`) before re-running tests. Consider writing consolidated helper scripts (build → kill old processes → wait → launch fresh) to eliminate ordering mistakes in manual multi-step testing sequences.
-  - **(2026-07-28 diagnostic success pattern)** Standalone scripts that bypass layers of abstraction (in this case, raw Python `mujoco` package bypassing `mujoco_ros2_control`) are extremely powerful for isolating where a bug lives. `debug_mujoco_internals.py` eliminated an entire category of hypotheses (physics, model file, MuJoCo) in a single run.
-  - [all prior workflow notes carry forward — see 2026-07-28 and earlier entries]
+- **Stage 4 (grasping) — CORE OBJECTIVE ACHIEVED 2026-07-29, `pick()` works end-to-end (2/2 runs).** Remaining items:
+  - **MANDATORY OPERATING RULE:** every `reset_world_home` MUST be followed by `force_effort_mode.sh`, or all torques are silently discarded. This is now automatic inside `reset_world_home.sh` — do not bypass it by calling the reset service directly.
+  - **Reliability sample is only 2 runs.** run31's final grasp came in at 0.0186 m against a 0.0200 m tolerance — a thin margin, and the worst joint shifted from joint5 to joint2. Run several more picks before treating the numbers as a characterised success rate for the report.
+  - **`panda_joint5` has a systematic, one-signed steady-state bias** (~0.013-0.053 rad, always negative, at every waypoint in every run). It no longer breaks the pick but is untouched by every fix made this session. This is the one genuinely model-shaped open question. **Cleanest test: re-run with `disable_residual:=true`** (RNEA + PD only, learned network never called). If the bias vanishes, the learned residual introduces it — a real result for goal.md objective 2, not just a debugging step.
+  - **`_attach_object()` attaches before the descent, which is physically wrong** and forced the floor collision box to be removed. Proper fix: attach only after the gripper closes (what MoveIt's own pick pipeline does), then restore the floor box. Also: `GraspExecutor` should detach in a `finally` so an abort cannot leak the attachment — the startup cleanup in `test_grasp_pick.py` is belt-and-braces, not a fix for the leak itself.
+  - **`gain_safety_margin_override:=4.0` is passed at launch, not made the default.** Consider promoting it in `controller/lyapunov_gains.py` — but note the wrist Kd (8.4-9.5) then sits near the 12 Nm limit, and visible chatter was observed at stretched, near-singular poses. `lyapunov_gains.py`'s own note on choosing Kp from a target tracking error (rather than from Kd's stability lower bound) is the principled fix and is still unimplemented.
+  - Stage 4 ROS2 orchestration node still doesn't exist — no longer blocked, a working `pick()` now exists to build on.
+- **Workflow lessons (carry forward, all earned expensively):**
+  - **(2026-07-29, the big one) A check that cannot fail is worse than no check.** This bug survived a week because every status layer reported healthy while torques were discarded. `switch_to_effort.sh`'s verification passed; `verify_effort_mode.sh` passed (it reads `controller_manager`, which is exactly the layer that lies); an early `force_effort_mode.sh` verification was tautological (it grepped for effort lines, then asserted the result contained effort lines) and reported OK while printing `position control enabled` directly above. **Verify against the layer that actually acts** — here, the plugin's own per-joint mode log — and make the check able to fail.
+  - **(2026-07-29) Read the log of the component that failed BEFORE forming a hypothesis.** `GOAL_STATE_INVALID` and `Unable to sample any valid states for goal tree` were sitting in `move_group`'s log the whole time and named both planning failures outright; two edits (shrinking the cube box, lowering the floor box) were made against guessed causes before that log was read. Same mistake at project scale: `switch_to_effort.sh`'s header had the correct diagnosis, with numbers, two days before it was acted on.
+  - **(2026-07-29) Distinguish planning failure from tracking failure before blaming the model.** `planning failed, error_code=99999` means MoveIt rejected the goal and NO torque was ever computed. Timing separates the sub-cases: ~1.8 ms = goal in collision; ~5 s = IK sampler exhausted; full 10 s timeout with `still converging` = a genuine tracking problem. Only the last one implicates Stage 1/3.
+  - **(2026-07-29) State leaks between runs.** Restarting the test script clears nothing: the planning scene lives in `move_group` and the control mode lives in the plugin. "Clean" re-runs were not clean.
+  - **(2026-07-28, still valid) Standalone scripts that bypass a layer are powerful** for isolating where a bug lives — but they must hold every other variable constant, or they mislead (`debug_mujoco_internals.py` compared two different control paths AND two different arm configurations at once).
+  - **(carry forward) Long pasted commands get corrupted by terminal line-wrapping.** It happened again on 2026-07-29 and silently dropped `checkpoint_path`, invalidating run18 — the exact failure `launch_pinn_controller_boosted.sh` had already been written to prevent. Use the scripts; do not paste multi-argument `ros2 launch` lines.
 - **Environment fix (carry forward):** Always ensure `ros-jazzy-ros2controlcli` is installed.
-- **MuJoCo-specific issues (carry forward from prior sessions):** [all prior notes] Self-collision partially fixed (one-line MJCF change) 2026-07-24, but freeze remains. Root cause moved from physics to ROS2/plugin layer 2026-07-28 via breakthrough diagnostic. Configuration discrepancy found and project-local fix created. Status: initial_positions.yaml fix awaiting proper live test with correct rebuild/restart methodology.
-- **Working tree: NOT CLEAN, BUT READY TO COMMIT ONCE INITIAL_POSITIONS.YAML FIX IS VALIDATED.** All fixes from 2026-07-23, 2026-07-24, and 2026-07-28 are uncommitted edits on `fix/effort-mode-actuator-lock` (not merged to main). New diagnostic tools added. Configuration fix created. Once initial_positions.yaml fix is confirmed to resolve the freeze (re-tested next session with correct methodology), entire branch can be committed and pushed as a single, well-documented commit explaining the ROS2/plugin-layer root cause and the configuration fix.
+- **Working tree:** all of 2026-07-23/24/28/29 committed on `fix/effort-mode-actuator-lock` (NOT merged to main, not pushed). `school_report/rapport/main.tex` §5.4 still carries the old physics/plugin framing and needs a prose rewrite.
 
 ## What to do next session
-1. **FIRST AND MOST CRITICAL: Properly re-test the `initial_positions.yaml` fix with correct methodology.** This was invalidated by a testing error this session. Follow these exact steps in order:
-   - From `ros2_ws/` directory: `colcon build --packages-select pinn_franka_controller` (full, complete build).
-   - Check that the build succeeded: `echo $?` should be 0.
-   - **FULLY RESTART Terminal 1 (the MuJoCo/Gazebo simulation terminal).** Kill any running MuJoCo/gazebo/mujoco_ros2_control_node processes (Ctrl-C, or `pkill -9 gazebo` if needed). Verify via `ps aux | grep gazebo` or `ros2 node list` that nothing sim-related is running.
-   - From the same terminal (now clean): run `cd ~/projects/pinn_franka/ros2_ws && source install/setup.bash && ros2_ws/launch_pinn_controller.sh` to start a fresh simulation instance.
-   - Once sim is running and stable (wait ~5 seconds): `ros2_ws/switch_to_effort.sh` to enable effort mode.
-   - `ros2_ws/test_joint4_raw_torque.sh` to test the isolated raw-torque scenario for joint4.
-   - Check result: if joint4 moves significantly (>0.1 rad), the fix worked — commit the branch. If it still doesn't move, the fix did not resolve it, and investigation must proceed to next steps.
-2. **If the initial_positions.yaml fix DOES resolve the freeze:** Congratulations — commit the entire branch (Stage 4 framework is now working). Move to building the actual ROS2 orchestration node and integrating into the main pick() pipeline.
-3. **If the initial_positions.yaml fix does NOT resolve the freeze:** The bug is definitively in the `mujoco_ros2_control` plugin or ros2_control command pathway C++ implementation, not in config or model files. Next steps:
-   - Consider live GDB debugging of the ros2_control_node process, focusing on `mujoco_system_interface.cpp`'s `write()` function and actuator command pathway for joints 4/6/7 specifically.
-   - File an upstream issue on github.com/ros-controls/mujoco_ros2_control with the full diagnostic evidence: standalone script proof that the model works fine in isolation, all config ruled out, and clear reproduction steps.
-   - Alternatively, inspect the plugin's runtime behavior via injected debug logging (add temporary std::cerr or RCLCPP_INFO statements in the write() and joint_command_to_actuator_command() functions, rebuild, and run to capture what actually happens at runtime).
-4. **Diagnostic tools now available for future use:**
-   - `stage4/debug_mujoco_internals.py` — use this pattern whenever you need to test "is this a physics/model issue or a ROS2/plugin issue?" Can be quickly adapted to test other joints or scenarios.
-   - `ros2_ws/test_joint4_raw_torque.sh`, `test_joint6_raw_torque.sh`, `test_joint7_raw_torque.sh` — reusable for isolation testing of individual joints.
-   - `stage4/test_direct_joint_bypass.py` — deterministic joint-space target generation, useful for testing without MoveIt2 variability.
-5. **Do NOT commit anything to main until a pick() is reliably, repeatably working.** The branch `fix/effort-mode-actuator-lock` is ready to commit and push once the initial_positions.yaml fix is confirmed (proper re-test next session), but only then.
-6. **Do NOT re-open prior debugging angles** (model-file audit, plugin indexing, IK variability, training model) — those are definitively ruled out by the breakthrough diagnostic. The investigation has moved to a new layer.
+**Startup sequence that works (use exactly this order):**
+1. **Terminal 1:** `bash ros2_ws/rebuild_and_relaunch_sim.sh` — kills stale processes, verifies they are gone, rebuilds, and only then launches. Wait for `OK: build succeeded` and the sim to come up.
+2. **Terminal 2:** `bash ros2_ws/launch_pinn_controller_boosted.sh 4.0` — confirm it prints `gain_safety_margin_override=4.00 active` and NOT `No checkpoint_path set`.
+3. **Terminal 3:** `bash ros2_ws/switch_to_effort.sh` — must exit 0. (On a FRESH sim this is the right call; after any reset use `reset_world_home.sh`, which re-asserts effort mode itself.)
+4. **Terminal 3:** run the pick, teeing to a log:
+   `source /opt/ros/jazzy/setup.bash && source ~/projects/pinn_franka/ros2_ws/install/setup.bash && source ~/projects/pinn_franka/ros2_ws/set_pinn_env.sh && python3 ~/projects/pinn_franka/stage4/test_grasp_pick.py 2>&1 | tee stage4/test_grasp_pick_runNN.log`
+5. Between picks: `bash ros2_ws/reset_world_home.sh` (re-asserts effort mode automatically), then re-run step 4.
+
+**Suggested priorities:**
+1. **Characterise reliability.** Run `pick()` 5-10 times and record the success rate and the spread of the final grasp error. Only 2 runs exist; run31 cleared its tolerance by 1.4 mm. The report needs a real number here, not an anecdote.
+2. **Settle the joint5 bias — the one open question that could touch Stage 1.** Re-run with `disable_residual:=true` and compare joint5's steady-state error against the current ~0.013-0.053 rad. If it vanishes, the learned residual is introducing a systematic torque bias on that joint; if it persists, it is the PD/gravity structure, not the model. Either answer belongs in the report (goal.md objective 2).
+3. **Fix the attach ordering properly.** Attach after the gripper closes, not before the descent; add a `finally` detach in `GraspExecutor`; then restore the floor collision box in `test_grasp_pick.py`.
+4. **Rewrite `school_report/rapport/main.tex` §5.4.** It still describes the freeze with the physics/plugin framing. The true story is stronger: a control-mode configuration fault that perfectly mimicked a physics fault, invisible to every status layer, plus a quantified limitation of Liu et al.'s Proposition 1 (Kp derived from a stability lower bound gives `e_ss = 4/(m^2 * eps)`, so better-modelled joints track WORSE — already derived in `controller/lyapunov_gains.py`'s own comment, and confirmed live this session).
+5. **Then Stage 4 orchestration node** — no longer blocked.
+
+**Diagnostic tools available:**
+- `ros2_ws/force_effort_mode.sh` — recover effort mode after any reset. Verifies against the plugin's own log.
+- `ros2_ws/rebuild_and_relaunch_sim.sh` — one-command kill/verify/build/launch cycle.
+- `ros2_ws/verify_effort_mode.sh` — pre/post-test gate. **Caveat: it reads `controller_manager`, which is exactly the layer that lies about the reset revert.** Trust `force_effort_mode.sh`'s plugin-log check over this one.
+- `stage4/debug_mujoco_internals.py` — physics-vs-stack isolation via the raw `mujoco` package (`--settle N` runs zero-torque free-fall first). Hold all other variables constant when using it.
+- `ros2_ws/test_joint{4,6,7}_raw_torque.sh` — single-joint isolation. **Only meaningful if effort mode is verified at the plugin log first.**
+- `stage4/test_direct_joint_bypass.py` — deterministic joint-space targets, no MoveIt2 variability.
+
+**Do NOT re-open:** physics/MJCF model audit, plugin indexing, MoveIt2/OMPL IK variability as the freeze cause, or the trained model as the freeze cause. All are ruled out — the freeze was `ResetWorld`'s silent position-PID revert, fixed and verified.

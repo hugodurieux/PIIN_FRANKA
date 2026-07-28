@@ -242,13 +242,18 @@ class PinnControllerNode(Node):
             kp, kd = compute_lyapunov_gains(
                 DEFAULT_ERROR_BOUND, safety_margin=self._gain_safety_margin_override
             )
+            # NOTE: rclpy's RcutilsLogger.warn() takes ONE pre-formatted string --
+            # it does NOT support logging-module-style lazy "%s"-plus-args calls.
+            # Passing them raises TypeError and kills the node at startup, which is
+            # what this call did from the day it was written (2026-07-24) until
+            # 2026-07-29, meaning gain_safety_margin_override (and therefore
+            # launch_pinn_controller_boosted.sh) had never once run successfully.
+            _default_name = "Lyapunov" if self._use_lyapunov_gains else "manual"
             self.get_logger().warn(
-                "gain_safety_margin_override=%.2f active -- using recomputed "
-                "Kp/Kd (diag Kp=%s) instead of the %s default. TEMPORARY "
-                "debug override, not the project's validated gains.",
-                self._gain_safety_margin_override,
-                np.diag(kp).round(2).tolist(),
-                "Lyapunov" if self._use_lyapunov_gains else "manual",
+                f"gain_safety_margin_override={self._gain_safety_margin_override:.2f} "
+                f"active -- using recomputed Kp/Kd (diag Kp="
+                f"{np.diag(kp).round(2).tolist()}) instead of the {_default_name} "
+                f"default. TEMPORARY debug override, not the project's validated gains."
             )
 
         if self._disable_residual:

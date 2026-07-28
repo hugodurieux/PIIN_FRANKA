@@ -67,7 +67,7 @@ def main() -> int:
         # the arm against it (frozen joints, torque absorbed by contact -- the
         # root cause found live 2026-07-23). Registering it here makes every
         # plan route around it. Position matches the MJCF grasp_object body
-        # (panda_arm_mujoco.xml: pos="0.5 0 0.02") and demo_targets.py's
+        # (panda_arm_mujoco.xml: pos="0.65 0 0.02") and demo_targets.py's
         # documented placement; frame defaults to panda_link0 (the base). This
         # is done in the TEST/orchestration layer (not ArmMotionClient.__init__),
         # keeping the client generic and the cube's literal numbers out of it.
@@ -118,18 +118,125 @@ def main() -> int:
         # the whole reachable workspace so MoveIt2 stops planning any path
         # that dips the forearm through it, regardless of which IK solution
         # it picks. NOT YET LIVE-VALIDATED.
-        log.info("Registering the floor in the MoveIt2 planning scene...")
-        arm.add_collision_box(
-            "floor",
-            position=(0.0, 0.0, -0.05),
-            size=(2.0, 2.0, 0.1),
-        )
+        # 2026-07-29: top surface DROPPED from z=0.0 to z=-0.03 (position
+        # -0.05 -> -0.08, size unchanged). With the top flush at z=0.0 this box
+        # touched the grasp cube, which rests at z=0.02 with 0.04 sides and so
+        # spans z=[0.0, 0.04]. Coincident surfaces alone would be marginal, but
+        # MoveIt2 pads collision geometry (~0.01 m default) on BOTH bodies, so
+        # the padded box and the padded cube overlapped by ~0.02 m. The moment
+        # GraspExecutor._attach_object() attached the cube to panda_hand it was
+        # therefore already in collision with the floor, and the very next plan
+        # request (approach sub-step 1/2) was rejected instantly --
+        # error_code=99999 (MoveItErrorCodes::FAILURE) returned in ~1.6 ms,
+        # far too fast to be a search timeout. Observed live in
+        # test_grasp_pick_run20.log, the first run where the arm actually
+        # reached this stage. _attach_object()'s own 2026-07-27 fix (shrink the
+        # world box from its inflated 0.12 m planning size back to the real
+        # 0.04 m footprint just before attaching) was necessary but not
+        # sufficient: even the bare cube still touches a floor whose top is at
+        # exactly z=0.0. Dropping the top 3 cm clears both padding envelopes
+        # while still blocking any planned path that dips meaningfully below
+        # the real floor -- and MuJoCo's actual floor plane at z=0 remains the
+        # true physical stop regardless of what MoveIt2 plans.
+        #
+        # NOTE: this box was originally added 2026-07-24 to mitigate the
+        # "joint4/6/7 freeze", on the theory that MoveIt2 was planning paths
+        # through the floor. That theory is void -- the freeze was
+        # mujoco_ros2_control silently reverting to its internal position PID
+        # after every reset_world (see ros2_ws/force_effort_mode.sh). The box
+        # is kept because bounding the planner below the floor is good practice
+        # on its own, not because it fixes the freeze.
+        # 2026-07-29: clear any grasp_object left ATTACHED to the gripper by a
+        # previous aborted run, BEFORE registering anything. The planning scene
+        # lives in move_group, not in this script, so it survives every restart
+        # of this process -- only relaunching move_group clears it. pick()
+        # attaches grasp_object before the approach, and on an ARM_TIMEOUT there
+        # it aborts without ever reaching GraspExecutor._detach_object(), so the
+        # attachment leaks into every subsequent run.
+        #
+        # This is not hypothetical: queried live from /get_planning_scene after
+        # run20 aborted at the approach, the scene held
+        #   attached_collision_objects=[link_name='panda_hand', id='grasp_object',
+        #                               pose=(-0.002, 0.014, 0.307), quat=(0.92, 0.40, ...)]
+        # -- a phantom box hanging 0.307 m off the gripper at a tumbled
+        # orientation (the stale grasp-time transform). It rides along with every
+        # planned motion, so at the last pre-approach waypoint (flange at
+        # z=0.3299, pointing down) it sweeps down to about floor level and
+        # collides with the floor box. Result: GOAL_STATE_INVALID on a goal pose
+        # that run20 itself had planned successfully minutes earlier -- runs 21,
+        # 22 and 23 all failed there deterministically, and raising
+        # num_planning_attempts 1 -> 10 could not help, because no IK solution
+        # for that goal is collision-free while the phantom is attached.
+        #
+        # Detach returns it to the world; remove then deletes that world copy, so
+        # the add_collision_box calls below start from a genuinely empty slate.
+        # Both are no-ops on a clean scene, so this is safe on a first run.
+        log.info("Clearing any stale grasp_object attachment from a previous run...")
+        arm.detach_object("grasp_object")
+        arm.remove_collision_object("grasp_object")
 
+        # 2026-07-29: FLOOR REGISTRATION REMOVED. It is fundamentally incompatible
+        # with GraspExecutor's attach-before-descent design, and it was added for a
+        # reason that has since been disproven.
+        #
+        # THE INCOMPATIBILITY. _attach_object() attaches grasp_object to panda_hand
+        # while the arm is still at the PRE-APPROACH pose, 0.10 m above the grasp
+        # (deliberately: the descent cannot be planned while the cube is still a
+        # world obstacle the open fingers must straddle). MoveIt2 attaches an object
+        # at its CURRENT world pose, so the stored transform is
+        #     0.02 (cube) - 0.3299 (flange) = -0.3099 m below the flange
+        # -- confirmed live by querying /get_planning_scene, which reported the
+        # attached object at z=0.307 off panda_hand. That transform then rides with
+        # the gripper. When the flange descends to the grasp pose at z=0.2299 the
+        # phantom cube follows to
+        #     0.2299 - 0.3099 = -0.08 m, spanning [-0.10, -0.06]
+        # i.e. BELOW the real floor -- because MoveIt2 now believes a cube still
+        # sitting on the ground moves downward with the gripper that has not yet
+        # grasped it. Any floor box overlapping that range rejects the goal
+        # instantly (~1.8 ms, vs the ~5 s an IK/search failure takes).
+        # Live evidence: with the floor top at z=0.0 this killed approach sub-step
+        # 1/2 (run20); dropping the top to z=-0.03 let 1/2 through and killed 2/2
+        # instead (run25), since the phantom sinks further on the final step. There
+        # is no floor height that is both deep enough to clear the phantom and
+        # shallow enough to be worth having.
+        #
+        # WHY REMOVING IT IS SAFE. The box was added 2026-07-24 to mitigate the
+        # "joint4/6/7 freeze" on the theory that MoveIt2 was planning paths through
+        # the floor. That theory is void: the freeze was mujoco_ros2_control
+        # silently reverting to its internal position PID after every reset_world
+        # (see ros2_ws/force_effort_mode.sh). The box never fixed anything -- the
+        # freeze recurred with it active -- and MuJoCo's own `floor` plane geom at
+        # z=0 remains the real physical stop regardless of what MoveIt2 plans.
+        #
+        # THE PROPER FIX, deferred: do not attach before the descent at all.
+        # Instead remove grasp_object from the world for the descent, and attach it
+        # only after the gripper has actually closed on it -- which is both what
+        # MoveIt's own pick pipeline does and what is physically true. Then the
+        # floor box can come back safely. That is a structural change to
+        # GraspExecutor.pick()'s phase order, worth doing deliberately rather than
+        # at the end of a debugging session.
+        log.info("Floor collision box intentionally NOT registered (see comment).")
+
+        # 2026-07-29: inflation reduced 0.12 -> 0.06 (real cube is 0.04). The 3x
+        # inflation was added 2026-07-23 to give the pre-approach moves planning
+        # margin around a static obstacle, but it also walls off the corridor the
+        # final pre-approach descent has to fly down: at 0.12 the box spans
+        # z=[-0.04, 0.08] and +/-0.06 in x/y, so the open fingers (0.08 span) must
+        # thread past a volume 3x the object they are reaching for. Observed live
+        # as a FLAKY failure, which is the signature of a too-tight corridor
+        # rather than a hard collision: test_grasp_pick_run20.log cleared
+        # sub-step 5/5 fine, run21 failed it with error_code=99999 after 5.15s of
+        # planning. That 5s is an OMPL search timeout -- contrast run20's attach
+        # collision, which came back in 1.6ms. A goal in collision is rejected
+        # instantly; a goal that is merely hard to reach burns the full budget.
+        # 1.5x still keeps a real margin around the cube while leaving the
+        # descent corridor open. The box is shrunk again to its true 0.04
+        # footprint just before attaching (GraspExecutor._attach_object()).
         log.info("Registering grasp_object in the MoveIt2 planning scene...")
         arm.add_collision_box(
             "grasp_object",
-            position=(0.5, 0.0, 0.02),
-            size=(0.12, 0.12, 0.12),
+            position=(0.65, 0.0, 0.02),
+            size=(0.06, 0.06, 0.06),
         )
 
         cfg = GraspConfig(
@@ -142,7 +249,7 @@ def main() -> int:
             # Used to shrink the collision object back down right before
             # attach, so it no longer overlaps the floor collision box below.
             collision_object_bare_size=(0.04, 0.04, 0.04),
-            collision_object_position=(0.5, 0.0, 0.02),
+            collision_object_position=(0.65, 0.0, 0.02),
         )
         executor = GraspExecutor(cfg, gripper, arm_controller=arm)
 

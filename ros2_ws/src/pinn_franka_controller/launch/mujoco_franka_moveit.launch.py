@@ -102,6 +102,19 @@ def generate_launch_description():
             },
         )
         .robot_description_semantic(file_path="config/panda.srdf")
+        # 2026-07-29: project-local kinematics override (absolute path -> this
+        # package's own config/kinematics.yaml, NOT the relative "config/..."
+        # form used by the calls around it, which resolve inside
+        # moveit_resources_panda_moveit_config). Raises KDL's IK timeout from the
+        # stock 0.05s to 0.25s; see that file's header for the full rationale.
+        # Without it, top-down goals near the arm's reach limit (the x=0.65
+        # grasp_object placement) fail intermittently with
+        # "Unable to sample any valid states for goal tree".
+        .robot_description_kinematics(
+            file_path=os.path.join(
+                pinn_franka_controller_share, "config", "kinematics.yaml"
+            )
+        )
         .trajectory_execution(file_path="config/gripper_moveit_controllers.yaml")
         .planning_pipelines(pipelines=["ompl", "pilz_industrial_motion_planner"])
         .to_moveit_configs()

@@ -120,6 +120,32 @@ def main() -> int:
     parser.add_argument("--duration", type=float, default=5.0, help="Simulated seconds to run. Default 5.")
     parser.add_argument("--keyframe", default="home", help="Keyframe name to reset to before applying torque. Default 'home'; falls back to qpos0 if not found.")
     parser.add_argument("--print-every", type=float, default=0.5, help="Print an internal-state snapshot every this many simulated seconds. Default 0.5.")
+    parser.add_argument(
+        "--settle",
+        type=float,
+        default=0.0,
+        help=(
+            "Simulated seconds to step with ZERO torque on every actuator BEFORE applying "
+            "--torque. Default 0.0 (apply torque immediately at step 0). "
+            "WHY THIS EXISTS (2026-07-29): the ROS2-side comparison this script was "
+            "originally written against (ros2_ws/test_jointN_raw_torque.sh) does NOT apply "
+            "its torque at the instant of reset_world_home -- seconds pass while "
+            "switch_to_effort.sh runs, the shell sources ROS, and topic discovery "
+            "completes. Throughout that gap every joint is commanded 0 Nm with no gravity "
+            "compensation (pinn_controller_node is deliberately stopped for that test), so "
+            "the arm free-falls and collapses; SESSION.md's own 2026-07-28 notes record "
+            "joints 1/3 oscillating with effort pinned at the +/-87 Nm stops during exactly "
+            "that test. This script, by contrast, applied its torque to a pristine home "
+            "pose at step 0. The 'identical model, identical torque, opposite outcome' "
+            "conclusion that redirected the whole investigation to the mujoco_ros2_control "
+            "plugin therefore rested on a comparison where TWO variables differed at once: "
+            "the software layer AND the arm's physical configuration when the torque "
+            "landed. Set --settle to a few seconds to hold the layer constant and vary "
+            "only the configuration. If the joint refuses to move after settling, the "
+            "freeze is reproducible in pure physics with no ROS2 involved, and the plugin "
+            "is NOT implicated."
+        ),
+    )
     args = parser.parse_args()
 
     print(f"Loading model: {args.model}")
@@ -139,6 +165,36 @@ def main() -> int:
     dof_adr = model.jnt_dofadr[joint_id]
     act_id = _find_actuator_for_joint(model, args.joint)
 
+    print_every_steps = max(1, int(args.print_every / model.opt.timestep))
+
+    q_reset = data.qpos[qpos_adr]
+
+    if args.settle > 0.0:
+        # Reproduce the ROS2 test's real starting conditions: every actuator at 0,
+        # no gravity compensation, arm free-falling, for as long as the gap between
+        # reset_world_home and the torque actually arriving on the wire.
+        print(
+            f"\n--- SETTLING {args.settle:.1f}s with ZERO torque on all {model.nu} actuators "
+            f"(reproducing the un-compensated free-fall gap in test_joint4_raw_torque.sh) ---"
+        )
+        data.ctrl[:] = 0.0
+        settle_steps = int(args.settle / model.opt.timestep)
+        for step in range(settle_steps):
+            mujoco.mj_step(model, data)
+            if step % print_every_steps == 0 or step == settle_steps - 1:
+                t = step * model.opt.timestep
+                print(
+                    f"  settle t={t:6.2f}s  q={data.qpos[qpos_adr]:+.5f}  "
+                    f"qdot={data.qvel[dof_adr]:+.5f}  "
+                    f"qfrc_constraint={data.qfrc_constraint[dof_adr]:+8.3f}  ncon={data.ncon}"
+                )
+        for line in _contact_summary(model, data):
+            print(line)
+        print(
+            f"--- SETTLED. {args.joint} drifted {data.qpos[qpos_adr] - q_reset:+.5f} rad "
+            f"from the keyframe during free-fall. Torque applied from here. ---\n"
+        )
+
     q_start = data.qpos[qpos_adr]
     print(
         f"Target joint: {args.joint!r} (joint_id={joint_id}, actuator_id={act_id}). "
@@ -151,7 +207,6 @@ def main() -> int:
     data.ctrl[act_id] = args.torque
 
     n_steps = int(args.duration / model.opt.timestep)
-    print_every_steps = max(1, int(args.print_every / model.opt.timestep))
 
     for step in range(n_steps):
         mujoco.mj_step(model, data)
