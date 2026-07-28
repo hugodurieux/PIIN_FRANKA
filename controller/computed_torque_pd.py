@@ -34,7 +34,7 @@ import numpy as np
 import torch
 
 from network.constants import N_JOINTS, TORQUE_LIMITS
-from controller.model_loader import load_grey_box_model
+from controller.model_loader import load_friction_net, load_grey_box_model
 from controller.lyapunov_gains import DEFAULT_KP, DEFAULT_KD
 from pinocchio_baseline.rnea_wrapper import RneaBaseline
 
@@ -79,6 +79,7 @@ class ComputedTorquePDController:
         device: str = "cpu",
         kp: Optional[np.ndarray] = None,
         kd: Optional[np.ndarray] = None,
+        disable_residual: bool = False,
     ):
         """
         Initialize the controller.
@@ -98,13 +99,29 @@ class ComputedTorquePDController:
                 ``DEFAULT_KP`` from ``lyapunov_gains.py``.
             kd: (7, 7) derivative gain matrix.  If *None*, uses
                 ``DEFAULT_KD`` from ``lyapunov_gains.py``.
+            disable_residual: 2026-07-28 diagnostic-only flag (Stage 4 investigation
+                of the joint4/6/7 freeze). Default False preserves the validated
+                tau_cmd = tau_rnea + tau_res + tau_pd composition exactly. When
+                True, tau_res is forced to zero and the GreyBoxNet/FrictionNet are
+                never even called -- isolates whether the LEARNED model is a factor
+                in the freeze, as opposed to RNEA/PD/physics alone. Not used by any
+                default launch path; only set via pinn_controller_node's own
+                identically-named, identically-defaulted-False parameter.
         """
         # White-box: RNEA from URDF (pinocchio_baseline is never modified)
         self.rnea = RneaBaseline(urdf_path)
 
         # Learned residual: GreyBoxNet in eval mode, gradients disabled
         self.model = load_grey_box_model(checkpoint_path, device=device)
+        # 2026-07-27: the FrictionNet the checkpoint was JOINTLY trained with, if
+        # any. training/train.py's step_loss() composes the residual as
+        # tau_res = tau_res_grey + tau_res_fric, so omitting the friction term at
+        # inference evaluates a different model than the one that was validated
+        # (see load_friction_net's docstring). None when the checkpoint's own
+        # config.json says it was trained without one.
+        self.friction_net = load_friction_net(checkpoint_path, device=device)
         self.device = device
+        self.disable_residual = disable_residual
 
         # Payload mass
         self.delta = delta
@@ -167,7 +184,10 @@ class ComputedTorquePDController:
         ).squeeze(0)  # (7,)
 
         # --- 2. Learned residual (GreyBoxNet) ---
-        tau_res = self._predict_residual(q, qdot)  # (7,)
+        # 2026-07-28: diagnostic-only bypass (see disable_residual's docstring).
+        tau_res = (
+            np.zeros(N_JOINTS) if self.disable_residual else self._predict_residual(q, qdot)
+        )  # (7,)
 
         # --- 3. PD error correction ---
         e = q_des - q              # position error
@@ -179,6 +199,20 @@ class ComputedTorquePDController:
 
         # --- Hard safety clip to torque limits ---
         tau_cmd = np.clip(tau_cmd, -_TORQUE_LIMITS_NP, _TORQUE_LIMITS_NP)
+
+        # 2026-07-24 TEMPORARY DEBUG (Stage 3 investigation, remove once
+        # resolved): cache the unclipped per-term breakdown so a caller (see
+        # pinn_controller_node.py's [DEBUG e] log) can inspect tau_rnea/
+        # tau_res/tau_pd separately, not just the combined+clipped tau_cmd --
+        # needed to tell apart "PD term is genuinely near-zero despite a real
+        # e" from "residual/RNEA is cancelling a real PD contribution" from
+        # "clipping is silently discarding it" for panda_joint4/6/7, which
+        # show a large persistent e (~0.3 rad, unchanged for 10+ seconds)
+        # but zero measured displacement.
+        self.last_tau_rnea = tau_rnea
+        self.last_tau_res = tau_res
+        self.last_tau_pd = tau_pd
+        self.last_tau_cmd_unclipped = tau_rnea + tau_res + tau_pd
 
         return tau_cmd
 
@@ -193,13 +227,19 @@ class ComputedTorquePDController:
             qdot: (7,) joint velocities [rad/s].
 
         Returns:
-            tau_res: (7,) residual torque [Nm] as a numpy array.
+            tau_res: (7,) residual torque [Nm] as a numpy array. Includes the
+                FrictionNet term when the checkpoint was trained with one --
+                the same ``tau_res_grey + tau_res_fric`` composition
+                ``training/train.py``'s ``step_loss()`` used, so the deployed
+                model matches the validated one.
         """
         with torch.no_grad():
             q_t = torch.from_numpy(q).unsqueeze(0).float().to(self.device)
             qdot_t = torch.from_numpy(qdot).unsqueeze(0).float().to(self.device)
             delta_t = torch.tensor([[self.delta]], dtype=torch.float32, device=self.device)
             tau_res_t = self.model(q_t, qdot_t, delta_t)  # (1, 7)
+            if self.friction_net is not None:
+                tau_res_t = tau_res_t + self.friction_net(q_t, qdot_t, delta_t)
         return tau_res_t.squeeze(0).cpu().numpy()
 
     def update_payload(self, delta: float) -> None:

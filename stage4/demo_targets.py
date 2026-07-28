@@ -56,15 +56,40 @@ _TILTED_30 = np.array([
 # Typical reachable workspace: x in [0.3, 0.7], y in [-0.4, 0.4], z in [0.0, 0.6]
 # ---------------------------------------------------------------------------
 
+# 2026-07-23: flange-to-fingertip offset used to correct grasp_object below.
+# ArmMotionClient's IK target is panda_link8 (the flange), not the fingertip
+# contact point -- computed directly from panda_arm_mujoco.xml's own body
+# chain (all offsets along the flange's local Z, which stays approach-axis-
+# aligned since the hand's mounting quat is a pure Z-axis twist):
+#   panda_link8 -> panda_hand              0.107   m  (body pos, line ~303)
+#   panda_hand  -> panda_leftfinger origin  0.0584  m  (body pos, line ~311)
+#   finger origin -> fingertip pad contact  0.0445  m  (mean of the 5
+#     fingertip_pad_collision box z-centers/spans, line ~73-87; 0.0445 is
+#     both pad_1's own center AND the midpoint of the full pad span
+#     0.036-0.053, so it's a reasonable "grasp contact height" regardless
+#     of which interpretation is used)
+#   total: 0.107 + 0.0584 + 0.0445 = 0.2099 m
+# This is a STATIC geometric calculation, not yet empirically validated
+# live (no live ROS2/MuJoCo access during this prep pass) -- expect it to
+# get this close but possibly need a small final live-tuned correction.
+_FLANGE_TO_FINGERTIP_Z = 0.2099
+
 TARGETS: dict[str, np.ndarray] = {
     # The actual grasp_object cube added to the MuJoCo scene 2026-07-22
     # (mujoco/franka_emika_panda/panda_arm_mujoco.xml): a 4cm cube resting on
-    # the floor at x=0.5, y=0, center height z=0.02. NOTE: z here targets the
-    # tip_link (panda_link8, the flange -- see arm_motion_client.py's own
-    # docstring), not the fingertip TCP, so this will very likely need
-    # recalibrating once a real pick is actually attempted and the offset
-    # between flange and fingertip is empirically visible; not resolved yet.
-    "grasp_object": _pose(x=0.5, y=0.0, z=0.02, rotation=_TOP_DOWN),
+    # the floor at x=0.5, y=0, center height z=0.02. z here is the panda_link8
+    # (flange) IK target, corrected by _FLANGE_TO_FINGERTIP_Z above so the
+    # FINGERTIP contact point (not the flange itself) lands at the cube's
+    # center height. Before this correction (raw z=0.02 for the flange), the
+    # commanded fingertip position was ~0.02 - 0.2099 = -0.19m -- 19cm BELOW
+    # the floor, physically unreachable -- which is the most likely root cause
+    # of both the "arm never gets near the object" symptom AND the severe
+    # (0.2+ rad, plateaued, not shrinking) joint tracking errors seen
+    # 2026-07-23 during the approach-phase move: MoveIt2's IK can still
+    # "solve" for the flange alone to reach z=0.02 (a valid point on its own),
+    # but likely only via a contorted, near-limit configuration that Stage 3's
+    # controller genuinely cannot hold, not a normal PD steady-state droop.
+    "grasp_object": _pose(x=0.5, y=0.0, z=0.02 + _FLANGE_TO_FINGERTIP_Z, rotation=_TOP_DOWN),
 
     # A small box placed roughly in front of the robot at table height
     "box_center": _pose(x=0.45, y=0.0,  z=0.12, rotation=_TOP_DOWN),

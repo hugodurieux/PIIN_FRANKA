@@ -80,6 +80,17 @@ def generate_launch_description():
         pinn_franka_controller_share, "urdf", "panda_mujoco.urdf.xacro"
     )
 
+    # 2026-07-28: project-local override of the default
+    # moveit_resources_panda_moveit_config initial_positions.yaml (see
+    # panda_mujoco.ros2_control.xacro's initial_positions_file xacro:arg,
+    # and this new file's own header comment for the full why -- the
+    # system default disagreed with panda_arm_mujoco.xml's own 'home'
+    # keyframe on panda_joint2/4/7, joint7 by a full sign flip, discovered
+    # during the panda_joint4/6/7 freeze investigation).
+    initial_positions_file = os.path.join(
+        pinn_franka_controller_share, "config", "initial_positions.yaml"
+    )
+
     moveit_config = (
         MoveItConfigsBuilder("moveit_resources_panda")
         .robot_description(
@@ -87,6 +98,7 @@ def generate_launch_description():
             mappings={
                 "headless": LaunchConfiguration("headless"),
                 "arm_control_mode": LaunchConfiguration("arm_control_mode"),
+                "initial_positions_file": initial_positions_file,
             },
         )
         .robot_description_semantic(file_path="config/panda.srdf")

@@ -401,6 +401,24 @@ class MuJoCoGripperController(BaseGripperController):
             return False
         return bool(result.reached_goal)
 
+    # 2026-07-23: found live -- commanding position=width/2.0 exactly (the object's own
+    # expected surface) produces ~zero steady-state position error once the fingers reach
+    # it, and this actuator is force-controlled only through that error (force = kp *
+    # error, see the MJCF actuator's own comment): zero error means ~zero real squeeze
+    # force, regardless of kp. A grasp() call reported success (final width landed in
+    # tolerance) but the object was NOT actually held through a subsequent lift. Fix:
+    # deliberately command GRASP_OVERTRAVEL_M past the object's expected surface. Since
+    # the object physically blocks the fingers from reaching that commanded position, a
+    # persistent position error (and therefore real, sustained squeeze force) results
+    # instead of the fingers just touching and stopping. This does NOT change what counts
+    # as "success" below -- the real settled width still lands near the object's true
+    # size regardless of how far past it we command, so the existing width/epsilon check
+    # (unchanged) still evaluates against the true contact width. 5mm chosen to pair with
+    # the MJCF actuator's kp=200 (raised from 30 in the same fix, see that file's own
+    # comment): 200 N/m * 0.005 m = 1.0N per finger, ~3.2x the ~0.31N per side estimated
+    # necessary to hold a 64g object by friction. NOT YET LIVE-VALIDATED.
+    GRASP_OVERTRAVEL_M = 0.01  # total (both fingers); 0.005 m per finger
+
     def grasp(
         self,
         width: float,
@@ -410,11 +428,26 @@ class MuJoCoGripperController(BaseGripperController):
         epsilon_outer: float,
         timeout: float = 5.0,
     ) -> bool:
-        result = self._send_goal_sync(position=width / 2.0, max_effort=force, timeout=timeout)
+        commanded_width = max(0.0, width - self.GRASP_OVERTRAVEL_M)
+        result = self._send_goal_sync(position=commanded_width / 2.0, max_effort=force, timeout=timeout)
         if result is None:
             self._last_grasp_succeeded = False
             return False
-        final_width = 2.0 * result.position
+        # 2026-07-23: don't trust result.position as the final settled width --
+        # same class of staleness already found and fixed in read() (2026-07-22):
+        # the action can report "stalled"/reached using whatever position it
+        # sampled at that exact control cycle, which may be mid-settle right
+        # after contact, not the true rest width a moment later. Live evidence:
+        # a grasp() call against the real cube reported failure using its own
+        # in-action result.position, but an immediate read() right after (which
+        # already spins for a real ~0.1s window, see read()'s own comment)
+        # showed width=0.048m, comfortably inside the requested [0.035, 0.050]
+        # tolerance band -- i.e. the grasp had actually succeeded, grasp() just
+        # checked too early. Reusing self.read() here (instead of duplicating
+        # its spin-timing logic) fixes this.
+        final_width = self.read().width
+        if np.isnan(final_width):
+            final_width = 2.0 * result.position
         success = (width - epsilon_inner) <= final_width <= (width + epsilon_outer)
         self._last_grasp_succeeded = success
         return success

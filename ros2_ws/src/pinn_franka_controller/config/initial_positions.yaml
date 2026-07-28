@@ -1,0 +1,38 @@
+# Stage 2/3/4 -- project-local override of moveit_resources_panda_moveit_config's
+# own config/initial_positions.yaml, added 2026-07-28.
+#
+# WHY: ros2_control's state_interface "position" initial_value for each arm
+# joint (declared in panda_mujoco.ros2_control.xacro) was being seeded from
+# the SYSTEM-INSTALLED moveit_resources_panda_moveit_config's own generic
+# initial_positions.yaml (a "fake system"/mock_components-oriented default),
+# which does NOT match this project's own MJCF 'home' keyframe
+# (mujoco/franka_emika_panda/panda_arm_mujoco.xml) for panda_joint2 (0 vs
+# -0.785), panda_joint4 (-1.57079 vs -2.356), and panda_joint7 (-0.7853 vs
+# +0.785 -- a SIGN FLIP, not just an offset). This discrepancy was flagged
+# once before (an earlier model-file audit session) and dismissed as
+# "cosmetic," but was re-examined 2026-07-28 during the panda_joint4/6/7
+# freeze investigation (see SESSION.md) after a standalone, ROS2-free MuJoCo
+# script proved joint4 moves completely normally when driven directly,
+# ruling out every physics/model-level explanation and pointing at
+# something in the ros2_control/mujoco_ros2_control command pathway
+# specifically. This file is a cheap, reversible, project-scoped fix for one
+# concrete piece of that pathway (removes it as a variable) -- it did not
+# touch the shared system package moveit_resources_panda_moveit_config ships
+# (deliberately: that package may be used by other examples on this
+# machine). NOT YET CONFIRMED to resolve the freeze on its own; the
+# correlation with the frozen joint set is not perfect (panda_joint2 also
+# mismatches here but has never been observed frozen; panda_joint6 matches
+# closely here but IS one of the three frozen joints) -- treat this as
+# eliminating one real, previously-dismissed discrepancy, not as a
+# confirmed root-cause fix, until live-tested.
+#
+# Values copied exactly from panda_arm_mujoco.xml's <keyframe> qpos (first 7
+# values, panda_joint1..7 in that order).
+initial_positions:
+  panda_joint1: 0.0
+  panda_joint2: 0.0
+  panda_joint3: 0.0
+  panda_joint4: -1.57079
+  panda_joint5: 0.0
+  panda_joint6: 1.57079
+  panda_joint7: -0.7853

@@ -96,6 +96,26 @@ class PinnControllerNode(Node):
         self.declare_parameter("delta", 0.0)
         self.declare_parameter("control_rate_hz", 1000)
         self.declare_parameter("use_lyapunov_gains", True)
+        # 2026-07-24 TEMPORARY DEBUG (Stage 3 investigation, remove once
+        # resolved): panda_joint4/6/7 show a large, real, persistent position
+        # error under active tracking with substantial correctly-signed PD
+        # torque computed, yet zero measured displacement -- confirmed NOT a
+        # collision (identical freeze with grasp_object moved 2.5m out of
+        # reach). Default -1.0 preserves existing behavior exactly (uses
+        # DEFAULT_KP/DEFAULT_KD or MANUAL_PD_KP/KD as before). Set > 0 (e.g.
+        # 8.0) via --ros-args -p gain_safety_margin_override:=8.0 to instead
+        # recompute Kp/Kd from DEFAULT_ERROR_BOUND at that safety_margin, as a
+        # live empirical test of whether a much stronger PD push can move
+        # these joints at all -- distinguishes "gain is simply too weak" from
+        # "something else entirely is preventing motion regardless of gain."
+        self.declare_parameter("gain_safety_margin_override", -1.0)
+        # 2026-07-28 DIAGNOSTIC (Stage 4 investigation of the joint4/6/7
+        # freeze): forwards to ComputedTorquePDController's disable_residual.
+        # Default False preserves the validated tau_cmd composition exactly.
+        # Set true via --ros-args -p disable_residual:=true to run RNEA+PD
+        # only (learned GreyBoxNet/FrictionNet never called), isolating
+        # whether the trained residual model is a factor in the freeze.
+        self.declare_parameter("disable_residual", False)
 
         self._urdf_path: str = (
             self.get_parameter("urdf_path").get_parameter_value().string_value
@@ -111,6 +131,14 @@ class PinnControllerNode(Node):
         )
         self._use_lyapunov_gains: bool = (
             self.get_parameter("use_lyapunov_gains").get_parameter_value().bool_value
+        )
+        self._gain_safety_margin_override: float = (
+            self.get_parameter("gain_safety_margin_override")
+            .get_parameter_value()
+            .double_value
+        )
+        self._disable_residual: bool = (
+            self.get_parameter("disable_residual").get_parameter_value().bool_value
         )
 
         # -----------------------------------------------------------------
@@ -201,12 +229,34 @@ class PinnControllerNode(Node):
             DEFAULT_KD,
             MANUAL_PD_KP,
             MANUAL_PD_KD,
+            compute_lyapunov_gains,
         )
+        from controller.lyapunov_gains import DEFAULT_ERROR_BOUND
 
         kp, kd = (DEFAULT_KP, DEFAULT_KD) if self._use_lyapunov_gains else (
             MANUAL_PD_KP,
             MANUAL_PD_KD,
         )
+
+        if self._gain_safety_margin_override > 0:
+            kp, kd = compute_lyapunov_gains(
+                DEFAULT_ERROR_BOUND, safety_margin=self._gain_safety_margin_override
+            )
+            self.get_logger().warn(
+                "gain_safety_margin_override=%.2f active -- using recomputed "
+                "Kp/Kd (diag Kp=%s) instead of the %s default. TEMPORARY "
+                "debug override, not the project's validated gains.",
+                self._gain_safety_margin_override,
+                np.diag(kp).round(2).tolist(),
+                "Lyapunov" if self._use_lyapunov_gains else "manual",
+            )
+
+        if self._disable_residual:
+            self.get_logger().warn(
+                "disable_residual=true active -- the learned GreyBoxNet/FrictionNet "
+                "residual will NEVER be called, tau_cmd = tau_rnea + tau_pd only. "
+                "TEMPORARY diagnostic override, not the project's validated model."
+            )
 
         try:
             self._controller = ComputedTorquePDController(
@@ -216,6 +266,7 @@ class PinnControllerNode(Node):
                 device="cpu",
                 kp=kp,
                 kd=kd,
+                disable_residual=self._disable_residual,
             )
         except Exception:
             self.get_logger().error(
@@ -246,8 +297,13 @@ class PinnControllerNode(Node):
             self.get_logger().warn("Received empty trajectory -- ignoring.")
             return
 
+        # expected_joint_names=_JOINT_NAMES: reorder by name instead of
+        # trusting positional order -- see TrajectoryInterpolator's own
+        # 2026-07-23 docstring note for why (the same class of bug already
+        # fixed once in this file's own _arm_indices(), just on the
+        # trajectory-input side instead of /joint_states).
         self._trajectory_interpolator = TrajectoryInterpolator(
-            msg, n_joints=_N_JOINTS
+            msg, n_joints=_N_JOINTS, expected_joint_names=_JOINT_NAMES
         )
         self._trajectory_stamp = self.get_clock().now()
         self.get_logger().info(
@@ -353,10 +409,62 @@ class PinnControllerNode(Node):
             [self._joint_state.velocity[i] for i in idx], dtype=np.float64
         )
 
+        # 2026-07-24 TEMPORARY DEBUG (Stage 3 investigation, remove once
+        # resolved): panda_joint4/6/7 show literally zero net displacement
+        # under an active trajectory regardless of how large or small the
+        # commanded target is (ruled out: self-collision, floor/cube contact,
+        # joint-name reordering both directions, actuator ranges, effort
+        # controller joint order -- all confirmed correct by code audit).
+        # This logs the actual q_des/q_meas/error the controller sees for
+        # those 3 joints at runtime, to distinguish "e is genuinely large but
+        # the PD/gain isn't producing motion from it" (a control-law issue)
+        # from "e is mysteriously near zero" (a data-delivery issue upstream
+        # of this point) -- can't be told apart from the existing move_to()
+        # logs, which only show the FINAL target/current, not what the
+        # controller computed at each tick.
+        self.get_logger().info(
+            "[DEBUG e] "
+            f"j4: q_des={q_des[3]:+.4f} q_meas={q_meas[3]:+.4f} e={q_des[3]-q_meas[3]:+.4f} "
+            f"qdot={qdot_meas[3]:+.5f} | "
+            f"j6: q_des={q_des[5]:+.4f} q_meas={q_meas[5]:+.4f} e={q_des[5]-q_meas[5]:+.4f} "
+            f"qdot={qdot_meas[5]:+.5f} | "
+            f"j7: q_des={q_des[6]:+.4f} q_meas={q_meas[6]:+.4f} e={q_des[6]-q_meas[6]:+.4f} "
+            f"qdot={qdot_meas[6]:+.5f}",
+            throttle_duration_sec=1.0,
+        )
+
         # --- Compute torques ------------------------------------------
         torques = self._compute_torques(
             q_meas, qdot_meas, q_des, qdot_des, qddot_des
         )
+
+        # 2026-07-24 TEMPORARY DEBUG (Stage 3 investigation, remove once
+        # resolved): breakdown of the combined torque into its 3 components
+        # (see computed_torque_pd.py's last_tau_rnea/last_tau_res/last_tau_pd)
+        # for joints 4/6/7 -- to see whether the residual is cancelling a
+        # real PD contribution, whether tau_pd itself is near-zero despite a
+        # real logged e (contradicting the [DEBUG e] log above), or whether
+        # the unclipped total is large (real torque wanted) vs the clipped
+        # tau_cmd actually published (would mean clipping is silently
+        # discarding it -- unlikely given prior torque captures stayed well
+        # under TORQUE_LIMITS, but not yet directly compared side by side).
+        if self._controller is not None and hasattr(self._controller, "last_tau_pd"):
+            rnea, res, pd_, unclipped = (
+                self._controller.last_tau_rnea,
+                self._controller.last_tau_res,
+                self._controller.last_tau_pd,
+                self._controller.last_tau_cmd_unclipped,
+            )
+            self.get_logger().info(
+                "[DEBUG tau] "
+                f"j4: rnea={rnea[3]:+.3f} res={res[3]:+.3f} pd={pd_[3]:+.3f} "
+                f"unclipped={unclipped[3]:+.3f} clipped={torques[3]:+.3f} | "
+                f"j6: rnea={rnea[5]:+.3f} res={res[5]:+.3f} pd={pd_[5]:+.3f} "
+                f"unclipped={unclipped[5]:+.3f} clipped={torques[5]:+.3f} | "
+                f"j7: rnea={rnea[6]:+.3f} res={res[6]:+.3f} pd={pd_[6]:+.3f} "
+                f"unclipped={unclipped[6]:+.3f} clipped={torques[6]:+.3f}",
+                throttle_duration_sec=1.0,
+            )
 
         # --- Publish --------------------------------------------------
         self._publish_torques(torques)

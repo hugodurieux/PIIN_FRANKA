@@ -65,7 +65,37 @@
         <geom type="mesh" contype="0" conaffinity="0" group="2"/>
       </default>
       <default class="panda/collision">
-        <geom type="mesh" group="3"/>
+        <!-- 2026-07-24 ROOT-CAUSE TEST + CANDIDATE FIX for the panda_joint4/6/7 freeze.
+             conaffinity="0" (contype stays at its default 1) DISABLES all robot
+             self-collision (every arm/hand/finger collision geom stops colliding with
+             every other robot collision geom) WITHOUT touching robot-vs-floor or
+             robot-vs-grasp_object contact:
+               contact happens iff (contype_A & conaffinity_B) || (contype_B & conaffinity_A).
+               robot-robot : (1 & 0) || (1 & 0) = 0  -> NO self-collision  (the fix)
+               finger-cube : (1 & 1) || (1 & 0) = 1  -> fingers STILL grasp the cube
+               robot-floor : (1 & 1) || (1 & 0) = 1  -> arm STILL collides the floor
+             (floor and grasp_object keep MuJoCo's default contype=1/conaffinity=1.)
+
+             Why this is the prime suspect: the <contact><exclude> block below mirrors
+             config/panda.srdf's disable_collisions list exactly, but that list was
+             generated against the robot's FINE collision meshes. MuJoCo collides CONVEX
+             HULLS, which are fatter, so pairs the SRDF never needed (notably
+             panda_hand / panda_leftfinger / panda_rightfinger vs link5, present in the
+             body tree but absent from the exclude block) can interpenetrate at folded
+             wrist poses. With <option impratio="10"/> those spurious contacts become
+             very stiff, absorbing commanded torque and pinning exactly the distal joints
+             (4/6/7) that would drive the hand into the forearm, while the roll joint (5)
+             and the proximal joints (1/2/3) stay free: the exact observed signature.
+
+             DECISIVE: relaunch and rerun the pick. If joints 4/6/7 now move, the freeze
+             WAS robot self-collision (this line is then a valid permanent fix; MoveIt2
+             already guarantees self-collision-free PLANS, so disabling MuJoCo self-contact
+             only matters if execution drifts off-plan, which is acceptable for this demo).
+             If they STILL freeze, robot self-collision is conclusively refuted: revert
+             this one attribute (delete conaffinity="0") and look elsewhere (the plugin's
+             effort path is already proven correct for all 7 joints; next suspect is the
+             finger-vs-FLOOR case, testable by commanding a high free-space pose). -->
+        <geom type="mesh" group="3" conaffinity="0"/>
         <!-- Fingertip pad collision boxes, values as-is from google-deepmind/mujoco_menagerie's
              franka_emika_panda/panda.xml (the WITH-hand variant): a small set of boxes
              approximating the rubberized fingertip pad's actual contact patch, layered on top
@@ -350,6 +380,29 @@
          starts exactly where placed, MuJoCo integrates gravity/contact normally from there
          (it will simply rest on the floor at sim start, already at its listed pos since z=0.02
          already accounts for the half-height sitting on the z=0 floor). -->
+    <!-- 2026-07-23: the "cube moved 2m out of reach" diagnostic (this comment
+         and the temporary pos value it described) confirmed the object WAS
+         the cause of the reproducible panda_joint4/6/7 freeze: with the cube
+         entirely out of reach, home->pre-approach converged cleanly on the
+         first try, every time, with no freeze. Reverted to the real position
+         below. Root cause: the registered MoveIt2 collision box used the
+         object's bare 0.04m size (see test_grasp_pick.py's add_collision_box
+         call) with no safety margin; MoveIt2 plans a path clearing that
+         box, but Stage 3's actual tracking error (a few cm, well-established
+         throughout this session) can drift the REAL executed path just far
+         enough off-plan to still clip the real physical cube in MuJoCo,
+         producing the exact "torque commanded, contact absorbs it, zero
+         motion" signature. Fixed by giving the registered box real safety
+         margin (test_grasp_pick.py), not by changing anything here. -->
+    <!-- 2026-07-28: re-tested the 2026-07-23 comment above (cube 2.5m out
+         of reach) under clean, confound-free, fully isolated conditions
+         (pinn_controller_node stopped, verified via `ros2 node list`;
+         raw 40 Nm to joint4 alone). RESULT: joint4 still did not move
+         (position unchanged to 4+ decimal places from home). This
+         CONTRADICTS the 2026-07-23 comment's claim and CONFIRMS
+         SESSION.md's 2026-07-24 account instead: the cube is not the
+         cause of this specific joint4 immobility. Reverted to the real
+         position below. -->
     <body name="grasp_object" pos="0.5 0 0.02">
       <freejoint/>
       <geom type="box" size="0.02 0.02 0.02" density="1000" friction="1 0.005 0.0001" rgba="0.8 0.25 0.1 1"/>
@@ -409,8 +462,31 @@
          top of the existing passive damping=1) gives a total of 4, comfortably overdamped
          for a smooth, non-oscillatory first working version. Revisit if grasping needs
          faster closing than this produces. panda_finger_joint2 has no actuator of its own —
-         see the <equality> constraint below. -->
-    <position name="panda_finger_joint1_position" joint="panda_finger_joint1" kp="30" kv="3" ctrlrange="0 0.04" forcerange="-20 20"/>
+         see the <equality> constraint below.
+
+         2026-07-23 correction: kp=30 was tuned purely against free-space open/close
+         oscillation (above) and never validated for actually holding an object. Live
+         testing of a real pick against grasp_object (a 64g cube) showed the gripper
+         registering a position/tolerance "success" (fingers stopped near the object's own
+         width) but the object was NOT actually lifted with the arm. Root cause: at kp=30,
+         even 5mm of commanded overtravel into a rigid object only generates
+         30*0.005=0.15N of squeeze force per finger, well under the ~0.31N per side needed
+         to hold a 64g object by friction (mu=1, 2-finger grip, with gravity alone, no
+         margin for lift acceleration). Raised to kp=200: still comfortably under the
+         critical-damping ceiling for the existing total damping of 4 (passive 1 + kv 3):
+         c=4 implies a ceiling of kp <= c^2/(4*m) = 16/(4*0.015) = 266.7, so 200 stays
+         overdamped (75% of ceiling), should not reintroduce the original oscillation bug,
+         while giving 200*0.005=1.0N per finger at the same 5mm overtravel, ~3.2x the
+         minimum needed. See MuJoCoGripperController.grasp() (stage4/gripper_controller.py)
+         for the matching change: it now deliberately commands a position past the object's
+         expected surface (not exactly at it) so this stiffness actually gets used;
+         commanding exactly the object's width produces ~zero position error and therefore
+         ~zero force regardless of kp. NOT YET LIVE-VALIDATED (this fix was prepared without
+         simulator access); if grip still fails, check whether the cube is being pushed
+         instead of held (kp still too low or forcerange=20 clamp too tight) or whether it's
+         now oscillating again (kp too high after all, reduce and re-derive the ceiling
+         above for whatever new kv is used). -->
+    <position name="panda_finger_joint1_position" joint="panda_finger_joint1" kp="200" kv="3" ctrlrange="0 0.04" forcerange="-20 20"/>
   </actuator>
 
   <equality>
@@ -436,6 +512,55 @@
     <exclude body1="link4" body2="link5"/>
     <exclude body1="link5" body2="link6"/>
     <exclude body1="link6" body2="link7"/>
+
+    <!-- 2026-07-23: the "Adjacent" excludes above were only HALF of
+         config/panda.srdf's disable_collisions list. The rest of that list (the
+         "Never" pairs the MoveIt Setup Assistant found never collide in any valid
+         configuration, plus the hand/finger "Adjacent"/"Default" pairs) was never
+         mirrored into MuJoCo. MuJoCo builds its collision geometry from CONVEX
+         HULLS of the meshes, which are looser than the finer meshes MoveIt samples
+         against, so pairs MoveIt calls "Never" can still interpenetrate here at the
+         folded "home" pose. With every collision geom at the default contype=1/
+         conaffinity=1 and no exclude, those spurious contacts generate large,
+         persistent normal forces that pin exactly the distal joints (4, 6, 7) whose
+         motion would drive the newly-added hand/finger collision geometry (added
+         this same session in commit 4b204d0, which left this block untouched) into
+         the forearm, while joint5 (a roll about the contact line) stays free. This
+         completes the mirror of panda.srdf. Arm-link body names are link0..link7
+         here (SRDF uses panda_link0..7). Finger-vs-arm pairs are made symmetric
+         across BOTH fingers (SRDF only sampled one side per pair); this can never
+         harm grasping since grasp_object is a separate, non-excluded body the
+         fingers still collide with normally. -->
+    <exclude body1="link0" body2="link2"/>
+    <exclude body1="link0" body2="link3"/>
+    <exclude body1="link0" body2="link4"/>
+    <exclude body1="link1" body2="link3"/>
+    <exclude body1="link1" body2="link4"/>
+    <exclude body1="link2" body2="link4"/>
+    <exclude body1="link2" body2="link6"/>
+    <exclude body1="link3" body2="link5"/>
+    <exclude body1="link3" body2="link6"/>
+    <exclude body1="link3" body2="link7"/>
+    <exclude body1="link4" body2="link6"/>
+    <exclude body1="link4" body2="link7"/>
+
+    <exclude body1="panda_hand" body2="link3"/>
+    <exclude body1="panda_hand" body2="link4"/>
+    <exclude body1="panda_hand" body2="link6"/>
+    <exclude body1="panda_hand" body2="link7"/>
+
+    <exclude body1="panda_leftfinger" body2="link3"/>
+    <exclude body1="panda_leftfinger" body2="link4"/>
+    <exclude body1="panda_leftfinger" body2="link6"/>
+    <exclude body1="panda_leftfinger" body2="link7"/>
+    <exclude body1="panda_rightfinger" body2="link3"/>
+    <exclude body1="panda_rightfinger" body2="link4"/>
+    <exclude body1="panda_rightfinger" body2="link6"/>
+    <exclude body1="panda_rightfinger" body2="link7"/>
+
+    <exclude body1="panda_hand" body2="panda_leftfinger"/>
+    <exclude body1="panda_hand" body2="panda_rightfinger"/>
+    <exclude body1="panda_leftfinger" body2="panda_rightfinger"/>
   </contact>
 
   <keyframe>
@@ -444,10 +569,23 @@
          from /joint_states' topic ordering, which sorts alphabetically and puts the
          fingers FIRST — confirmed live). 0.04 each = fully open, a safer default starting
          state for a future grasp demo than closed.
+         + 7 more values for grasp_object's <freejoint/> (added later, same session, right
+         after the fingers in body-tree order): 3 position + 4 quaternion (MuJoCo order
+         w x y z), matching that body's own pos="0.5 0 0.02" with identity orientation.
+         Found live 2026-07-23: an XML-specified <key qpos="..."/> shorter than the model's
+         actual nq gets the missing trailing values padded with ZERO by MuJoCo's compiler,
+         not the body's real starting pose, so reset_world with this keyframe was silently
+         teleporting the cube to the world origin with a degenerate all-zero quaternion
+         (w=0), not just resetting the arm. This is why the cube "disappeared" after a
+         reset_world call. Any future body added to this model MUST also get its DOF count
+         appended here, or the same bug recurs silently (loads fine at first launch, since
+         initial state comes from each body's own pos/quat, not this keyframe; only
+         reset_world is affected).
          ctrl: 7 arm values (unchanged, 0 ctrl on a motor actuator is 0 torque — holding
          "home" against gravity is pinn_controller_node's _publish_safe_fallback's job, not
          this keyframe's) + 1 new value for the finger's <position> actuator, matching its
-         qpos so it doesn't snap on startup. -->
-    <key name="home" qpos="0 0 0 -1.57079 0 1.57079 -0.7853 0.04 0.04" ctrl="0 0 0 0 0 0 0 0.04"/>
+         qpos so it doesn't snap on startup. grasp_object has no actuator (free body), so
+         ctrl's length is unaffected by the freejoint addition. -->
+    <key name="home" qpos="0 0 0 -1.57079 0 1.57079 -0.7853 0.04 0.04 0.5 0 0.02 1 0 0 0" ctrl="0 0 0 0 0 0 0 0.04"/>
   </keyframe>
 </mujoco>
