@@ -74,6 +74,29 @@ _JOINT_STATE_TIMEOUT_SEC = 0.1
 # Maximum age (seconds) for a trajectory before the node stops tracking it.
 _TRAJECTORY_STALE_SEC = 2.0
 
+# --- Safe-fallback hold gains (see _publish_safe_fallback) -----------------
+# Fractions of the ACTIVE tracking gains, so these follow any
+# gain_safety_margin_override rather than silently diverging from it.
+# Deliberately below 1.0: the fallback's job is to sit still safely, not to
+# track, and the boosted (margin 4.0) wrist Kd already sits close to the 12 Nm
+# limit with visible chatter at stretched poses -- see SESSION.md 2026-07-29.
+_HOLD_KP_SCALE = 0.5
+_HOLD_KD_SCALE = 0.5
+# The hold error is clamped before it reaches Kp, so a large drift (or a
+# world reset that teleports the arm far from the latched pose) produces a
+# bounded restoring torque instead of a full-authority slew back to it.
+# 0.15 rad against a scaled Kp keeps the restoring term well inside the
+# per-joint limits, so the clip in _publish_torques() is a backstop and not
+# the thing doing the limiting.
+_HOLD_MAX_ERR_RAD = 0.15
+# A per-tick jump larger than this means the arm was TELEPORTED, not moved:
+# the fastest Panda joint is 2.61 rad/s, so even at a slow 100 Hz observation
+# rate a real motion is <= 0.026 rad per tick. A ResetWorld call is the usual
+# cause. The latched hold pose is then stale, and holding it would mean quietly
+# pulling the arm back off the pose the reset just established -- so re-latch
+# instead. Set ~2x above the fastest physically reachable step.
+_TELEPORT_STEP_RAD = 0.05
+
 
 class PinnControllerNode(Node):
     """ROS2 node that runs the PINN torque controller at a configurable rate.
@@ -153,6 +176,15 @@ class PinnControllerNode(Node):
         self._trajectory_interpolator: TrajectoryInterpolator | None = None
         self._trajectory_stamp: Time | None = None
         self._controller = None  # Will hold the Stage 3 controller instance
+        # Pose latched on ENTRY to the safe fallback, so the fallback holds a
+        # fixed pose instead of following the arm wherever it drifts. Cleared
+        # whenever a fresh trajectory arrives, so the next fallback entry
+        # re-latches at wherever that trajectory actually ended.
+        # See _publish_safe_fallback() for why this exists.
+        self._hold_q: np.ndarray | None = None
+        # Previous tick's measured q, used ONLY to distinguish a teleport
+        # (large single-tick jump) from ordinary drift away from _hold_q.
+        self._prev_fallback_q: np.ndarray | None = None
 
         # -----------------------------------------------------------------
         # Attempt to load the Stage 3 controller
@@ -311,6 +343,11 @@ class PinnControllerNode(Node):
             msg, n_joints=_N_JOINTS, expected_joint_names=_JOINT_NAMES
         )
         self._trajectory_stamp = self.get_clock().now()
+        # Drop any latched hold pose: the arm is about to be commanded again,
+        # and the NEXT fallback entry must latch wherever this trajectory
+        # leaves it, not where the previous one did.
+        self._hold_q = None
+        self._prev_fallback_q = None
         self.get_logger().info(
             f"New trajectory received with {len(msg.points)} points."
         )
@@ -534,15 +571,42 @@ class PinnControllerNode(Node):
         self._publish_torques(np.zeros(_N_JOINTS, dtype=np.float64))
 
     def _publish_safe_fallback(self) -> None:
-        """Publish gravity-compensation torque at the last known joint
-        position (qdot=0, qddot=0), instead of literal zero.
+        """Hold the arm safely when no usable trajectory is available.
 
-        Zero torque with no drive holding the arm up causes it to free-fall
-        under gravity while waiting for a trajectory. RNEA at qdot=qddot=0
-        reduces to exactly the gravity term, so this holds position without
-        needing any tracking error or trajectory. Falls back to literal zero
-        if the controller (and therefore RNEA) never loaded, or no joint
-        state has been observed yet.
+        Publishes gravity compensation PLUS a damped hold about a latched
+        pose, instead of literal zero.
+
+        2026-07-29 correction. This function used to publish gravity
+        compensation ALONE, and its docstring claimed that "holds position
+        without needing any tracking error". That claim is wrong, and the
+        error matters:
+
+          - Cancelling gravity does not hold a pose, it makes the arm
+            NEUTRALLY BUOYANT. There is no restoring term and no dissipation,
+            so any disturbance -- model error, contact, the discontinuity of a
+            world reset -- produces drift that nothing opposes.
+          - Worse, the gravity term was recomputed at the CURRENT measured q
+            every tick, so the fallback followed the arm wherever it drifted
+            and re-established equilibrium there. It could not pull back
+            towards anything, by construction.
+
+        Fixed by adding the two terms that were missing:
+
+          - Kd damping (the safety-critical half). Purely dissipative: it can
+            only remove kinetic energy, never add it, so it cannot drive the
+            arm anywhere on its own.
+          - Kp about `self._hold_q`, latched on ENTRY to the fallback, against
+            a CLAMPED error (_HOLD_MAX_ERR_RAD). The clamp is what keeps this
+            from becoming the very failure mode it is meant to prevent: with
+            an unclamped error, an arm that has drifted (or been teleported by
+            a world reset) would be slammed back to the latched pose at full
+            torque.
+
+        Both gains are fractions of the active tracking gains, so a
+        gain_safety_margin_override carries through here too.
+
+        Falls back to literal zero if the controller (and therefore RNEA)
+        never loaded, or no joint state has been observed yet.
         """
         if self._controller is None or self._joint_state is None:
             self._publish_zero_torques()
@@ -555,6 +619,39 @@ class PinnControllerNode(Node):
         q = np.array(
             [self._joint_state.position[i] for i in idx], dtype=np.float64
         )
+        # Velocity is read defensively here, unlike the main control path:
+        # the fallback is exactly the state reached when something upstream is
+        # already wrong, so a short/absent velocity array must degrade to
+        # "no damping" rather than raise inside the safety path.
+        if len(self._joint_state.velocity) >= max(idx) + 1:
+            qdot = np.array(
+                [self._joint_state.velocity[i] for i in idx], dtype=np.float64
+            )
+        else:
+            qdot = np.zeros(_N_JOINTS, dtype=np.float64)
+
+        # Latch the pose to hold, once, on entry to the fallback -- and
+        # re-latch if the arm was teleported out from under it (a world reset
+        # while the fallback is engaged is the normal way this happens).
+        teleported = (
+            self._hold_q is not None
+            and np.any(np.abs(q - self._hold_q) > _TELEPORT_STEP_RAD)
+            and self._prev_fallback_q is not None
+            and np.any(
+                np.abs(q - self._prev_fallback_q) > _TELEPORT_STEP_RAD
+            )
+        )
+        if self._hold_q is None or teleported:
+            self._hold_q = q.copy()
+            self.get_logger().info(
+                ("Safe fallback re-latched after a teleport (world reset?) "
+                 if teleported else "Safe fallback engaged -- ")
+                + "holding at q="
+                + np.array2string(q, precision=4, suppress_small=True)
+                + " with gravity compensation + damped hold."
+            )
+        self._prev_fallback_q = q.copy()
+
         zeros = np.zeros(_N_JOINTS, dtype=np.float64)
         try:
             tau_grav = self._controller.rnea.compute_tau_theoretical(
@@ -572,7 +669,29 @@ class PinnControllerNode(Node):
             self._publish_zero_torques()
             return
 
-        self._publish_torques(tau_grav)
+        # Damped hold about the latched pose. Sign convention matches
+        # ComputedTorquePDController.compute(): e = q_des - q_meas, and
+        # edot = qdot_des - qdot_meas = -qdot_meas here (the hold pose is
+        # static), so the damping term enters negatively.
+        e_hold = np.clip(
+            self._hold_q - q, -_HOLD_MAX_ERR_RAD, _HOLD_MAX_ERR_RAD
+        )
+        try:
+            tau_hold = (
+                _HOLD_KP_SCALE * (self._controller.kp @ e_hold)
+                - _HOLD_KD_SCALE * (self._controller.kd @ qdot)
+            )
+        except Exception:
+            # Never let the hold term take down the safety path: gravity
+            # compensation alone is still strictly better than zero torque.
+            self.get_logger().error(
+                "Damped-hold term failed -- falling back to gravity "
+                "compensation only.\n" + traceback.format_exc(),
+                throttle_duration_sec=1.0,
+            )
+            tau_hold = np.zeros(_N_JOINTS, dtype=np.float64)
+
+        self._publish_torques(tau_grav + tau_hold)
 
 
 def main(args=None) -> None:

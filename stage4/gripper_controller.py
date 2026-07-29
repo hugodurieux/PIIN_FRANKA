@@ -417,7 +417,23 @@ class MuJoCoGripperController(BaseGripperController):
     # the MJCF actuator's kp=200 (raised from 30 in the same fix, see that file's own
     # comment): 200 N/m * 0.005 m = 1.0N per finger, ~3.2x the ~0.31N per side estimated
     # necessary to hold a 64g object by friction. NOT YET LIVE-VALIDATED.
-    GRASP_OVERTRAVEL_M = 0.01  # total (both fingers); 0.005 m per finger
+    #
+    # 2026-07-29: NOW LIVE-VALIDATED, AND 3.2x WAS NOT ENOUGH. run32 grasped the
+    # cube (settled width ~0.040, grasp() correctly reported success) and then
+    # DROPPED it during the 0.150 m lift, with the fingers closing on to their
+    # commanded setpoint of 0.030 = exactly grasp_width - this constant. The 3.2x
+    # margin above is a STATIC one: it covers holding the 64g cube against gravity
+    # at rest, but not the lift's own acceleration, and not the reduced effective
+    # friction of an off-centre grip (run32's final approach error was 0.0140 m,
+    # a third of the cube's 0.04 m width, so the fingers were not centred on the
+    # faces). Note the margin cannot be read off the tracking error alone: run31
+    # was WORSE (0.0186 m) and held, which is what a marginal grip looks like --
+    # outcome decided by millimetres rather than by any one measured quantity.
+    # Doubled to 0.02 -> 200 N/m * 0.010 m = 2.0N per finger, ~6.4x static. The
+    # width/epsilon success check is unaffected (it evaluates the true settled
+    # contact width, which is set by the object, not by how far past it we
+    # command), so this trades only squeeze force, not what counts as a grasp.
+    GRASP_OVERTRAVEL_M = 0.02  # total (both fingers); 0.010 m per finger
 
     def grasp(
         self,
