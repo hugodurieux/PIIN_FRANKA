@@ -45,7 +45,7 @@ import torch
 import torch.nn as nn
 
 from network.constants import N_JOINTS, INPUT_DIM, OUTPUT_DIM, FRICTION_NET_HIDDEN
-from network.grey_box_net import encode_state
+from network.grey_box_net import encode_state, encoded_dim
 
 
 class FrictionNet(nn.Module):
@@ -60,13 +60,19 @@ class FrictionNet(nn.Module):
         eps: Small constant added to Softplus output for numerical stability.
     """
 
-    def __init__(self, hidden_dim: int = FRICTION_NET_HIDDEN, eps: float = 1e-6):
+    def __init__(self, hidden_dim: int = FRICTION_NET_HIDDEN, eps: float = 1e-6,
+                 encoding: str = "sincos"):
         super().__init__()
         self.eps = eps
         self._softplus = nn.Softplus()
+        # Must match GreyBoxNet's encoding. If FrictionNet kept sin/cos while
+        # the main net ran with --encoding raw, the sin/cos information would
+        # re-enter through this sub-module and the spatial-encoding ablation
+        # would measure nothing.
+        self.encoding = encoding
 
         self.backbone = nn.Sequential(
-            nn.Linear(INPUT_DIM, hidden_dim),
+            nn.Linear(encoded_dim(encoding), hidden_dim),
             nn.Mish(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.Mish(),
@@ -86,7 +92,7 @@ class FrictionNet(nn.Module):
         Returns:
             D_diag: (B, 7) diagonal entries of D (all strictly positive).
         """
-        x = encode_state(q, qdot, delta)
+        x = encode_state(q, qdot, delta, encoding=self.encoding)
         h = self.backbone(x)
         d = self.head(h)
         return self._softplus(d) + self.eps

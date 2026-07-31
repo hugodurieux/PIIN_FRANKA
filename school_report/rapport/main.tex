@@ -695,6 +695,20 @@ concurrents), introduit un écart de domaine assumé, dont
 \label{sec-resultats}
 % =====================================================================
 
+\paragraph{Avertissement sur la provenance des chiffres de cette section.}
+Les valeurs des \cref{tab-perjoint,fig-rmse} proviennent d'exécutions
+antérieures au module \code{training/splits.py}, sous lesquelles la partition
+était 80/20 entraînement/validation \emph{sans jeu de test}: la RMSE rapportée
+était celle du jeu de \emph{validation}, c'est-à-dire du jeu ayant servi à
+sélectionner le point de contrôle, et la borne $\epsilon_j$ en était dérivée de
+même. Ce sont donc des mesures en échantillon vis-à-vis du critère de
+sélection, non des mesures sur données réservées. La partition 80/10/10
+décrite en \cref{sec-probleme} est désormais implémentée et partagée par
+l'entraînement, l'évaluation et le calcul de $\epsilon_j$, mais \textbf{tous les
+chiffres de cette section doivent être régénérés} avant publication
+(\code{run_experiments.sh}, phase~1). Cette limite est reprise en
+\cref{sec-limites}.
+
 L'apprentissage a été réalisé sur \acompleter{modèle exact de GPU et de CPU}
 avec un temps d'exécution mural de \acompleter{temps total} pour 200~époques.
 
@@ -983,11 +997,24 @@ préhension réelle, faute d'avoir fait varier la masse de l'objet saisi.
 \subsection{Limites structurelles et méthodologiques}
 \label{sec-limites}
 \begin{description}
+    \item[Chiffres rapportés mesurés sur le jeu de validation.] Le point le
+    plus grave, et il précède tous les autres. Jusqu'au 31 juillet 2026 le dépôt
+    ne contenait \emph{aucun} jeu de test: la partition était 80/20
+    entraînement/validation, la RMSE publiée était celle de la validation, le
+    point de contrôle était sélectionné sur cette même validation, et
+    $\epsilon_j$ — donc les gains $K_p, K_d$ réellement embarqués — en était
+    tirée. Un biais de sélection, non une mesure sur données réservées. La
+    partition 80/10/10 annoncée en \cref{sec-probleme} est maintenant
+    implémentée (\code{training/splits.py}) et partagée par les trois usages,
+    mais les tableaux de la \cref{sec-resultats} n'ont pas encore été
+    régénérés sous cette partition. Rien de quantitatif ne doit être publié
+    avant de l'avoir fait.
     \item[Lignes de base non mesurées.] Les RMSE de RNEA seul et du MLP direct
     (\cref{tab-baselines}) n'ont pas été mesurées. L'apport quantitatif de la
     structure grise face à ces deux extrêmes n'est donc pas établi par ce
-    document, et n'y est pas revendiqué. C'est la lacune la plus bloquante pour
-    une soumission.
+    document, et n'y est pas revendiqué. Le protocole et l'outillage existent
+    désormais (\code{evaluation/eval_baselines.py}), les mesures restent à
+    lancer.
     \item[Ablation de l'encodage spatial non conduite.] L'apport des termes
     $\sin(\q), \cos(\q)$ de \cref{eq-encodage} est justifié par un argument
     physique (\cref{sec-degre0}) mais n'est pas démontré: aucune exécution

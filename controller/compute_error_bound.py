@@ -7,10 +7,21 @@ Proposition 1) requires a bound that holds for EVERY sample, not an average.
 Using RMSE as tau_error_bound would understate the true worst case and
 silently break the stability guarantee whenever a real error exceeds it.
 
-Reconstructs the exact same validation split used by training/train.py
-(MultiPayloadDataset over the same files, random_split seed=0, 90/10),
-so the reported bound matches what the reported per_joint_val_rmse in
-config.json was computed on.
+Uses the HELD-OUT TEST split from training/splits.py -- the same partition
+training/train.py and evaluation/eval_baselines.py use.
+
+This changed on 2026-07-31. It previously reconstructed the 90/10 *validation*
+split, which was also the set the checkpoint was selected on, so the bound
+epsilon_j -- and therefore the live Kp/Kd the robot runs with -- was derived
+from data the model had effectively been fitted to. A bound measured on the
+selection set understates the true error, and epsilon_j feeding
+lyapunov_gains.py means understating it makes the gains too low, not just the
+paper too optimistic.
+
+Consequence: the bound this script now prints will generally be LARGER than the
+values currently hard-coded in controller/lyapunov_gains.py's
+DEFAULT_ERROR_BOUND, which were computed the old way. Re-run this and update
+that constant before quoting either.
 
 Usage:
     python -m controller.compute_error_bound \\
@@ -30,6 +41,7 @@ from controller.model_loader import load_grey_box_model
 from network.constants import N_JOINTS, FRICTION_NET_HIDDEN
 from network.friction_net import FrictionNet
 from training.dataset import MultiPayloadDataset
+from training.splits import make_splits, describe
 
 
 def main():
@@ -63,15 +75,20 @@ def main():
             param.requires_grad_(False)
         print(f"[compute_error_bound] Loaded FrictionNet from {fric_path}")
 
-    # Reconstruct the exact same split as training/train.py::build_loaders
+    # Same split as training/train.py and evaluation/eval_baselines.py.
     full = MultiPayloadDataset(args.data, max_samples=cfg.get("max_samples"))
-    n_val = max(1, int(0.1 * len(full)))
-    n_train = len(full) - n_val
-    _, val_ds = torch.utils.data.random_split(
-        full, [n_train, n_val], generator=torch.Generator().manual_seed(0)
-    )
-    loader = torch.utils.data.DataLoader(val_ds, batch_size=args.batch_size, shuffle=False)
-    print(f"[compute_error_bound] Validation set: {len(val_ds)} samples")
+    print(f"[compute_error_bound] {describe(len(full))}")
+    _, _, test_ds = make_splits(full)
+    loader = torch.utils.data.DataLoader(test_ds, batch_size=args.batch_size,
+                                         shuffle=False)
+    print(f"[compute_error_bound] HELD-OUT TEST set: {len(test_ds)} samples")
+
+    if cfg.get("split_seed") is None:
+        print("[compute_error_bound] WARNING: this run's config.json predates "
+              "training/splits.py, so the model may have been TRAINED on samples "
+              "that are in today's test split. The bound below is then NOT "
+              "held-out. Retrain with the current training/train.py before "
+              "quoting it.")
 
     all_abs_err = []
     all_q, all_qdot, all_delta = [], [], []
@@ -111,9 +128,12 @@ def main():
     rmse = torch.sqrt((abs_err ** 2).mean(dim=0))
     max_abs_err = abs_err.max(dim=0).values
 
-    print("\nPer-joint RMSE (Nm) -- cross-check against config.json's per_joint_val_rmse:")
+    print("\nPer-joint TEST RMSE (Nm) -- cross-check against config.json's "
+          "per_joint_test_rmse:")
     print("  [" + ", ".join(f"{v:.4f}" for v in rmse.tolist()) + "]")
-    print(f"\nconfig.json per_joint_val_rmse was:")
+    print(f"\nconfig.json per_joint_test_rmse was:")
+    print(f"  {cfg.get('per_joint_test_rmse', '(absent -- run predates splits.py)')}")
+    print(f"config.json per_joint_val_rmse (in-sample for selection, do not quote):")
     print(f"  {cfg.get('per_joint_val_rmse')}")
 
     print("\nPer-joint error percentiles (Nm) -- diagnosing tail shape before "

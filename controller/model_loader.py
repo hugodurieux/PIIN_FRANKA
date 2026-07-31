@@ -94,7 +94,9 @@ def load_friction_net(
             "greybox-only feedforward that does not match the trained model."
         )
 
-    friction_net = FrictionNet()
+    # Must match the encoding the checkpoint was trained with, or the first
+    # Linear layer's width will not match the saved weights.
+    friction_net = FrictionNet(encoding=cfg.get("encoding", "sincos"))
     state_dict = torch.load(friction_path, map_location=device, weights_only=True)
     friction_net.load_state_dict(state_dict)
     friction_net.to(device)
@@ -150,6 +152,12 @@ def load_grey_box_model(
     hidden_dim = 256
     n_hidden_layers = 4
     activation = "mish"
+    # Checkpoints saved before the encoding ablation existed have no
+    # "encoding" key; they were all trained with sin/cos, so that is the
+    # correct default. Getting this wrong is not a silent error -- the first
+    # Linear layer would be 22-wide against 15-wide weights and load_state_dict
+    # would raise -- but defaulting correctly keeps every existing run loadable.
+    encoding = "sincos"
 
     if config_path is not None and os.path.isfile(config_path):
         with open(config_path, "r") as fh:
@@ -157,12 +165,14 @@ def load_grey_box_model(
         hidden_dim = cfg.get("hidden_dim", hidden_dim)
         n_hidden_layers = cfg.get("n_hidden_layers", n_hidden_layers)
         activation = cfg.get("activation", activation)
+        encoding = cfg.get("encoding", encoding)
 
     # --- build model and load weights ---
     model = GreyBoxNet(
         hidden_dim=hidden_dim,
         n_hidden_layers=n_hidden_layers,
         activation=activation,
+        encoding=encoding,
     )
     state_dict = torch.load(checkpoint_path, map_location=device, weights_only=True)
     model.load_state_dict(state_dict)

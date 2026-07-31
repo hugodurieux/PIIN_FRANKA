@@ -35,22 +35,23 @@
 \contentsline {paragraph}{Une conséquence contre-intuitive du gabarit.}{10}{paragraph*.18}%
 \contentsline {paragraph}{Écart de domaine (\emph {sim-to-sim gap}).}{10}{paragraph*.19}%
 \contentsline {section}{\numberline {6}Validation et résultats}{11}{section.6}%
+\contentsline {paragraph}{Avertissement sur la provenance des chiffres de cette section.}{11}{paragraph*.20}%
 \contentsline {subsection}{\numberline {6.1}Lignes de base et protocole de comparaison}{11}{subsection.6.1}%
-\contentsline {paragraph}{Ligne de base analytique (RNEA seul).}{11}{paragraph*.20}%
-\contentsline {paragraph}{Ligne de base boîte noire (MLP direct).}{11}{paragraph*.21}%
-\contentsline {paragraph}{Modèle proposé (\mbox {\ttfamilyFB \small isaac-satfix}).}{11}{paragraph*.22}%
+\contentsline {paragraph}{Ligne de base analytique (RNEA seul).}{11}{paragraph*.21}%
+\contentsline {paragraph}{Ligne de base boîte noire (MLP direct).}{11}{paragraph*.22}%
+\contentsline {paragraph}{Modèle proposé (\mbox {\ttfamilyFB \small isaac-satfix}).}{11}{paragraph*.23}%
 \contentsline {subsection}{\numberline {6.2}Précision du modèle appris}{11}{subsection.6.2}%
-\contentsline {subsection}{\numberline {6.3}Tenue des garanties physiques}{11}{subsection.6.3}%
+\contentsline {subsection}{\numberline {6.3}Tenue des garanties physiques}{12}{subsection.6.3}%
 \contentsline {subsection}{\numberline {6.4}Suivi de trajectoire en boucle fermée}{12}{subsection.6.4}%
 \contentsline {subsection}{\numberline {6.5}Ablation du résidu appris sous transfert inter-simulateurs}{12}{subsection.6.5}%
-\contentsline {paragraph}{Ce que ce résultat établit, et ce qu'il n'établit pas.}{12}{paragraph*.27}%
+\contentsline {paragraph}{Ce que ce résultat établit, et ce qu'il n'établit pas.}{13}{paragraph*.28}%
 \contentsline {section}{\numberline {7}Discussion et limites}{13}{section.7}%
 \contentsline {subsection}{\numberline {7.1}Le biais d'optimisation non corrigé}{13}{subsection.7.1}%
 \contentsline {subsection}{\numberline {7.2}Limites de l'intégration au moteur physique}{13}{subsection.7.2}%
-\contentsline {paragraph}{Un défaut de configuration qui imitait un défaut de physique.}{13}{paragraph*.28}%
-\contentsline {paragraph}{Une leçon méthodologique transposable.}{13}{paragraph*.29}%
-\contentsline {paragraph}{État après correction.}{14}{paragraph*.30}%
-\contentsline {paragraph}{Ce que cette tâche ne valide pas.}{14}{paragraph*.31}%
+\contentsline {paragraph}{Un défaut de configuration qui imitait un défaut de physique.}{13}{paragraph*.29}%
+\contentsline {paragraph}{Une leçon méthodologique transposable.}{14}{paragraph*.30}%
+\contentsline {paragraph}{État après correction.}{14}{paragraph*.31}%
+\contentsline {paragraph}{Ce que cette tâche ne valide pas.}{14}{paragraph*.32}%
 \contentsline {subsection}{\numberline {7.3}Limites structurelles et méthodologiques}{14}{subsection.7.3}%
-\contentsline {section}{\numberline {8}Conclusion}{14}{section.8}%
-\contentsline {paragraph}{Travaux futurs.}{15}{paragraph*.32}%
+\contentsline {section}{\numberline {8}Conclusion}{15}{section.8}%
+\contentsline {paragraph}{Travaux futurs.}{15}{paragraph*.33}%
