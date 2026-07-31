@@ -179,31 +179,65 @@ def print_result(r: dict) -> None:
           f" / {r['n_test']:,}")
 
 
-def latex_table(results) -> str:
-    """Emit the report's baseline table body, ready to paste."""
-    label = {"rnea": "RNEA seul (analytique)",
-             "mlp": "MLP direct (boîte noire)",
-             "greybox": "\\textbf{Gris} \\code{isaac-satfix}"}
-    guarantees = {"rnea": "sans objet", "mlp": "aucune",
-                  "greybox": "limites + dissipativité"}
+LABEL = {"rnea": "RNEA seul (analytique)",
+         "mlp": "MLP direct (boîte noire)",
+         "greybox": "\\textbf{Gris} \\code{isaac-satfix}"}
+
+# What each model is actually CONSTRAINED to, as implemented -- not as one
+# might assume. --no_rnea keeps the torque-limit penalty (a statement about
+# actuators, true for any model) and disables only dissipativity (meaningless
+# when tau_res is the whole torque). Calling the black box "aucune" would
+# understate it and flatter the grey box.
+GUARANTEES = {
+    "rnea": "aucune (non entraîné)",
+    "mlp": "limites de couple seules",
+    "greybox": "limites + dissipativité",
+}
+
+# Decimal points are left as points on purpose: the report loads siunitx with
+# locale=FR and output-decimal-marker={,}, so \num{1.456} already renders as
+# "1,456". Substituting commas here would be a second, redundant conversion.
+
+
+def latex_summary_table(results) -> str:
+    """Baseline summary: mean RMSE, worst joint, torque violations, guarantees."""
     lines = [
         "% Généré par: python -m evaluation.eval_baselines --latex",
-        "% Toutes les lignes sont mesurées sur LE MÊME split de test "
-        f"(seed={SPLIT_SEED}).",
-        "\\begin{tabular}{@{}lccc@{}}",
+        f"% Même split de test pour toutes les lignes (seed={SPLIT_SEED}).",
+        "\\begin{tabular}{@{}lcccc@{}}",
         "\\toprule",
-        "Modèle & RMSE de test moyenne [\\si{\\newton\\meter}] "
-        "& RMSE max par axe [\\si{\\newton\\meter}] & Garanties physiques \\\\",
+        "Modèle & RMSE moyenne & RMSE pire axe & Éch. hors limites "
+        "& Garanties \\\\",
+        " & [\\si{\\newton\\meter}] & [\\si{\\newton\\meter}] & de couple & \\\\",
         "\\midrule",
     ]
     for r in results:
-        worst = max(r["per_joint_rmse"])
+        pct = 100.0 * r["n_samples_over_torque_limit"] / max(r["n_test"], 1)
         lines.append(
-            f"{label.get(r['kind'], r['kind'])} & "
+            f"{LABEL.get(r['kind'], r['kind'])} & "
             f"\\num{{{r['mean_rmse']:.3f}}} & "
-            f"\\num{{{worst:.3f}}} & "
-            f"{guarantees.get(r['kind'], '')} \\\\".replace(".", ",", 2)
+            f"\\num{{{max(r['per_joint_rmse']):.3f}}} & "
+            f"{r['n_samples_over_torque_limit']} "
+            f"(\\SI{{{pct:.2f}}}{{\\percent}}) & "
+            f"{GUARANTEES.get(r['kind'], '')} \\\\"
         )
+    lines += ["\\bottomrule", "\\end{tabular}"]
+    return "\n".join(lines)
+
+
+def latex_per_joint_table(results) -> str:
+    """Per-joint RMSE for every model. This is the table that shows J7."""
+    lines = [
+        "% Généré par: python -m evaluation.eval_baselines --latex",
+        f"% Même split de test pour toutes les lignes (seed={SPLIT_SEED}).",
+        "\\begin{tabular}{@{}lccccccc@{}}",
+        "\\toprule",
+        "RMSE de test [\\si{\\newton\\meter}] & J1 & J2 & J3 & J4 & J5 & J6 & J7 \\\\",
+        "\\midrule",
+    ]
+    for r in results:
+        cells = " & ".join(f"\\num{{{v:.3f}}}" for v in r["per_joint_rmse"])
+        lines.append(f"{LABEL.get(r['kind'], r['kind'])} & {cells} \\\\")
     lines += ["\\bottomrule", "\\end{tabular}"]
     return "\n".join(lines)
 
@@ -267,8 +301,31 @@ def main():
 
     if args.latex:
         order = {"rnea": 0, "mlp": 1, "greybox": 2}
+        ordered = sorted(results, key=lambda r: order.get(r["kind"], 9))
         print("\n" + "=" * 68)
-        print(latex_table(sorted(results, key=lambda r: order.get(r["kind"], 9))))
+        print("% ---- TABLE 1: résumé des lignes de base ----")
+        print(latex_summary_table(ordered))
+        print("\n% ---- TABLE 2: RMSE par axe (montre l'axe 7) ----")
+        print(latex_per_joint_table(ordered))
+
+        # Flag any joint where a learned model is WORSE than doing nothing.
+        rnea = next((r for r in results if r["kind"] == "rnea"), None)
+        if rnea is not None:
+            for r in results:
+                if r["kind"] == "rnea":
+                    continue
+                worse = [
+                    (j + 1, r["per_joint_rmse"][j], rnea["per_joint_rmse"][j])
+                    for j in range(N_JOINTS)
+                    if r["per_joint_rmse"][j] > rnea["per_joint_rmse"][j]
+                ]
+                if worse:
+                    print(f"\n!! {r['kind']} ({r['tag']}) is WORSE than RNEA alone on:")
+                    for j, got, ref in worse:
+                        print(f"     J{j}: {got:.4f} Nm vs RNEA {ref:.4f} Nm "
+                              f"({got / max(ref, 1e-9):.1f}x worse)")
+                    print("   The learned residual is adding error on joints the "
+                          "analytical model already gets right.")
 
     if args.json_out:
         with open(args.json_out, "w") as fh:
