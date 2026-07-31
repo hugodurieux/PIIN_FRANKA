@@ -3,7 +3,166 @@
      Do not edit by hand. CLAUDE.md imports it at every startup. -->
 
 ## Last updated
-2026-07-29 SESSION 2 — CONFIGURATION SWEEP BEGUN. **HEADLINE: THE ISAAC-TRAINED RESIDUAL DEGRADES TRACKING IN MUJOCO — DISABLING IT CUTS joint5's BIAS 22x AND HALVES THE FLANGE ERROR.** Phase A distance sweep complete, baseline moved x=0.65 -> 0.55. Post-lift drop check added and immediately caught a false success. Full matrix and prep in `tracking/STAGE4_TEST_PLAN.md`.
+2026-07-31 — **EVERYTHING MERGED TO `main` AND PUSHED.** **HEADLINE: THERE WAS NO TEST SPLIT — every number the project had ever reported was measured on the validation set the checkpoint was selected on.** Fixed, re-measured, and the first genuinely held-out results are in. Two of them contradict the project's central hypothesis: **a black box of identical capacity is 28 % more accurate than the grey box**, and **the learned residual degrades the joints RNEA already models well (6.9× on joint 7)**. School report restructured against a new publication review and updated with the real numbers.
+
+**Goal for the day:** get everything onto GitHub; then apply
+`school_report/review/analyse_publication_hugo.md`; then build the tests needed
+to produce actual results.
+
+### 1. Repository — DONE, nothing outstanding
+
+`main` is at `b13b9eb`. Working tree clean, nothing unpushed. Three merges this
+session, all `--no-ff` so each body is revertible as a unit:
+
+| Branch merged | What it brought |
+|---|---|
+| `fix/effort-mode-actuator-lock` | all of Stage 2/3/4 + the report (20 commits, 207 files) |
+| `docs/report-publication-revision` | report restructured against the ICRA/IROS/CoRL review |
+| `test/report-measurements` | test split, measurement harness, first held-out results |
+
+`wip/damped-safe-fallback` is pushed but **deliberately unmerged** — it holds the
+damped safe-fallback pulled out of `stash@{0}`, which must be re-validated
+outside a measurement series.
+
+**`models/` and `data/` are gitignored.** A fresh clone cannot run the
+controller: the checkpoint is not on GitHub. Copy `models/` by hand, or decide
+to commit it (1.7 MB).
+
+### 2. THE FINDING THAT MATTERS — no test split existed
+
+`training/train.py` split 90/10 train/val only, reported `per_joint_val_rmse`,
+**and selected the checkpoint on that same set**. `controller/compute_error_bound.py`
+then derived `epsilon_j` from it too — its own docstring said so — and
+`epsilon_j` sets the live Kp/Kd through `lyapunov_gains.py`. So every headline
+number was in-sample for the selection criterion, and **the gains the arm
+actually runs with were tuned against data the model had been fitted to**. The
+report claimed "10 % de test indépendant" and "fuite de données corrigée";
+the code did neither.
+
+Fixed by `training/splits.py` — a deterministic 80/10/10 partition, single
+source of truth, shared by training, evaluation and the error bound. Pure
+function of `(n, seed, fractions)`, numpy `default_rng` rather than torch
+`random_split` (whose stream is not guaranteed stable across releases).
+Self-checking: `python -m training.splits`.
+
+**This had to be fixed before measuring any baseline**, or the new baselines
+would have inherited the same contamination.
+
+### 3. The results — 14,830 held-out samples, `results/20260731_164630/`
+
+| Model | Mean RMSE | J1 | J2 | J3 | J4 | J5 | J6 | J7 |
+|---|---|---|---|---|---|---|---|---|
+| RNEA alone | 1.456 | 1.588 | 2.841 | 1.824 | 1.953 | 0.883 | 1.062 | **0.042** |
+| **MLP direct** | **0.447** | 0.971 | 0.845 | 0.405 | 0.742 | 0.066 | 0.068 | 0.031 |
+| Grey box | 0.624 | 1.022 | 0.935 | 0.553 | 0.843 | 0.371 | 0.355 | 0.288 |
+| Grey box, raw encoding | 0.631 | | | | | | | |
+| Grey box, no FrictionNet | 0.633 | | | | | | | |
+
+**The black box wins by 28 %**, and on the wrist by half an order of magnitude
+(J5 5.6×, J6 5.2×, J7 9.3×). Two compounding causes: RNEA is at its *worst* on
+the wrist (7.4 % and 8.9 % of limit on J5/J6), so the analytical term is a poor
+starting point exactly there; and the grey residual is constrained dissipative
+while the black box is not.
+
+**The residual degrades joints RNEA already gets right.** J7: RNEA 0.042 →
+grey box 0.288. The worst-offender dump gives the mechanism outright —
+`tau_real = -0.01`, `tau_rbd = -0.08` (already correct), network emits
+`tau_res = -2.04`. Learned `D_77` converges to **0.67, the largest of all seven
+joints**, while `D_11` collapses to 0.019: the dissipative module is most active
+where there is no friction to model. **This is the same phenomenon as the
+2026-07-29 closed-loop ablation** (disabling the residual cut joint-5 bias 22×),
+now measured offline as well. Two independent measurements, one cause.
+
+**Both KEEP novelties are negligible on accuracy:** sin/cos encoding buys 1.1 %
+(0.624 vs 0.631), FrictionNet buys 1.4 % (0.624 vs 0.633). FrictionNet's value
+is the structural guarantee, not precision, and the report now says so.
+
+**New `epsilon_j` = [5.81 6.94 3.70 4.38 2.10 2.35 1.58]** vs old
+[5.20 5.66 3.06 3.80 2.10 2.38 1.57]. Wrist unchanged to three digits; J1–J4 up
+10–20 %, so Kp up 25–50 % there. **`DEFAULT_ERROR_BOUND` was deliberately NOT
+updated** — that changes what the arm runs with and needs its own tested step.
+
+### 4. What was built (all on `main`)
+
+- `training/splits.py` — the 80/10/10 partition, single source of truth.
+- `training/train.py` — 3-way split; reports test AND val separately so the gap
+  is visible; `--no_rnea` (black-box baseline), `--encoding raw|sincos`, `--tag`.
+- `evaluation/eval_baselines.py` — scores rnea/greybox/mlp on the same test
+  split, emits pasteable LaTeX, and **flags any joint where a learned model is
+  worse than RNEA alone**.
+- `run_experiments.sh` — 8 phases, ~18 min total, captures hardware and
+  wall-clock into `results/<stamp>/{env.txt,timings.txt}`.
+- Encoding threaded through `FrictionNet` too — it independently called
+  `encode_state`, so `--encoding raw` would have leaked sin/cos back in and the
+  ablation would have measured nothing.
+
+Two design calls worth remembering: `--no_rnea` **disables dissipativity but
+keeps the torque-limit constraint** (tau_res is the whole torque there, so
+`tau_res·qdot <= 0` is physically wrong and would have crippled the baseline);
+and the black box still scored **0 torque-limit violations**, so the guarantees
+column says "limites de couple seules", not "aucune".
+
+### 5. Phase 8 (data efficiency) is VOID — fixed but not re-run
+
+`--max_samples` truncated the dataset **before** the split, so each budget was
+scored on its own small, different test set (500 / 2500 / 5000 samples). The
+curve came out non-monotonic (0.601 / 0.743 / 0.550 against 0.624 for the full
+run) and the 25 k run showed val 0.260 against test 0.743 — a 2.9× gap that is
+small-sample noise. `--max_samples` is now a **training budget applied after the
+split**, val and test held at full size. `compute_error_bound.py` stops
+truncating to match. **Re-run `bash run_experiments.sh 8`;** nothing in the
+report depends on it.
+
+### 6. School report — restructured twice, builds clean
+
+Target is `school_report/rapport/main.tex` (NOT the 138 KB top-level
+`school_report/main.tex`, which is a separate, older draft — still unresolved
+which is canonical). 17 pages, latexmk exit 0, 0 errors, 0 undefined refs.
+
+**It did not compile at all before this session:** the
+`[NOM_DE_L_EQUIPE_A_COMPLETER]` placeholders contain underscores, a math-mode
+character. SESSION.md's "compiles cleanly, 32 pages" was stale.
+
+All seven review items from `analyse_publication_hugo.md` applied: Préliminaires
++ Formulation du problème sections, dense title, tightened abstracts, run-in
+Related Work headings, a pipeline figure with loss nodes and gradient flows
+(the file had none), formalised baselines, cleveref + standard `\paragraph`,
+and the grasping negative result demoted to Discussion §7.2.
+
+**Two LaTeX traps found by compiling rather than reading, both worth keeping:**
+- **babel-french makes `:` an active character**, which breaks cleveref's
+  `\csname r@...\endcsname` — 1440 errors. All 86 labels renamed `sec:x` →
+  `sec-x` rather than `\shorthandoff{:}`, which would cost French colon spacing.
+- **titlesec forces `\paragraph` into the TOC regardless of `tocdepth`** — the
+  previous author was RIGHT to keep the `\parag` macro, and the review's
+  suggested fix is insufficient alone. Verified live: the TOC filled with 32
+  entries. Neutralising `\l@paragraph` fixes it whatever writes the entry.
+
+§6 now opens with a **five-point synthesis** so the section leads with what was
+achieved rather than with the comparison the grey box loses. Numbers unchanged.
+
+### 7. ONE THING LEFT BEFORE SUBMISSION
+
+`school_report/rapport/main.tex` **line 188**: replace
+`\acompleter{nom de l'équipe d'accueil}` with the Melbourne team name, then
+`latexmk -pdf main.tex` in `school_report/rapport/`. That is the only remaining
+placeholder in the document.
+
+### 8. Operating notes earned this session
+
+- **`python3` is the SYSTEM interpreter and has no torch.** The project's deps
+  (torch 2.13.0+cu132, h5py, pinocchio via cmeel) live in `./.venv`.
+  `run_experiments.sh` resolves `PYTHON` env → `./.venv/bin/python` → `python3`
+  and preflights both imports and dataset paths before creating anything.
+- **A cheap smoke test before a long run pays.** `EPOCHS=2 bash run_experiments.sh 1 3 5`
+  exercises the split, both training paths, checkpoint reload and LaTeX
+  generation in ~15 s.
+- Full 8-phase sweep on the RTX 3090: **~18 minutes** (p1 245 s, p3 209 s,
+  p4 242 s, p7 231 s).
+
+---
+
+[Session continuation entry: 2026-07-29 SESSION 2 — CONFIGURATION SWEEP BEGUN. **HEADLINE: THE ISAAC-TRAINED RESIDUAL DEGRADES TRACKING IN MUJOCO — DISABLING IT CUTS joint5's BIAS 22x AND HALVES THE FLANGE ERROR.** Phase A distance sweep complete, baseline moved x=0.65 -> 0.55. Post-lift drop check added and immediately caught a false success. Full matrix and prep in `tracking/STAGE4_TEST_PLAN.md`. **NOTE (2026-07-31): the RMSE and epsilon_j figures quoted in this entry predate `training/splits.py` and were validation-set numbers; see the top entry.**]
 
 **Goal for the day:** re-run the working Stage 4 pick, then start varying the cube's
 configuration (distance, height, weight) instead of claiming Stage 4 works from a
@@ -439,10 +598,44 @@ Entirely separately from Stage 4 work: `school_report/rapport/main.tex` (a Frenc
 | fourier-sobol-N2diag | 2026-06-26 | 0.0570 | Sobol-generated Fourier |
 | multi-payload-frictionnet-smoke | 2026-06-26 | 0.0523 | Fourier 0/1/3kg, FrictionNet (147,734 samples) |
 | isaac-multipayload-frictionnet-first-real | 2026-07-16 | 1.4767 | First real Isaac Sim data (148,760 samples), SUPERSEDED |
-| isaac-multipayload-frictionnet-satfix | 2026-07-16 | **0.3995** | After SATURATION_MARGIN=0.97 fix, **REFERENCE BASELINE** (148,304 samples) |
+| isaac-multipayload-frictionnet-satfix | 2026-07-16 | **0.3995** | After SATURATION_MARGIN=0.97 fix, former reference baseline (148,304 samples). **Val loss under the OLD 90/10 split, and the checkpoint was selected on that same set — not comparable with anything below.** |
+
+**Everything above used the pre-`splits.py` 90/10 train/val partition and reports
+VALIDATION loss on the set the checkpoint was selected on. Do not put it in the
+same table as anything below.** Runs below are 80/10/10 with a held-out test set.
+
+| Run ID (tag) | Date | Mean TEST RMSE | Notes |
+|--------------|------|----------------|-------|
+| `rnea` (no training) | 2026-07-31 | **1.456 Nm** | Analytical baseline. 147/14,830 samples over torque limit (0.99 %). J7 = 0.042 |
+| `greybox-reference` | 2026-07-31 | **0.624 Nm** | The proposed model. 0 limit violations. J7 = 0.288 |
+| `baseline-mlp-direct` | 2026-07-31 | **0.447 Nm** | Black box, `--no_rnea`. **Most accurate.** 0 limit violations |
+| `ablation-raw-encoding` | 2026-07-31 | 0.631 Nm | `--encoding raw`. sin/cos is worth 1.1 % |
+| `ablation-no-frictionnet` | 2026-07-31 | 0.633 Nm | FrictionNet is worth 1.4 % |
+| `data-efficiency-{5000,25000,50000}` | 2026-07-31 | **VOID** | Split bug: each budget scored on its own small test set. Semantics fixed; re-run `run_experiments.sh 8` |
+
+Raw logs and JSON: `results/20260731_164630/`. Hardware: RTX 3090 24 GiB,
+i9-12900KF, torch 2.13.0+cu132. 200 epochs = 245 s.
 
 ## Current milestone
-**Stage 1 (PINN):** `isaac-multipayload-frictionnet-satfix` (val loss 0.3995) is the current reference baseline. DEFAULT_ERROR_BOUND recomputed from real data (p99.9 percentiles).
+**Stage 1 (PINN) — FIRST HELD-OUT MEASUREMENTS EXIST AS OF 2026-07-31, and they
+reframe the contribution.** The reference model is now the `greybox-reference`
+run in `models/run_20260731_164633/` (**test** RMSE 0.624 Nm mean), not the old
+`isaac-...-satfix` (whose 0.3995 was a validation loss on the selection set).
+
+Three things are established on 14,830 held-out samples:
+- the grey box **cuts the analytical model's error 2.3×** (1.456 → 0.624 Nm) and
+  holds **zero torque-limit violations** where RNEA violates on 0.99 % of samples;
+- **a black box of identical capacity and budget is 28 % more accurate**
+  (0.447 Nm), so the grey structure is NOT justified by precision. Its case rests
+  on the structural guarantees and on the URDF automation that never relearns
+  inertia or gravity — the report now argues it in those terms;
+- **the learned residual degrades joints RNEA already models well** — 6.9× on
+  joint 7, mechanism traced to `D_77` converging to the largest value of all
+  seven joints where there is no friction to model. Same phenomenon as the
+  closed-loop ablation, measured independently.
+
+`DEFAULT_ERROR_BOUND` is still the OLD constant. The new `epsilon_j` is
+[5.81 6.94 3.70 4.38 2.10 2.35 1.58]; updating it changes the live gains.
 
 **Stage 2/3 (ROS2 + MoveIt2 + Controller):** **Milestone 1 and 2 FULLY CLOSED.** Position-mode MoveIt2 execution and Stage 3 effort-mode trajectory tracking are both empirically validated.
 
@@ -473,7 +666,45 @@ The blocking "panda_joint4/6/7 freeze" is SOLVED: **`mujoco_ros2_control`'s `Res
 
 ## What to do next session
 
-> **SUPERSEDED BY THE 2026-07-29 SESSION 2 ENTRY AT THE TOP OF THIS FILE.**
+### PRIORITY 0 — five minutes, unblocks submission
+`school_report/rapport/main.tex` **line 188**: replace
+`\acompleter{nom de l'équipe d'accueil}` with the Melbourne team name, then
+`cd school_report/rapport && latexmk -pdf main.tex`. That is the ONLY remaining
+placeholder. The report is otherwise complete: 17 pages, builds clean, every
+table carries held-out numbers.
+
+### PRIORITY 1 — cheap, and the report's last void number
+`bash run_experiments.sh 8` — re-runs the data-efficiency curve under the fixed
+`--max_samples` semantics. ~2 minutes. Nothing in the report depends on it.
+
+### PRIORITY 2 — decide, then test deliberately with the sim up
+Update `controller/lyapunov_gains.py`'s `DEFAULT_ERROR_BOUND` to the new
+held-out `epsilon_j` [5.81 6.94 3.70 4.38 2.10 2.35 1.58]. Kp rises 25–50 % on
+J1–J4, wrist unchanged. **This changes what the arm physically runs with**, and
+visible wrist chatter was already observed at margin 4.0 — do not combine it
+with a measurement series.
+
+### PRIORITY 3 — the two closed-loop measurements still missing
+Both need the ROS2 stack live; both are specified at the end of
+`run_experiments.sh` and in `tracking/STAGE4_TEST_PLAN.md`.
+- **Payload conditioning in a real grasp.** `update_payload(delta)` has still
+  never been called during a pick. This is the project's most specific
+  scientific claim and it is untested end to end.
+- **Sim-to-sim fine-tuning (N3-Duong).** `training/fine_tune.py` exists, never
+  validated. The baseline it must beat is measured: joint-5 bias −0.0337 rad,
+  flange error 14.3 mm with the Isaac residual on.
+
+### PRIORITY 4 — housekeeping
+- `models/` (1.7 MB) and `data/` (25 MB) are gitignored, so a fresh clone cannot
+  run the controller. Decide: commit `models/`, or document the manual copy.
+- `school_report/main.tex` (138 KB, top level) vs `school_report/rapport/main.tex`
+  (26 KB, the live one) — still unresolved which is canonical.
+- `wip/damped-safe-fallback` is pushed and unmerged; re-validate outside a
+  measurement series.
+
+---
+
+> **The startup sequence below remains correct and is unchanged.**
 > The startup sequence below is still exactly correct and validated across ~15 runs
 > — keep using it, and note step 3 is NOT optional on a fresh sim (skipping it voided
 > a run this session: every torque discarded, arm parked at home, joint7 at -0.78529).
