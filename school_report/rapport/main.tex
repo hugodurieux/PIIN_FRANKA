@@ -721,8 +721,10 @@ laquelle le point de contrôle était aussi sélectionné, et $\epsilon_j$ — d
 les gains embarqués — en était tirée. Les chiffres ci-dessous sont les premiers
 du projet à être réellement hors échantillon, et ils diffèrent des précédents.
 
-L'apprentissage a été réalisé sur \acompleter{modèle exact de GPU et de CPU},
-avec un temps d'exécution mural de \SI{245}{\second} pour \num{200} époques sur
+L'apprentissage a été réalisé sur une carte NVIDIA GeForce RTX~3090
+(\SI{24}{\gibi\byte}) et un processeur Intel Core i9-12900KF (16~c\oe urs,
+24~fils), sous PyTorch~2.13 avec CUDA~13.2, avec un temps d'exécution mural de
+\SI{245}{\second} pour \num{200} époques sur
 \SI{118644}{} échantillons d'entraînement (\SI{209}{\second} pour la ligne de
 base boîte noire, \SI{242}{\second} pour l'ablation d'encodage).
 
