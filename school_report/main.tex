@@ -1,0 +1,2369 @@
+% =====================================================================
+% Rapport de recherche — Master
+% Pipeline « URDF vers robot commandé » par réseau de neurones informé
+% par la physique (PINN gris) — Franka Emika Panda 7 DoF
+% =====================================================================
+
+\documentclass[a4paper, oneside]{article}
+
+\usepackage[a4paper, fancysections, titlepage, pagenumber]{polytechnique}
+\usepackage[french]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[hidelinks]{hyperref}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+% Unités physiques standardisées (Nm, Hz, rad, kg...) avec espacement et
+% notation décimale françaises, cohérentes avec la convention à virgule
+% utilisée par pgfplots ci-dessous.
+\usepackage[locale=FR, per-mode=symbol]{siunitx}
+\sisetup{output-decimal-marker={,}, group-separator={\,},
+    list-final-separator={ et }, list-separator={, }}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.16}
+% Convention numérique française pour tous les graphiques
+\pgfplotsset{
+    /pgf/number format/use comma,
+    /pgf/number format/1000 sep={\,},
+}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds, calc}
+\usepackage{caption}
+\captionsetup{font=small, labelfont=bf}
+
+% Bibliographie (BibTeX/Biber, remplace l'environnement thebibliography
+% manuel). Style numérique pour préserver le rendu [1], [2]... déjà utilisé
+% dans tout le texte par \cite{}. polytechnique.sty ne charge ni natbib ni
+% biblatex et n'impose donc aucune convention de bibliographie particulière.
+\usepackage{csquotes}
+\usepackage[backend=biber, style=numeric, sorting=nyt, giveninits=true]{biblatex}
+\addbibresource{bibliography.bib}
+
+% Titre de paragraphe en vedette (run-in). Défini explicitement plutôt que
+% d'utiliser \paragraph, car titlesec — chargé par polytechnique.sty — insère
+% les \paragraph dans la table des matières en ignorant tocdepth. Une
+% correction native à titlesec a été envisagée (reformater \paragraph via
+% \titleformat/\titlespacing puis compter sur tocdepth pour filtrer l'entrée
+% de table des matières), mais titlesec est connu pour ne pas toujours
+% respecter tocdepth sur les niveaux non explicitement reformatés par
+% \DeclareOption{fancysections} de polytechnique.sty ; sans vérification
+% visuelle live de la table des matières sur les 40 occurrences de \parag du
+% document, ce correctif plus « propre » n'a pas été appliqué pour ne pas
+% risquer une régression silencieuse. Cette macro dédiée reste donc en place
+% intentionnellement.
+\newcommand{\parag}[1]{%
+    \par\medskip\noindent\textbf{#1}\ \ignorespaces%
+}
+
+\newcommand{\code}[1]{%
+    \mbox{\ttfamily\small%
+        \detokenize{#1}%
+    }%
+}
+
+% --- Notation (utilisée de façon cohérente dans tout le document) ---
+\newcommand{\q}{\ensuremath{q}}
+\newcommand{\qd}{\ensuremath{\dot{q}}}
+\newcommand{\qdd}{\ensuremath{\ddot{q}}}
+\newcommand{\taurbd}{\ensuremath{\tau_{\mathrm{rbd}}}}
+\newcommand{\taumlp}{\ensuremath{\tau_{\mathrm{mlp}}}}
+\newcommand{\taufric}{\ensuremath{\tau_{\mathrm{fric}}}}
+\newcommand{\taures}{\ensuremath{\tau_{\mathrm{res}}}}
+\newcommand{\taupred}{\ensuremath{\tau_{\mathrm{pred}}}}
+\newcommand{\taureal}{\ensuremath{\tau_{\mathrm{real}}}}
+\newcommand{\taucmd}{\ensuremath{\tau_{\mathrm{cmd}}}}
+\newcommand{\Rset}{\ensuremath{\mathbb{R}}}
+
+\author{Hugo Durieux}
+\date{\today}
+\title{Des fichiers URDF au robot commandé, en simulation}
+\subtitle{Apprentissage de dynamique par réseau de neurones informé par la
+physique et commande temps réel à \SI{1}{kHz} d'un Franka Emika Panda 7~DoF
+simulé (Isaac~Sim / MuJoCo)}
+
+\begin{document}
+
+\maketitle
+
+\begin{center}
+\begin{minipage}{0.88\textwidth}
+\small
+\textbf{Résumé.} La commande précise d'un manipulateur repose sur un modèle
+dynamique fidèle, mais le modèle rigide analytique issu d'un URDF est
+systématiquement faux face aux frottements et à la compliance réels. Ce
+travail construit et instrumente une chaîne entièrement automatisée, en
+simulation, qui part du seul fichier URDF d'un Franka Emika Panda 7~DoF et
+produit un robot simulé effectivement commandé par un modèle dynamique gris~:
+un terme analytique calculé par RNEA (Pinocchio), jamais appris, composé à un
+résidu neuronal contraint et conditionné par la charge portée, avec trois
+degrés de garantie croissants (libre, imposé par la perte via un lagrangien
+augmenté, structurel par construction pour la partie dissipative). Ce modèle
+est inséré dans une loi de couple calculé plus PD à \SI{1000}{Hz} dont les gains
+sont dérivés d'une borne d'erreur mesurée, pilotant un Franka simulé sous
+MuJoCo via ROS2. Le modèle de référence atteint une erreur de prédiction de
+couple de 0,30 à 0,90~Nm par axe (0,62 à 3,11\% de la limite de couple), avec
+violation de limite de couple nulle et violation de dissipativité résiduelle
+de $6\cdot 10^{-4}$ sur les données d'entraînement. Le suivi de trajectoire
+par le modèle appris est confirmé numériquement en boucle fermée, mais la
+tâche de préhension complète utilisée comme test d'intégration n'aboutit pas~:
+ce rapport documente ce résultat négatif, l'immobilisation intermittente d'un
+axe pendant l'exécution, dont une cause réelle mais partielle a été identifiée
+et corrigée.
+
+\medskip
+\textbf{Abstract.} Accurate manipulator control requires a faithful dynamics
+model, yet the analytical rigid-body model derived from a URDF is
+systematically wrong once friction and transmission compliance are accounted
+for. This work builds and instruments a fully automated, simulation-only
+pipeline that takes as sole input the URDF file of a 7-DoF Franka Emika Panda
+and produces a simulated robot actually driven by a learned grey-box dynamics
+model~: an analytical term computed by RNEA (Pinocchio), never learned,
+composed with a constrained, payload-conditioned neural residual exposing
+three increasing degrees of guarantee (unconstrained, loss-imposed via an
+augmented Lagrangian, structurally guaranteed by construction for the
+dissipative part). This model is embedded in a \SI{1000}{Hz} computed-torque-plus-PD
+control law whose gains are derived from a measured error bound, driving a
+simulated Franka under MuJoCo through ROS2. The reference model reaches a
+per-joint torque prediction error of 0.30 to 0.90~Nm (0.62 to 3.11\% of the
+torque limit), with zero torque-limit violation and a residual dissipativity
+violation of $6\cdot 10^{-4}$ on the training data. Closed-loop trajectory
+tracking by the learned model is confirmed numerically, but the full grasping
+task used as an integration test does not succeed~: this report documents
+that negative result, an intermittent joint freeze during execution, for
+which one real but partial cause was identified and fixed.
+\end{minipage}
+\end{center}
+
+\setcounter{tocdepth}{2}
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{Introduction}
+% =====================================================================
+
+\subsection{Un modèle exact et néanmoins faux}
+
+% TODO(hugo): confirmer le nom exact du laboratoire d'accueil et de l'équipe
+% de recherche à Melbourne ; aucune trace de cette information n'a été
+% trouvée dans le dépôt du projet (goal.md, PROJECT_STATE.md, PAPER_DRAFT.md)
+% au moment de cette révision. Compléter la phrase ci-dessous en conséquence.
+Ce travail a été mené dans le cadre d'un stage de recherche de Master, au sein
+d'un laboratoire de robotique à Melbourne dont l'un des axes est l'interaction
+humain-agent~: un robot qui partage un espace de travail avec une personne, ou
+qui répond à une consigne de haut niveau plutôt qu'à une trajectoire
+programmée, ne peut être sûr et réactif que si son modèle dynamique interne
+est à la fois exact et interrogeable en temps réel. C'est cette exigence
+double — précision du modèle, disponibilité en boucle de commande — qui motive
+plus largement le choix d'un manipulateur physiquement instrumentable comme le
+Franka Emika Panda comme cible de ce travail, au-delà du seul intérêt pour la
+méthode d'apprentissage elle-même.
+
+La commande précise d'un bras manipulateur repose sur la connaissance de sa
+dynamique, c'est-à-dire de l'application qui relie une trajectoire articulaire
+souhaitée aux couples moteurs qui la réalisent. Pour un robot série rigide à
+$n$ degrés de liberté, cette relation prend la forme classique du modèle
+dynamique inverse
+%
+\begin{equation}
+    \tau = M(\q)\,\qdd + C(\q,\qd)\,\qd + G(\q) ,
+    \label{eq:rbd}
+\end{equation}
+%
+où $\q, \qd, \qdd \in \Rset^{n}$ désignent respectivement les positions,
+vitesses et accélérations articulaires, $M(\q)$ la matrice d'inertie,
+$C(\q,\qd)$ la matrice des termes de Coriolis et centrifuges, $G(\q)$ le
+vecteur de gravité et $\tau \in \Rset^{n}$ le vecteur des couples
+articulaires. L'équation~\eqref{eq:rbd} est entièrement déterminée dès lors que
+la géométrie et les paramètres inertiels du robot sont connus; elle se calcule
+efficacement par l'algorithme récursif de Newton-Euler (\emph{Recursive
+Newton-Euler Algorithm}, RNEA) à partir d'une description cinématique et
+inertielle, typiquement un fichier URDF (\emph{Unified Robot Description
+Format}).
+
+Le problème est que l'équation~\eqref{eq:rbd} est fausse sur un robot réel. Les
+frottements secs et visqueux des réducteurs harmoniques, la compliance des
+transmissions, le jeu mécanique (\emph{backlash}), les pertes dépendantes de la
+température et l'usure des actionneurs produisent un écart systématique entre
+le couple prédit par le modèle rigide et le couple réellement mesuré. Cet
+écart, appelé ici couple résiduel, est de l'ordre de plusieurs newton-mètres
+sur un Franka Emika Panda et n'est pas modélisable analytiquement de manière
+fiable. C'est précisément là que l'apprentissage automatique intervient — et
+c'est aussi là que se joue tout le contenu scientifique du présent travail:
+non pas dans le remplacement de~\eqref{eq:rbd}, mais dans le traitement de ce
+qu'elle ne dit pas.
+
+Deux voies s'opposent. La première apprend la dynamique de bout en bout, comme
+une boîte noire: un réseau de neurones reçoit l'état et prédit le couple.
+Cette approche est flexible mais coûteuse en données, ne garantit aucune
+propriété physique et généralise mal hors de la distribution d'entraînement. La
+seconde, dite \emph{informée par la physique}, contraint le réseau à respecter
+la structure des équations de la mécanique — soit en inscrivant cette structure
+dans l'architecture, soit en l'imposant par des termes de perte. Les réseaux
+lagrangiens profonds~\cite{lutter2019iclr} et, plus récemment, les travaux de
+Liu, Borja et Della~Santina~\cite{liu2024} ont établi la viabilité théorique et
+expérimentale de cette seconde voie sur des manipulateurs réels.
+
+\subsection{Objectif et verrou scientifique}
+\label{sec:verrou}
+
+L'objectif de ce travail est de \textbf{construire et valider une chaîne
+automatique qui prend en entrée le seul fichier de description d'un
+manipulateur et produit en sortie un robot effectivement commandé} par un
+modèle dynamique appris, interrogé à chaque période de la boucle de commande.
+Cette chaîne comprend l'apprentissage d'un modèle dynamique gris
+(\emph{grey-box}), sa mise en service dans une loi de commande temps réel, et
+une tâche de préhension complète servant de test d'intégration de bout en bout.
+
+Formulé ainsi, l'objectif paraît relever de l'ingénierie. Trois difficultés
+distinctes le rendent non trivial, et ce sont elles qui définissent la
+contribution.
+
+\parag{La généralité s'obtient contre la précision.}
+La littérature obtient ses meilleurs résultats en dérivant à la main les
+équations d'un robot particulier, puis en ajustant un réseau sur cette
+structure. Rendre le procédé automatique à partir d'un simple URDF signifie
+renoncer à toute dérivation manuelle: le graphe cinématique, les dimensions du
+réseau, l'excitation des trajectoires d'apprentissage et les bornes physiques
+doivent être extraits du fichier de description. Or ce fichier est lui-même une
+source d'erreurs silencieuses. Au cours de ce travail, l'URDF de référence du
+projet s'est révélé dépourvu de toute balise inertielle: RNEA calculait depuis
+des inerties de remplacement, et non depuis les propriétés massiques réelles du
+Franka, pendant toute la première partie du projet
+(section~\ref{sec:disc-urdf}).
+
+\parag{Les garanties physiques survivent mal à l'apprentissage.}
+Un résidu appris librement peut injecter de l'énergie dans le système —
+physiquement absurde pour un terme censé représenter des frottements — et
+prédire des couples supérieurs aux limites des actionneurs. Sur un système à
+7~degrés de liberté, ces contraintes doivent être satisfaites simultanément sur
+sept axes dont les limites de couple diffèrent d'un facteur~7 (\SI{87}{Nm}
+pour les quatre premiers axes, \SI{12}{Nm} pour les trois derniers), ce qui
+déséquilibre
+naturellement l'optimisation. Les preuves de concept de la littérature sont le
+plus souvent validées sur des pendules ou des bras plans à deux axes; le
+passage à 7~DoF n'est pas une simple mise à l'échelle.
+
+\parag{L'exactitude hors ligne ne fait pas une commande.}
+Une erreur de prédiction faible sur un jeu de validation ne dit rien de la
+stabilité en boucle fermée. Insérer un réseau de neurones dans une boucle à
+\SI{1000}{Hz} impose une inférence sous la milliseconde, un ordonnancement temps réel
+fiable, et une loi de commande dont on sache borner l'erreur en présence
+d'erreur de modèle. C'est la difficulté qui a produit le plus de défauts réels:
+sur l'ensemble des sessions de mise au point documentées, la quasi-totalité des
+bogues bloquants se situait non pas dans les mathématiques de la commande, mais
+à l'interface entre le modèle appris, l'intergiciel ROS2 et le simulateur
+(sections~\ref{sec:res-loop} et~\ref{sec:res-task}).
+
+\subsection{Contributions et état d'avancement}
+\label{sec:contributions}
+
+Ce travail se positionne explicitement par rapport à l'état de l'art défini par
+Liu \emph{et al.}~\cite{liu2024}, référence la plus proche: même robot (Franka
+Panda 7~DoF), même classe de méthodes (réseaux informés par la physique), même
+finalité (modéliser puis commander). Quatre contributions sont revendiquées.
+
+\begin{enumerate}
+    \item \textbf{Une chaîne automatisée \og URDF vers modèle \fg{}.} Le
+    fichier URDF est la seule entrée: le graphe cinématique et les paramètres
+    inertiels en sont extraits par Pinocchio, le terme analytique est évalué par
+    RNEA sans aucune dérivation manuelle, l'architecture du résidu est
+    dimensionnée depuis le nombre d'axes, et les bornes physiques (couples,
+    vitesses) alimentent directement les contraintes d'entraînement. Liu
+    \emph{et al.} dérivent au contraire les équations de leur réseau
+    d'énergie spécifiquement pour leur plateforme.
+
+    \item \textbf{L'intégration du modèle appris dans une boucle de commande à
+    \SI{1000}{Hz}.} Le modèle n'est pas évalué seulement hors ligne sur des données
+    enregistrées: il est interrogé à chaque période de commande par un n\oe ud
+    ROS2 qui pilote un Franka simulé sous MuJoCo à travers
+    \code{ros2_control}. Liu \emph{et al.} s'arrêtent à \SI{500}{Hz}.
+
+    \item \textbf{La montée en dimension à 7~DoF sous contraintes physiques
+    dures.} Les contraintes de limites de couple et de dissipativité sont
+    imposées simultanément sur les sept axes par un lagrangien augmenté à
+    montée duale, et complétées par une garantie structurelle de dissipativité
+    obtenue par construction (matrice de frottement diagonale définie
+    positive), et non par pénalisation.
+
+    \item \textbf{Un protocole, implémenté mais non encore validé, de
+    réduction de l'écart simulation-réalité.} Le modèle est pré-entraîné
+    massivement en simulation, puis affiné sur un petit enregistrement réel
+    avec toutes les couches gelées sauf les deux dernières, sous la même perte
+    informée par la physique. Ce protocole est correctement implémenté et
+    vérifié sur le plan physique (section~\ref{sec:finetune}), mais il n'a
+    jamais été exécuté sur un enregistrement réel~: à ce titre, il doit être
+    lu comme une perspective outillée plutôt que comme un résultat au même
+    titre que les contributions~1 à~3, distinction reprise explicitement dans
+    le paragraphe qui suit et dans les limites (section~\ref{sec:limites}).
+\end{enumerate}
+
+Il faut annoncer d'emblée l'état réel d'avancement: les contributions~1 et~3
+sont implémentées et validées quantitativement; la contribution~2 est validée
+en boucle fermée mais la mesure de latence d'inférence qui la substantierait
+pleinement n'a pas été réalisée. La quatrième reste, par construction, d'une
+nature différente des trois premières~: le protocole de transfert
+simulation-réalité est implémenté et vérifié sur le plan physique, mais aucun
+enregistrement sur robot réel n'a été effectué, si bien qu'il n'a en réalité
+jamais été mis à l'épreuve. Un protocole non testé ne constitue pas un
+résultat validé~; il est présenté ici comme une contribution \emph{d'outillage
+et de conception}, dont la validation reste entièrement à faire, et non comme
+une contribution empiriquement établie au même titre que les trois autres. Ce
+rapport rend compte du travail effectué, y compris de ce qui n'a pas
+fonctionné: la tâche de préhension, qui devait servir de démonstration
+applicative, n'aboutit pas, et l'analyse de son échec constitue le principal
+résultat négatif du travail.
+
+La suite est organisée de manière à faire porter chaque section une part de
+l'argument. La section~\ref{sec:etat-art} construit, à partir des travaux
+existants, le verrou précis que ce travail attaque, et le formalise sous forme
+d'un tableau d'écarts avec la référence. La section~\ref{sec:methode} déduit de
+ce verrou une méthode et justifie chacun de ses choix, y compris ceux qui
+consistent à rejeter un mécanisme attractif de la littérature. La
+section~\ref{sec:resultats} confronte chaque contribution revendiquée à une
+mesure susceptible de la démentir. La section~\ref{sec:discussion} interprète
+ces mesures, y compris les défavorables, et énonce les limites. La
+section~\ref{sec:conclusion} conclut.
+
+% =====================================================================
+\section{Où placer la connaissance physique~? Lecture critique des
+travaux existants}
+\label{sec:etat-art}
+% =====================================================================
+
+Une trentaine d'articles ont été dépouillés de manière systématique pendant ce
+travail. Chacun a donné lieu à une extraction structurée selon une grille
+constante — résumé, plateforme, résultats chiffrés, nouveautés candidates,
+puis verdict motivé de reprise, de rejet ou de mise en attente — consignée dans
+un registre unique et associée, pour les nouveautés retenues, à une trace
+d'implémentation. Cette discipline importe pour la lecture qui suit: plusieurs
+mécanismes discutés ci-dessous ont été rejetés, et le rejet est alors argumenté
+par un critère explicite plutôt que passé sous silence.
+
+Reste à choisir un axe de lecture. Regrouper ces articles par thème applicatif
+serait sans portée, car ils visent presque tous la même chose. L'axe retenu ici
+est celui qui sépare réellement les méthodes entre elles: \textbf{où la
+connaissance physique est injectée dans le problème d'apprentissage, et ce
+qu'elle garantit en retour}. Un modèle appris comporte en effet trois lieux
+d'insertion possibles — ses paramètres, son architecture, et sa fonction
+objectif — et le choix du lieu détermine la nature de la garantie obtenue:
+paramètres physiquement admissibles, propriété vraie par construction, ou
+contrainte satisfaite en moyenne sur les données. Cette lecture par lieu
+d'insertion est celle que retient également la revue de
+Ma \emph{et al.}~\cite{ma2025}, qui distingue entrées informées, pertes
+informées et architectures informées, en la justifiant par l'anatomie même d'un
+modèle d'apprentissage. Les sections~\ref{sec:sota-param}
+à~\ref{sec:sota-compo} parcourent cet axe. La
+section~\ref{sec:sota-boucle} introduit une contrainte d'un autre ordre, que
+l'axe précédent ignore: ce que la mise en boucle fermée exige en retour du
+modèle. La section~\ref{sec:sota-gap} en déduit le verrou.
+
+\subsection{La connaissance dans les paramètres: identifier un modèle rigide}
+\label{sec:sota-param}
+
+Le premier lieu d'insertion est le plus ancien: conserver intégralement la
+structure analytique~\eqref{eq:rbd} et ne chercher qu'à en identifier les
+paramètres. On excite le robot par des trajectoires riches, puis on résout un
+problème de moindres carrés sur les paramètres inertiels.
+Sutanto \emph{et al.}~\cite{sutanto2020} en proposent la version moderne et
+différentiable: RNEA est réécrit comme un graphe de calcul PyTorch, et les
+paramètres inertiels de chaque corps deviennent des variables optimisables.
+Leur apport propre est instructif pour le présent travail, car il porte
+précisément sur la \emph{forme} de la garantie: ils comparent une série de
+re-paramétrisations de plus en plus contraintes du tenseur d'inertie — non
+structurée, symétrique, définie positive, respectant l'inégalité triangulaire
+des moments principaux — et montrent que les variantes les plus contraintes
+convergent en 2~époques contre 61 pour la variante libre, tout en généralisant
+mieux à des tâches non vues. Une contrainte plus forte ne coûte donc pas
+nécessairement en performance: elle peut au contraire réduire le coût
+d'apprentissage.
+
+L'intérêt de cette approche est sa parcimonie et son interprétabilité: le
+modèle obtenu est celui de la mécanique, avec des paramètres qui ont un sens
+physique. Sa limite est structurelle, et non affaire de réglage: quelle que
+soit la qualité de l'identification, un modèle rigide ne peut représenter ni
+frottements non linéaires ni compliance, car ces phénomènes ne figurent pas
+dans son espace de fonctions. Sutanto \emph{et al.} le constatent eux-mêmes en
+passant du simulateur au robot réel, où le frottement statique reste le défaut
+résiduel de leur formulation.
+
+\subsection{La connaissance dans l'architecture: apprendre une structure
+énergétique}
+\label{sec:sota-archi}
+
+Le deuxième lieu d'insertion déplace la physique dans l'architecture du réseau
+lui-même. Les réseaux lagrangiens profonds (DeLaN) de Lutter, Ritter et
+Peters~\cite{lutter2019iclr} apprennent la matrice d'inertie $M(\q)$ sous forme
+factorisée de Cholesky $M = LL^{\top}$, avec une diagonale passée par une
+fonction Softplus, ce qui garantit la définie-positivité en tout point de
+l'espace articulaire; la gravité est apprise par une tête séparée, et
+l'équation d'Euler-Lagrange est imposée par construction. Le même groupe étend
+ensuite l'approche à la commande fondée sur l'énergie pour des systèmes
+sous-actionnés~\cite{lutter2019iros}. Duong \emph{et al.}~\cite{duong2024}
+transposent l'idée dans le formalisme port-hamiltonien sur groupes de Lie, avec
+des sous-réseaux distincts et factorisés par Cholesky pour l'inertie, la
+dissipation, l'énergie potentielle et la matrice d'entrée.
+Wang, Chen et Ding~\cite{wang2025spel} poursuivent avec une formulation
+hamiltonienne symplectique et apportent un argument géométrique dont ce travail
+fera un usage direct: pour des liaisons rotoïdes tournant chacune autour d'un
+axe unique, la matrice de dissipation par corps est de rang~1, ce qui autorise
+une structure creuse.
+
+Liu, Borja et Della~Santina~\cite{liu2024} constituent la référence directe de
+ce travail. Ils étendent les réseaux lagrangiens et hamiltoniens à la
+dissipation et à l'actionnement non colocalisé, et — c'est leur apport le plus
+utile ici — démontrent la stabilité au sens de Lyapunov d'un correcteur à
+couple calculé augmenté d'un terme proportionnel-dérivé lorsque l'erreur de
+modèle est bornée. Leur validation est expérimentale sur un Franka Panda réel:
+erreur de prédiction ramenée de 182{,}5 à 2{,}68~rad$^2$ face à une référence
+boîte noire, avec seulement 25\,000 échantillons d'apprentissage contre
+550\,000 pour cette référence, et commande effective du robot réel à \SI{500}{Hz}.
+
+La force de ce lieu d'insertion est que la garantie ne dépend pas des données:
+une inertie factorisée par Cholesky est définie positive quel que soit le jeu de
+poids. Sa faiblesse est le prix payé pour cette force. Apprendre $M(\q)$
+consiste à dépenser de la capacité de réseau — et des données — pour
+reconstruire une quantité que l'URDF fournit déjà exactement, et à perdre au
+passage la propriété qui intéresse ce travail: qu'un modèle valide s'obtienne
+automatiquement pour n'importe quelle description de robot correctement
+renseignée. Ces travaux paient donc en généralité automatique ce qu'ils gagnent
+en garantie.
+
+Ce constat mérite d'être rendu explicite pour le formalisme port-hamiltonien de
+Duong \emph{et al.}~\cite{duong2024} en particulier, plutôt que laissé comme un
+cas parmi d'autres de ce lieu d'insertion. La passivité y est garantie de
+façon intrinsèque et inconditionnelle par la structure hamiltonienne elle-même
+— une propriété strictement plus forte que la contrainte de dissipativité
+imposée ici par pénalisation duale au degré~1 (section~\ref{sec:degre1}), qui
+n'est vraie qu'en moyenne sur les données vues à l'entraînement. Ce formalisme
+a été examiné et écarté comme pilier architectural pour deux raisons propres à
+ce travail, distinctes du seul argument de généralité automatique ci-dessus.
+D'abord, une architecture hamiltonienne sur groupes de Lie, comme celle de
+Duong \emph{et al.}, doit réapprendre l'inertie, la dissipation, l'énergie
+potentielle et la matrice d'entrée depuis les données~: exactement ce que le
+verrou de la section~\ref{sec:sota-gap} interdit, puisque ces quantités sont
+déjà disponibles exactement via RNEA pour tout URDF correctement renseigné.
+Ensuite, et c'est un argument de conception plus ciblé~: la propriété qui
+intéresse spécifiquement ce travail n'est pas la passivité de l'ensemble du
+système appris, mais la seule non-injection d'énergie par le terme dissipatif
+du résidu — une propriété strictement plus étroite, pour laquelle une
+architecture hamiltonienne complète est disproportionnée. Le degré~2 de la
+section~\ref{sec:frictionnet} obtient précisément cette garantie plus étroite,
+par construction et de façon inconditionnelle, avec une matrice de frottement
+diagonale à un coût architectural bien moindre qu'un réseau hamiltonien
+complet. Le prix de ce choix est net et assumé~: contrairement au formalisme
+port-hamiltonien, rien ne garantit ici la passivité du couple total
+$\taupred$, seul le terme $\taufric$ l'est structurellement — c'est pourquoi la
+contrainte de dissipativité~\eqref{eq:gdissip} du degré~1 reste nécessaire pour
+couvrir $\taumlp$, dont la sortie demeure libre.
+
+Un second écart, plus discret, mérite d'être relevé ici car il structure toute
+la méthode de la section~\ref{sec:methode}. Liu \emph{et al.} évitent
+délibérément toute mesure d'accélération, car $\qdd$ est bruité sur robot réel;
+ils intègrent donc le modèle dans le temps, ce qui les conduit à une perte de
+\emph{rollout} par intégration Runge-Kutta d'ordre~4. Ce choix est cohérent chez
+eux et incompatible avec l'architecture retenue ici, où $\qdd$ n'intervient que
+hors ligne — sous forme analytique lors de la préparation du jeu de données — ou
+sous sa forme \emph{désirée}, issue du planificateur, dans la boucle de
+commande. À aucun moment une accélération mesurée n'est employée.
+
+\subsection{La connaissance partagée: composer un terme analytique et un
+résidu contraint}
+\label{sec:sota-compo}
+
+Le troisième lieu d'insertion n'est ni les paramètres seuls ni l'architecture
+seule: il compose un terme analytique connu avec un résidu appris, et impose
+les propriétés physiques restantes par la fonction objectif. Djeumou
+\emph{et al.}~\cite{djeumou2022} en donnent la formulation de référence: des
+termes de champ de vecteurs connus sont combinés à des résidus neuronaux, et
+les contraintes physiques sont imposées par un lagrangien augmenté avec montée
+duale sur les multiplicateurs. Leurs résultats séparent nettement les deux
+effets: gain d'un facteur~100 sur l'erreur de rollout face à une boîte noire
+grâce à la composition, et réduction de la violation de contraintes de quatre
+ordres de grandeur grâce au lagrangien augmenté — c'est-à-dire que la
+composition apporte la précision et que le mécanisme dual apporte le respect de
+la physique, les deux n'étant pas interchangeables.
+
+Deng \emph{et al.}~\cite{deng2024} suivent une logique voisine mais plus
+prescriptive: les sous-termes de la dynamique inverse (produits
+trigonométriques, produits polynomiaux, combinaisons linéaires) sont encodés
+comme des couches structurelles dures, ce qui rend les poids du réseau
+interprétables comme paramètres physiques et permet de les comparer aux valeurs
+vraies. Leur validation, sur le dernier axe d'un KUKA iiwa 7~DoF, contient un
+avertissement utile: le modèle de référence purement appris atteint une erreur
+comparable à la leur \emph{en moyenne} tout en produisant une erreur maximale de
+44{,}4~Nm, c'est-à-dire des prédictions physiquement absurdes que la moyenne
+masque. Li \emph{et al.}~\cite{li2025compliant} appliquent une architecture
+grise voisine à des manipulateurs compliants et confirment indépendamment la
+supériorité du gris sur le noir dans un autre domaine. La revue de
+Toscano \emph{et al.}~\cite{toscano2025} recense huit années d'avancées et
+établit que les compositions grises, l'imposition de contraintes par lagrangien
+augmenté et l'affinage à ossature gelée constituent des pratiques établies
+plutôt que des paris.
+
+Deux résultats de cette lecture bornent par avance ce que le présent travail
+peut prétendre. Le premier est l'avertissement de Deng \emph{et al.} sur les
+métriques moyennes, qui impose de rapporter des queues de distribution et non
+seulement des erreurs quadratiques moyennes; il est suivi en
+section~\ref{sec:res-bound}. Le second est le résultat négatif de
+Prabhakar \emph{et al.}~\cite{prabhakar2026}: sur des dynamiques de contact,
+les contraintes physiques \emph{dégradent} l'extrapolation temporelle au-delà de
+la fenêtre d'apprentissage, de 6 à 10\% d'erreur supplémentaire. Ce résultat
+n'est pas contourné dans ce travail mais assumé comme une restriction de portée
+déclarée (section~\ref{sec:limites}).
+
+C'est de cette manière de partager la connaissance que le présent travail est
+le plus proche: l'architecture développée en section~\ref{sec:methode} en est
+une instance. Il convient de le dire sans ambiguïté, car deux nouveautés
+candidates issues de Djeumou \emph{et al.} — la structure compositionnelle et le
+lagrangien augmenté à montée duale — ont été examinées puis classées \og déjà
+présentes \fg{}: toutes deux étaient implémentées indépendamment avant la
+lecture de l'article, qui joue donc le rôle d'une validation externe de
+l'architecture et non d'une source. La contribution propre de ce travail est
+ailleurs, et se révèle en changeant de question.
+
+\subsection{Ce que la fermeture de la boucle impose en retour}
+\label{sec:sota-boucle}
+
+Les trois sections précédentes examinent comment la physique entre dans le
+modèle. Une contrainte d'un tout autre ordre apparaît lorsqu'on demande au
+modèle de piloter un robot: la boucle fermée impose ses propres exigences en
+retour, et elles éliminent des mécanismes qui étaient pourtant les meilleurs sur
+le plan de la modélisation. C'est un enseignement central de la revue
+d'Ibarz \emph{et al.}~\cite{ibarz2021}, qui consacre à la latence et à
+l'exécution asynchrone un traitement de premier plan: un décalage de quelques
+millisecondes entre mesure et actionnement suffit à faire échouer des
+algorithmes par ailleurs à l'état de l'art, parce qu'il rompt l'hypothèse
+d'exécution synchrone sur laquelle ils reposent.
+
+\parag{La cadence disqualifie des mécanismes.} Les intégrations temps réel
+publiées se situent toutes entre 2 et \SI{100}{Hz}. Wang \emph{et al.}~\cite{wang2024cac}
+embarquent un PINN discret dans une commande prédictive non linéaire pour un
+bras multi-axes, avec un résidu physique intégré par la méthode des trapèzes à
+\SI{20}{Hz} et un filtre de Kalman étendu à l'interface. Li \emph{et al.}~\cite{li2025ral}
+opèrent à \SI{100}{Hz}. Djeumou \emph{et al.}~\cite{djeumou2024drift} proposent, pour
+la conduite à la limite d'adhérence, une architecture à cadences découplées: un
+modèle de diffusion lent à \SI{2}{Hz} estime les paramètres de frottement, tandis
+qu'une commande prédictive rapide s'exécute par-dessus. Viser \SI{1000}{Hz}, comme
+ici, rend inutilisables le résidu discrétisé à \SI{20}{Hz} et le filtre de Kalman
+étendu, dont l'inversion matricielle par pas de commande est incompatible avec
+un budget de l'ordre de la milliseconde. La cadence n'est donc pas un paramètre
+de réglage: c'est une contrainte qui sélectionne l'architecture.
+
+\parag{La charge portée doit être traitée quelque part.} Une masse portée
+modifie l'inertie, la gravité et les frottements perçus. Li \emph{et al.}~\cite{li2025ral}
+l'identifient en ligne à partir des courants moteurs d'actionneurs à
+entraînement quasi direct, puis injectent un corps virtuel correspondant dans
+le modèle Pinocchio, lequel alimente une commande prédictive non linéaire.
+Hu \emph{et al.}~\cite{hu2026} traitent par une approche PINN l'erreur induite
+par le jeu mécanique sur des robots industriels et établissent un fait qui
+oriente directement la décomposition retenue ici: l'erreur de \emph{backlash}
+dépend de la direction de la vitesse et de la position articulaire, mais non de
+la masse portée. Il existe donc une frontière naturelle entre ce qui dépend de
+la charge et ce qui dépend de l'état de mouvement. Aucun des travaux cités ne
+l'exploite dans les deux sens à la fois.
+
+\parag{Le transfert et la planification sont des dépendances, non des
+contributions.} Sur le versant planification, Ni et Qureshi~\cite{ni2024} et
+Liu \emph{et al.}~\cite{liu2024ntfields} utilisent des PINN résolvant
+l'équation d'Eikonal pour planifier sans données d'expert, avec des temps de
+planification de 0{,}05 à 0{,}15~s contre 0{,}06 à 6{,}77~s pour des références
+classiques. Sur le versant transfert, Ibarz \emph{et al.}~\cite{ibarz2021}
+documentent le coût du passage simulation-réalité,
+Duong \emph{et al.}~\cite{duong2024} proposent un protocole d'affinage court à
+ossature gelée, et Chen \emph{et al.}~\cite{chen2025soft} synthétisent les
+approches pilotées par les données pour les robots mous, où le même problème se
+pose de manière aiguë. Enfin, Fang \emph{et al.}~\cite{fang2026} et
+Agrawal \emph{et al.}~\cite{agrawal2026} illustrent l'automatisation croissante
+de la chaîne elle-même, respectivement pour la cinématique inverse de
+manipulateurs mobiles redondants et pour l'orchestration automatisée de
+l'entraînement puis du déploiement d'un PINN sous ROS2. Ce dernier travail est
+instructif par sa manière de rendre compte du coût de déploiement: il publie
+une décomposition de la latence de bout en bout composant par composant, où
+l'inférence du réseau ne pèse que 2~ms sur 40{,}5~ms au total, le reste étant
+absorbé par la perception et le passage d'interface. Une chaîne complète se juge
+donc sur son maillon lent, pas sur son réseau.
+
+\subsection{Le verrou retenu, et le positionnement de ce travail}
+\label{sec:sota-gap}
+
+La lecture qui précède permet d'énoncer le verrou précisément. Les approches qui
+placent la physique dans les paramètres obtiennent un modèle interprétable mais
+structurellement incapable de représenter les frottements. Celles qui la
+placent dans l'architecture obtiennent des garanties inconditionnelles, mais
+paient en réapprenant ce que la description du robot fournit déjà, ce qui
+interdit l'automatisation depuis un simple URDF. Celles qui la partagent entre
+un terme analytique et un résidu contraint évitent ces deux écueils, mais
+aucune, à notre connaissance, ne conditionne le résidu par la charge portée ni
+ne ferme la boucle sur un manipulateur industriel à sept axes à une cadence
+compatible avec un asservissement de couple. Autrement dit: \textbf{la
+composition grise est un acquis, mais elle n'a pas encore été portée
+simultanément à sept axes, sous contraintes physiques dures, conditionnée par la
+charge, et interrogée à chaque période d'une boucle à \SI{1}{kHz}.} C'est cet
+ensemble de conditions simultanées, et non l'un de ses éléments pris isolément,
+qui constitue l'objet de ce travail.
+
+Le tableau~\ref{tab:gaps} exprime ce verrou sous la forme d'écarts point par
+point avec la référence la plus proche~\cite{liu2024}. Il fournit la définition
+opérationnelle des quatre contributions annoncées en
+section~\ref{sec:contributions}, et c'est à lui que la
+section~\ref{sec:resultats} confrontera les mesures.
+
+\begin{table}[htbp]
+\centering
+\caption{Positionnement par rapport à la référence Liu \emph{et al.}
+(2024)~\cite{liu2024}, article le plus proche de ce travail (même robot, même
+classe de méthodes, même finalité).}
+\label{tab:gaps}
+\small
+\begin{tabular}{@{}p{0.44\textwidth}p{0.48\textwidth}@{}}
+\toprule
+\textbf{Limite de Liu \emph{et al.} (2024)} & \textbf{Réponse de ce travail} \\
+\midrule
+Équations dérivées manuellement pour la plateforme visée & Chaîne automatisée
+URDF $\rightarrow$ Pinocchio $\rightarrow$ réseau, sans dérivation manuelle
+(contribution~1) \\
+Commande à \SI{500}{Hz}, sans intégration dans un solveur & Boucle ROS2 à \SI{1000}{Hz}
+interrogeant le modèle appris à chaque pas (contribution~2) \\
+Aucun conditionnement par la charge portée & Charge $\delta$ traitée par deux
+voies: inertie de l'effecteur dans RNEA, et entrée explicite du résidu;
+testée à \SIlist{0;1;3}{kg} \\
+Aucun protocole de transfert simulation-réalité & Pré-entraînement en
+simulation puis affinage à ossature gelée sous perte informée
+(contribution~4) \\
+Aucune limite de couple ni de vitesse dans la perte & Lagrangien augmenté sur
+les limites de couple et la dissipativité, plus écrêtage dur à la publication
+des consignes \\
+Réseau d'énergie intégralement appris, sans terme RNEA analytique &
+Architecture grise: RNEA jamais modifié, seul le résidu est appris
+(contribution~3) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =====================================================================
+\section{Méthode}
+\label{sec:methode}
+% =====================================================================
+
+\subsection{Décomposition: ce qui est calculé, ce qui est appris}
+\label{sec:overview}
+
+Toute la méthode découle d'une seule décision, prise en réponse au verrou de la
+section~\ref{sec:sota-gap}: la dynamique du corps rigide est \emph{calculée},
+jamais apprise, et l'apprentissage est confiné à ce qu'elle ne couvre pas. Le
+modèle prédit donc
+%
+\begin{equation}
+    \taupred = \underbrace{\taurbd(\q,\qd,\qdd,\delta)}_{\text{calculé
+    (RNEA, URDF)}}
+    \;+\;
+    \underbrace{\taures(\q,\qd,\delta)}_{\text{appris, contraint}} ,
+    \label{eq:decompo}
+\end{equation}
+%
+où $\delta \in \Rset_{+}$ désigne la masse portée par l'effecteur. Cette
+frontière n'est pas arbitraire: elle suit celle qu'établit
+Hu \emph{et al.}~\cite{hu2026}, à savoir que les effets non modélisés dépendent
+de l'état de mouvement mais non de la charge, tandis que les effets de charge
+sont, eux, exactement ceux que le modèle rigide sait traiter. Chaque terme
+de~\eqref{eq:decompo} reçoit donc la part du problème pour laquelle il est
+qualifié, sans recouvrement.
+
+La figure~\ref{fig:pipeline} situe les deux régimes d'utilisation de ce modèle.
+Hors ligne, un unique fichier URDF alimente deux consommateurs: Pinocchio, qui
+en construit le modèle rigide et évalue RNEA, et le simulateur de génération de
+données, qui exécute des trajectoires d'excitation et mesure les couples
+effectifs; la différence entre couple mesuré et couple calculé constitue la
+cible d'apprentissage du résidu. En ligne, le modèle entraîné est chargé par un
+n\oe ud ROS2 qui l'interroge à chaque pas de commande, dans une loi de couple
+calculé pilotant un Franka simulé.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    font=\small,
+    box/.style={draw, rounded corners=2pt, minimum height=8mm, align=center,
+                inner sep=3pt, fill=white},
+    white/.style={box, fill=black!4},
+    learn/.style={box, fill=black!12},
+    rt/.style={box, fill=black!7},
+    ar/.style={-{Latex[length=2mm]}, thick},
+    node distance=4mm
+]
+% --- entrée
+\node[box] (urdf) {URDF\\\code{panda.urdf}};
+
+% --- régime hors ligne
+\node[white, right=9mm of urdf, yshift=9mm] (pin) {Pinocchio\\RNEA \eqref{eq:rbd}};
+\node[white, right=9mm of urdf, yshift=-9mm] (sim) {excitation Sobol\\+ Fourier
+(Isaac~Sim)};
+\node[box, right=9mm of pin, yshift=-9mm, minimum height=10mm] (res)
+    {cible du résidu\\$\taureal-\taurbd$};
+\node[learn, right=9mm of res] (train) {entraînement\\MSE + lagrangien
+augmenté};
+\node[box, right=9mm of train] (ckpt) {modèle\\$\theta^{*}$};
+
+% --- régime en ligne
+\node[rt, below=14mm of train, xshift=-16mm] (moveit) {planification\\MoveIt2};
+\node[rt, right=8mm of moveit] (ctrl) {couple calculé + PD\\\SI{1000}{Hz}};
+\node[rt, right=8mm of ctrl] (robot) {Franka simulé\\MuJoCo};
+
+\draw[ar] (urdf.east) -- (pin.west);
+\draw[ar] (urdf.east) -- (sim.west);
+\draw[ar] (pin.east) -- (res.west);
+\draw[ar] (sim.east) -- (res.west);
+\draw[ar] (res) -- (train);
+\draw[ar] (train) -- (ckpt);
+\draw[ar] (ckpt.south) -- ++(0,-7mm) -| (ctrl.north);
+\draw[ar] (moveit) -- (ctrl);
+\draw[ar] (ctrl) -- (robot);
+\draw[ar] (robot.south) -- ++(0,-5mm) -| node[below, pos=0.25]
+    {$\q,\qd$ mesurés} (ctrl.south);
+\draw[ar] (urdf.south) |- ++(0,-30mm) -| (moveit.south);
+\end{tikzpicture}
+\caption{Les deux régimes d'utilisation du modèle. Le fichier URDF est la seule
+entrée: il alimente le calcul analytique (Pinocchio/RNEA), la génération de
+données d'excitation, et la planification. Rangée du haut: identification hors
+ligne du résidu. Rangée du bas: boucle de commande temps réel, qui interroge le
+modèle entraîné à chaque période. Les blocs clairs sont analytiques, le bloc
+foncé est appris.}
+\label{fig:pipeline}
+\end{figure}
+
+Le robot cible est un Franka Emika Panda à 7~degrés de liberté. Ses constantes
+physiques, utilisées de manière centralisée par tous les modules, sont
+rappelées au tableau~\ref{tab:constantes}. L'asymétrie d'un facteur~7 entre les
+limites de couple des quatre premiers axes et des trois derniers y mérite une
+attention particulière: elle intervient trois fois dans la suite, comme borne
+de contrainte d'entraînement (section~\ref{sec:degre1}), comme source du
+déséquilibre d'optimisation discuté en section~\ref{sec:res-desequilibre}, et
+comme dénominateur de la seule grandeur d'erreur réellement interprétable pour
+la commande (section~\ref{sec:res-quoi}).
+
+\begin{table}[htbp]
+\centering
+\caption{Constantes physiques du Franka Emika Panda utilisées dans tout le
+travail (source: fiche technique constructeur, centralisée dans
+\code{network/constants.py}).}
+\label{tab:constantes}
+\small
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+Axe $j$ & 1 & 2 & 3 & 4 & 5 & 6 & 7 \\
+\midrule
+Limite de couple $\bar{\tau}_j$ [\si{Nm}] & \num{87} & \num{87} & \num{87} &
+\num{87} & \num{12} & \num{12} & \num{12} \\
+Vitesse maximale [\si{\radian\per\second}] & \num{2,175} & \num{2,175} &
+\num{2,175} & \num{2,175} & \num{2,610} & \num{2,610} & \num{2,610} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Le terme analytique, tenu pour invariant}
+\label{sec:whitebox}
+
+Le terme calculé l'est par la fonction \code{pinocchio.rnea} appliquée au modèle
+construit directement depuis l'URDF. Trois décisions de conception en
+découlent.
+
+\parag{Un modèle réduit à sept axes.} L'URDF du Franka déclare neuf
+articulations: les sept axes du bras et les deux glissières des doigts de la
+pince. La boucle de commande ne pilote et ne mesure que les sept axes du bras.
+Le modèle Pinocchio est donc réduit par \code{buildReducedModel}, qui verrouille
+les deux glissières en position neutre et ramène la dimension de configuration
+de 9 à 7. Sans cette réduction, tout appel RNEA en ligne échoue sur une erreur
+de dimension; ce défaut était latent et n'est apparu qu'au premier appel réel
+en boucle fermée.
+
+\parag{Un terme analytique jamais modifié.} Le module RNEA est traité comme
+une invariante du projet: aucun de ses paramètres n'est rendu optimisable, et
+aucune de ses sorties n'est corrigée avant composition. C'est le point de
+divergence délibéré avec DiffNEA~\cite{sutanto2020} et DeLaN~\cite{lutter2019iclr}.
+Rendre l'URDF apprenable, comme le fait DiffNEA, détruirait la propriété sur
+laquelle repose la contribution~1 — un modèle valide obtenu automatiquement
+pour n'importe quelle description correcte — au bénéfice d'une précision
+supplémentaire dont le résidu appris se charge par ailleurs. Le bénéfice de ce
+gel est direct: la validité physique du terme dominant ne dépend en rien de la
+qualité de l'apprentissage.
+
+\parag{L'injection analytique de la charge.} Avant chaque évaluation de
+RNEA, la masse portée $\delta$ est ajoutée à la masse du corps portant
+l'effecteur, puis restaurée après l'appel. La partie \emph{connue} de l'effet de
+la charge — surcroît de gravité, d'inertie et de couplage inertiel — est ainsi
+traitée analytiquement, et seule la partie non modélisée reste à la charge du
+résidu. Le mécanisme est identique à celui que Li \emph{et al.}~\cite{li2025ral}
+présentent comme leur apport principal, implémenté ici indépendamment et
+antérieurement; il constitue la première des deux voies de prise en compte de
+la charge. En revanche, l'identification \emph{en ligne} de la charge par les
+courants moteurs, qui fait le reste de leur contribution, a été rejetée: le
+Franka est équipé de réducteurs, ce qui rend la relation courant-couple non
+linéaire, contrairement aux actionneurs quasi directs de leur plateforme.
+
+On notera dans la suite
+%
+\begin{equation}
+    \taurbd(\q,\qd,\qdd,\delta) = \mathrm{RNEA}\bigl(\q,\qd,\qdd~;~
+    \mathrm{URDF},\ \delta\bigr) \in \Rset^{7}
+    \label{eq:taurbd}
+\end{equation}
+%
+la sortie de ce terme analytique.
+
+\subsection{Le résidu appris et ses trois degrés de garantie}
+\label{sec:residu}
+
+Reste à construire $\taures$. Plutôt que de présenter directement
+l'architecture finale, il est plus informatif de la présenter comme le dernier
+terme d'une progression en trois degrés de garantie, chacun apportant ce que le
+précédent ne peut pas fournir. Cette manière de faire est celle de
+Sutanto \emph{et al.}~\cite{sutanto2020}, qui comparent explicitement des
+re-paramétrisations de contrainte croissante; elle rend visible ce que chaque
+niveau coûte et ce qu'il achète.
+
+\subsubsection{Degré~0: un résidu libre, régulier, conditionné par la charge}
+\label{sec:degre0}
+
+\parag{Encodage de l'état.} Le réseau résiduel ne reçoit pas directement
+$\q$. Les positions articulaires sont d'abord transformées en leurs
+représentations trigonométriques, ce qui élimine la discontinuité de
+$\pm 2\pi$ et garantit la continuité spatiale de la fonction apprise. L'entrée
+du réseau est le vecteur
+%
+\begin{equation}
+    x = \bigl[\sin(\q),\ \cos(\q),\ \qd,\ \delta\bigr] \in \Rset^{22},
+    \label{eq:encodage}
+\end{equation}
+%
+de dimension $3\times 7 + 1 = 22$. La présence explicite de $\delta$ dans $x$
+constitue la seconde voie de prise en compte de la charge: le résidu peut
+apprendre des effets dépendant de la charge — frottements chargés, compliance de
+transmission sous couple élevé — qu'un modèle rigide ne représente pas, même
+avec l'inertie corrigée. C'est la combinaison des deux voies, analytique et
+apprise, qui distingue ce travail des approches de la
+section~\ref{sec:sota-boucle}, lesquelles n'en retiennent qu'une.
+
+L'accélération $\qdd$ est délibérément absente de~\eqref{eq:encodage}. Elle
+n'est nécessaire qu'à RNEA, où elle intervient hors ligne ou sous sa forme
+désirée. Le résidu, lui, ne dépend que de la configuration, de la vitesse et de
+la charge.
+
+La présence de $\sin(\q), \cos(\q)$ dans cette entrée mérite une justification
+propre, car un modèle de frottement sec et visqueux classique ne dépend que de
+la vitesse (et, ici, de la charge) et non de la position. Ce n'est cependant
+pas le modèle physique pertinent pour un réducteur harmonique comme ceux du
+Franka~: l'engrènement des dents d'un réducteur harmonique produit une
+ondulation de couple (\emph{torque ripple}) et une composante de frottement
+répétable en fonction de l'angle articulaire, en plus de la composante
+classique dépendant de la vitesse. C'est exactement ce qu'établissent
+Hu \emph{et al.}~\cite{hu2026} pour l'erreur induite par le jeu mécanique
+(\emph{backlash}) sur des robots industriels~: elle dépend de la direction de
+la vitesse \emph{et} de la position articulaire, mais non de la charge portée.
+La frontière tracée en~\eqref{eq:decompo} — charge à l'analytique, état de
+mouvement (position et vitesse) au résidu — reprend directement cette
+décomposition. Inclure $\q$ dans $x$ n'est donc pas une confusion entre
+frottement et position~: c'est la manière dont ce travail représente une
+composante de frottement räelle, répétable et dépendante de l'angle, propre
+aux transmissions à réducteur harmonique, distincte de la composante
+classique en $\qd$ que porte également le résidu.
+
+\parag{Architecture et régularité.} Le résidu principal est un perceptron
+multicouche de 4~couches cachées de 256 unités, sans activation sur la couche de
+sortie, produisant $\taumlp \in \Rset^{7}$. Le choix de la fonction
+d'activation est contraint: seules Mish et Softplus sont autorisées, et ReLU
+est explicitement interdite dans tout le projet. La raison n'est pas la
+performance d'apprentissage mais la physique de l'actionneur: la sortie du
+réseau est un couple envoyé à des moteurs, et une activation non lisse produit
+des discontinuités de dérivée qui se traduisent par des à-coups de couple. Le
+même argument de régularité est invoqué par Liu \emph{et al.}~\cite{liu2024}
+pour leur réseau d'énergie, où la nécessité de dériver deux fois impose des
+activations lisses; il est ici transposé en argument de sécurité moteur. C'est
+aussi le critère qui a conduit à rejeter deux mécanismes attractifs de la
+littérature: les couches de Kolmogorov-Arnold recensées par
+Toscano \emph{et al.}~\cite{toscano2025} et évaluées par
+Wang \emph{et al.}~\cite{wang2025spel}, et le modèle de frottement de Stribeck
+paramétrique de Lutter \emph{et al.}~\cite{lutter2019iros}, qui repose sur un
+terme en $\mathrm{sign}(\qd)$ non lisse.
+
+Le critère de régularité $C^{1}$ ne distingue cependant pas, à lui seul, Mish
+de deux autres activations lisses courantes, GELU et Tanh, et ce choix précis
+mérite d'être justifié séparément — étant entendu que Liu \emph{et al.}~
+\cite{liu2024}, cités ci-dessus pour l'argument de régularité, n'utilisent pas
+Mish dans leur propre réseau (ils emploient Softplus en sortie pour la
+non-négativité) et ne fournissent donc aucun précédent direct à invoquer ici.
+Tanh est écartée pour une raison de saturation~: bornée dans $(-1,1)$, elle
+produit un gradient qui s'annule pour les grandes activations, ce qui
+ralentirait l'apprentissage des régimes de couple élevé — précisément ceux que
+ce travail cherche à bien représenter sur les axes porteurs. Entre GELU et
+Mish, toutes deux non bornées supérieurement, bornées inférieurement et non
+monotones au voisinage de zéro (propriétés qui leur valent d'être préférées à
+Tanh dans la littérature récente sur les réseaux profonds), le choix de Mish
+retenu ici repose sur ces propriétés génériques de la fonction elle-même — en
+particulier l'auto-régularisation de sa composante non monotone au voisinage
+de zéro, rapportée comme bénéfique à l'entraînement dans sa littérature
+d'origine — et non sur une comparaison empirique menée dans ce projet. Aucune
+étude de sensibilité Mish contre GELU n'a été réalisée ici~: ce n'est pas un
+axe de la matrice d'ablation implémentée (section~\ref{sec:limites}), et le
+choix doit donc être lu comme un choix de conception par défaut, documenté et
+assumé, plutôt que comme un résultat comparatif.
+
+Ce degré~0 ne garantit rien. Un tel résidu peut prédire des couples hors des
+limites d'actionneur et, plus grave, injecter de l'énergie dans le système —
+c'est-à-dire se comporter comme une source alors qu'il est censé représenter des
+pertes.
+
+\subsubsection{Degré~1: des garanties imposées par la fonction objectif}
+\label{sec:degre1}
+
+Le premier remède consiste à contraindre l'optimisation. L'entraînement minimise
+une perte composite formée d'un terme de fidélité aux données et d'un lagrangien
+augmenté portant deux contraintes d'inégalité. Pour un lot de $N$ échantillons
+indexés par $i$,
+%
+\begin{equation}
+    \mathcal{L}_{\text{données}}
+    = \frac{1}{N}\sum_{i=1}^{N}
+      \bigl\| \taupred^{(i)} - \taureal^{(i)} \bigr\|_2^{2} .
+    \label{eq:Ldata}
+\end{equation}
+%
+Les deux contraintes sont
+%
+\begin{align}
+    g_{\mathrm{couple}}^{(i)} &= \bigl|\taupred^{(i)}\bigr| - \bar{\tau} \le 0
+    \qquad \text{(par axe)}, \label{eq:gtorque}\\
+    g_{\mathrm{dis}}^{(i)} &= \bigl(\taures^{(i)}\bigr)^{\top}\qd^{(i)} \le 0 ,
+    \label{eq:gdissip}
+\end{align}
+%
+où $\bar{\tau}$ est le vecteur des limites de couple du
+tableau~\ref{tab:constantes}. Elles ne jouent pas le même rôle:
+\eqref{eq:gtorque} est une contrainte de \emph{sécurité}, qui interdit au modèle
+de prédire un couple irréalisable, alors que~\eqref{eq:gdissip} est la
+contrainte \emph{informative}, qui interdit au résidu total d'injecter de
+l'énergie.
+
+En posant $\psi_\bullet = \max(0, g_\bullet)$ la violation positive, la perte
+totale s'écrit
+%
+\begin{equation}
+    \mathcal{L}
+    = \mathcal{L}_{\text{données}}
+    + \underbrace{\overline{\lambda_{t}\,\psi_{\mathrm{couple}}
+      + \tfrac{\rho}{2}\,\psi_{\mathrm{couple}}^{2}}
+    + \overline{\lambda_{d}\,\psi_{\mathrm{dis}}
+      + \tfrac{\rho}{2}\,\psi_{\mathrm{dis}}^{2}}}
+      _{\text{lagrangien augmenté}} ,
+    \label{eq:Ltotal}
+\end{equation}
+%
+où la barre désigne la moyenne sur le lot, $\rho = 1$ est le poids de
+pénalisation quadratique, et $\lambda_{t}, \lambda_{d} \ge 0$ sont les
+multiplicateurs de Lagrange, mis à jour une fois par époque par montée duale.
+La valeur $\rho = 1$ elle-même est fixée arbitrairement, à dire d'expérience,
+et n'a fait l'objet d'aucune étude de sensibilité ni d'aucune règle de mise à
+jour adaptative dans ce travail — une lacune reconnue ici plutôt que
+découverte a posteriori, alors même que l'instabilité de la montée duale est
+classiquement associée à un mauvais calibrage de ce paramètre. La
+section~\ref{sec:res-physique} montrera que la montée duale converge
+proprement sur données saines avec cette valeur, ce qui atténue mais
+n'élimine pas ce risque~: rien ne garantit que $\rho = 1$ reste un bon choix
+hors du régime testé ici, et une étude de sensibilité sur $\rho$ fait partie
+des axes d'ablation non couverts (section~\ref{sec:limites}).
+%
+\begin{equation}
+    \lambda_\bullet \leftarrow \max\bigl(0,\ \lambda_\bullet
+    + \rho\,\overline{\psi_\bullet}\bigr) .
+    \label{eq:dual}
+\end{equation}
+%
+Ce mécanisme, repris de Djeumou \emph{et al.}~\cite{djeumou2022}, présente
+l'avantage décisif sur une pénalisation à poids fixe de ne pas exiger le réglage
+manuel d'un compromis: par~\eqref{eq:dual}, le multiplicateur croît tant que la
+contrainte est violée et se relâche dès qu'elle est satisfaite. C'est aussi
+pourquoi le
+programme d'annelage des contraintes proposé par
+Prabhakar \emph{et al.}~\cite{prabhakar2026} a été écarté: la montée duale
+réalise déjà, de manière adaptative, ce que cet annelage impose de manière
+prescrite.
+
+Ce degré~1 apporte beaucoup, mais sa garantie reste d'une nature faible. Elle
+est \emph{statistique et rétrospective}: les contraintes sont évaluées sur les
+échantillons vus à l'entraînement, et rien n'assure qu'un état non visité les
+respecte. La section~\ref{sec:res-physique} montrera d'ailleurs que la montée
+duale, si elle converge proprement sur des données saines, peut se déstabiliser
+lorsque les données ne le sont pas.
+
+\subsubsection{Degré~2: une garantie obtenue par construction}
+\label{sec:frictionnet}
+
+Le troisième degré consiste à retirer la partie dissipative du résidu du domaine
+de ce qui est \emph{espéré} pour la placer dans celui de ce qui est \emph{vrai}.
+Un sous-module dédié, appelé ici module de frottement, porte cette partie. Son
+architecture est un perceptron $22 \rightarrow 64 \rightarrow 64 \rightarrow 7$
+à activations Mish, dont la sortie $d \in \Rset^{7}$ est transformée en une
+matrice de frottement diagonale
+%
+\begin{equation}
+    D(x) = \mathrm{diag}\bigl(\mathrm{Softplus}(d) + \varepsilon\bigr),
+    \qquad \varepsilon = 10^{-6},
+    \label{eq:Dmat}
+\end{equation}
+%
+strictement définie positive, puis en un couple de frottement
+%
+\begin{equation}
+    \taufric = -D(x)\,\qd .
+    \label{eq:taufric}
+\end{equation}
+%
+La puissance dissipée vérifie alors, pour tout état et tout jeu de poids,
+%
+\begin{equation}
+    \taufric^{\top}\qd
+    = -\sum_{j=1}^{7}\bigl(\mathrm{Softplus}(d_j)+\varepsilon\bigr)\,\qd_j^{2}
+    \le 0 ,
+    \label{eq:dissip}
+\end{equation}
+%
+c'est-à-dire que le couple~\eqref{eq:taufric}, construit depuis la matrice
+strictement définie positive~\eqref{eq:Dmat}, retire toujours de l'énergie au
+système. Contrairement au degré~1, la propriété~\eqref{eq:dissip} ne dépend ni
+des données ni de l'entraînement: c'est une identité algébrique.
+
+\parag{Pourquoi une matrice diagonale.} Le motif de factorisation
+garantissant la définie-positivité est celui de
+Lutter \emph{et al.}~\cite{lutter2019iclr}, appliqué à la dissipation par
+Liu \emph{et al.}~\cite{liu2024} et Duong \emph{et al.}~\cite{duong2024}. Une
+factorisation de Cholesky complète d'une matrice $7\times 7$ demanderait
+28~entrées triangulaires inférieures. L'argument géométrique de
+Wang \emph{et al.}~\cite{wang2025spel} établit que des liaisons rotoïdes
+tournant chacune autour d'un axe unique produisent une dissipation de rang~1 par
+corps, qui se réduit en espace articulaire à un scalaire par axe. Cette
+hypothèse a été vérifiée spécifiquement sur le modèle du Franka par une analyse
+dédiée du modèle Pinocchio: les sept articulations sont bien du type révolute à
+axe unique, et les coefficients de frottement et d'amortissement déclarés dans
+l'URDF sont tous nuls, donc tous à apprendre. La forme diagonale est ainsi
+physiquement justifiée et réduit de 28 à 7 le nombre de paramètres de
+dissipation, soit 80\% de moins, pour un total de 6\,087 paramètres dans le
+sous-module.
+
+Le résidu total composé est finalement
+%
+\begin{equation}
+    \taures(\q,\qd,\delta) = \taumlp(x) + \taufric(x),
+    \label{eq:greybox}
+\end{equation}
+%
+et, injecté dans~\eqref{eq:decompo}, il donne l'architecture représentée sur la
+figure~\ref{fig:archi}. On notera que la contrainte~\eqref{eq:gdissip} du
+degré~1 n'est pas rendue inutile par le degré~2: elle étend à $\taumlp$, dont
+la sortie est libre, la propriété que~\eqref{eq:dissip} garantit pour
+$\taufric$ seul. Les deux degrés sont complémentaires, l'un couvrant ce que
+l'autre laisse libre.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    font=\small,
+    box/.style={draw, rounded corners=2pt, minimum height=8mm, align=center,
+                inner sep=3pt},
+    white/.style={box, fill=black!4},
+    learn/.style={box, fill=black!12},
+    ar/.style={-{Latex[length=2mm]}, thick},
+    sum/.style={draw, circle, inner sep=1pt}
+]
+% voie analytique (rangée haute)
+\node[white, text width=36mm] (rnea) at (5.2,3.0)
+    {\textbf{terme calculé}\\RNEA (URDF, $\delta$)\\
+     $\taurbd$ \eqref{eq:taurbd}};
+% voie apprise (rangée basse)
+\node[box, text width=22mm] (state) at (1.3,0)
+    {$\q,\qd,\qdd,\delta$};
+\node[box, text width=30mm] (enc) at (5.0,0)
+    {encodage \eqref{eq:encodage}\\$x \in \Rset^{22}$};
+\node[learn, text width=32mm] (mlp) at (9.6,1.3)
+    {MLP $4\times256$, Mish\\$\taumlp$ (degré~0)};
+\node[learn, text width=30mm] (fric) at (9.6,-1.5)
+    {module de frottement\\MLP 22-64-64-7\\$\taufric=-D(x)\,\qd$ (degré~2)};
+\node[sum] (s1) at (12.9,0) {$+$};
+\node[sum] (s2) at (12.9,3.0) {$+$};
+\node[box] (out) at (14.3,3.0) {$\taupred$};
+
+\draw[ar] (state.north) |- (rnea.west);
+\draw[ar] (state.east) -- (enc.west);
+\draw[ar] (enc.east) -- (mlp.west);
+\draw[ar] (enc.east) -- (fric.west);
+\draw[ar] (mlp.east) -- (12.3,1.3) |- (s1.west);
+\draw[ar] (fric.east) -- (12.3,-1.5) |- (s1.west);
+\draw[ar] (s1.north) -- node[right, pos=0.5] {$\taures$} (s2.south);
+\draw[ar] (rnea.east) -- (s2.west);
+\draw[ar] (s2.east) -- (out.west);
+\end{tikzpicture}
+\caption{Architecture grise résultant de~\eqref{eq:decompo}
+et~\eqref{eq:greybox}. Le terme calculé RNEA, jamais appris, porte la dynamique
+du corps rigide et la part connue de la charge; les deux blocs appris (gris
+foncé) portent le résidu. Le module de frottement est structurellement
+dissipatif par~\eqref{eq:dissip} (degré~2), tandis que la sortie libre du MLP
+(degré~0) n'est contrainte que par la perte~\eqref{eq:Ltotal} (degré~1). Tous
+les blocs appris reçoivent la charge $\delta$ en entrée.}
+\label{fig:archi}
+\end{figure}
+
+\subsection{Rendre le résidu identifiable: excitation et hygiène des données}
+\label{sec:donnees}
+
+Un résidu contraint n'est utile que s'il est identifiable, ce qui exige des
+données couvrant l'espace d'état atteignable. La stratégie retenue est en deux
+niveaux, puis suivie d'un filtrage dont la justification constitue l'un des
+résultats du travail.
+
+\parag{Choix des configurations centrales.} Dix configurations articulaires
+$\q_{\mathrm{c}}$ sont tirées par une séquence de Sobol brouillée en
+dimension~7, bornée par les limites articulaires de l'URDF. Un échantillonnage
+quasi aléatoire à faible discrépance couvre l'espace plus uniformément qu'un
+tirage uniforme indépendant, ce qui importe lorsque le nombre de
+configurations est faible devant la dimension — mais dix points, même bien
+répartis par une séquence de Sobol, restent un échantillonnage extrêmement
+clairsemé d'un espace à 7~dimensions~: la distance entre plus proches voisins
+y est grande, et de larges régions de l'espace articulaire ne sont couvertes
+par aucune configuration centrale, seulement par l'excursion locale, de faible
+amplitude (0,05 à 0,30~rad, voir~\eqref{eq:fourier}), des trajectoires
+d'excitation qui les entourent. Ce choix est un compromis budgétaire assumé
+plutôt qu'une couverture revendiquée de l'espace atteignable~: chaque
+configuration centrale coûte 5\,000 pas de simulation par charge, et
+l'élargir à un nombre de points croissant avec la dimension (ce que
+suggérerait une couverture uniforme au sens strict) était hors du budget de
+calcul de ce travail. La conséquence directe est que le modèle appris n'est
+identifié, et donc valide, que dans un voisinage de ces dix configurations et
+de leur excursion locale — c'est une limite reconnue explicitement en
+section~\ref{sec:limites}, et non un défaut découvert après coup.
+
+\parag{Trajectoires d'excitation.} Autour de chaque configuration centrale,
+une série de Fourier à 5~harmoniques est générée indépendamment pour chaque
+axe:
+%
+\begin{equation}
+    \q_j(t) = \q_{\mathrm{c},j}
+    + \sum_{k=1}^{5} A_{kj}\,\sin\!\bigl(\omega_{kj}\,t + \varphi_{kj}\bigr),
+    \label{eq:fourier}
+\end{equation}
+%
+avec $A_{kj}$ tiré uniformément dans $[0{,}05~;~0{,}30]$~rad,
+$\omega_{kj}$ dans $[0{,}50~;~3{,}00]$~rad$\cdot$s$^{-1}$ et $\varphi_{kj}$
+dans $[0~;~2\pi]$. La série de Fourier finie est le choix standard pour
+l'excitation en identification de dynamique~\cite{deng2024}; son avantage
+propre ici est que les vitesses et accélérations s'obtiennent par dérivation
+analytique de~\eqref{eq:fourier}, ce qui fournit un $\qdd$ exact — et non
+différencié numériquement — pour l'évaluation de RNEA. Chaque segment dure 5~s
+échantillonnées à \SI{1}{kHz}, soit 5\,000 pas, et dix segments sont exécutés par
+valeur de charge, ce qui porte le jeu nominal à 150\,000 échantillons pour les
+trois charges.
+
+\parag{Source du couple mesuré.} Les trajectoires sont rejouées dans le
+moteur physique d'Isaac~Sim, dont le modèle du Franka porte des frottements, un
+amortissement et une compliance d'actionneur propres; le couple mesuré
+$\taureal$ est lu directement sur les articulations. Le résidu cible
+$\taureal - \taurbd$ reflète donc de la dynamique non modélisée d'un moteur
+physique indépendant, et non un modèle de frottement synthétique. Un générateur
+antérieur, fondé sur un résidu de Coulomb et visqueux réglé à la main, a été
+conservé mais uniquement comme test de bon fonctionnement de la chaîne sur
+processeur: il n'a pas de valeur scientifique, puisque le réseau y réapprend un
+modèle inventé.
+
+\parag{Filtrage de saturation.} Les échantillons dont le couple mesuré
+atteint la limite de l'actionneur sont écartés par le critère
+%
+\begin{equation}
+    \bigl|\tau_{\mathrm{real},j}\bigr| \le 0{,}97\,\bar{\tau}_j
+    \quad \text{pour tout } j ,
+    \label{eq:satfilter}
+\end{equation}
+%
+c'est-à-dire une marge de 3\% sous la limite. Le raisonnement, développé et
+quantifié en section~\ref{sec:res-satfix}, est le suivant: un échantillon saturé
+porte comme couple mesuré la valeur d'écrêtage de l'actionneur et non la
+dynamique réelle, alors que $\taurbd$ est calculé depuis l'accélération \emph{de
+référence}, supposée atteinte; le résidu cible correspondant est alors dénué de
+sens physique. Un filtre naïf $|\taureal| > \bar{\tau}$ ne les capture pas,
+puisqu'un échantillon écrêté se situe exactement \emph{à} la limite. Après
+filtrage, le jeu de données retient 148\,304~échantillons sur les 150\,000
+nominaux — soit un peu plus de 1\% écartés — répartis sur trois valeurs de
+charge (\SIlist{0;1;3}{kg}) et séparés en 90\% d'entraînement et 10\% de validation.
+
+\subsection{Fermer la boucle sur le modèle appris}
+\label{sec:boucle}
+
+\subsubsection{Loi de commande}
+
+La loi de commande est un couple calculé augmenté d'un correcteur
+proportionnel-dérivé. À chaque pas, pour un état mesuré $(\q,\qd)$ et une
+consigne $(\q_{\mathrm{d}},\qd_{\mathrm{d}},\qdd_{\mathrm{d}})$ issue de la
+trajectoire planifiée,
+%
+\begin{equation}
+    \taucmd = \underbrace{\taurbd(\q,\qd,\qdd_{\mathrm{d}},\delta)
+    + \taures(\q,\qd,\delta)}_{\text{anticipation, modèle appris}}
+    + \underbrace{K_p\,e + K_d\,\dot{e}}_{\text{rétroaction}},
+    \qquad
+    \begin{aligned}
+        e &= \q_{\mathrm{d}} - \q, \\
+        \dot{e} &= \qd_{\mathrm{d}} - \qd,
+    \end{aligned}
+    \label{eq:ctpd}
+\end{equation}
+%
+la sortie étant finalement écrêtée axe par axe aux limites du
+tableau~\ref{tab:constantes}:
+$\taucmd \leftarrow \mathrm{clip}(\taucmd, -\bar{\tau}, +\bar{\tau})$. Cet
+écrêtage est une couche de sécurité indépendante de l'apprentissage: même si le
+modèle prédisait un couple irréalisable, aucune consigne hors limites ne peut
+être publiée. On soulignera que $\qdd_{\mathrm{d}}$ provient du planificateur et
+n'est jamais une accélération différenciée depuis les capteurs, ce qui referme
+l'argument ouvert en section~\ref{sec:sota-archi}.
+
+\subsubsection{Des gains dérivés d'une borne mesurée}
+\label{sec:gains}
+
+Les gains ne sont pas réglés à la main. Le résultat de
+Liu \emph{et al.}~\cite{liu2024} établit que, pour une loi de la
+forme~\eqref{eq:ctpd} avec une erreur de modèle \emph{strictement bornée au
+sens du pire cas} par $\epsilon_j$ sur l'axe $j$, l'erreur de suivi converge
+dès lors que les gains dominent cette borne avec une marge suffisante. Il faut
+préciser d'emblée un point qui conditionne la portée de tout ce qui suit~: la
+démonstration exige une borne valable pour \emph{tout} état, et non une borne
+statistique. La section~\ref{sec:res-bound} montrera que la borne effectivement
+injectée dans~\eqref{eq:gains} ci-dessous est un quantile mesuré à 99,9~\% et
+non le maximum absolu observé~; ce choix, justifié et quantifié à cet endroit,
+affaiblit la garantie théorique de ce paragraphe~: la certification au sens de
+Lyapunov qui suit n'est donc, en toute rigueur, valable que pour la fraction
+des conditions de fonctionnement couvertes par ce quantile, le reste étant
+couvert non par la preuve mais par l'écrêtage matériel indépendant décrit plus
+haut. On en déduit, en imposant de surcroît une condition d'amortissement
+critique qui évite tout dépassement,
+%
+\begin{equation}
+    K_{d,jj} = \kappa\,\epsilon_j , \qquad
+    K_{p,jj} = \frac{K_{d,jj}^{2}}{4} ,
+    \label{eq:gains}
+\end{equation}
+%
+où $\kappa \ge 1$ est une marge de sécurité multiplicative, fixée à
+$\kappa = 2$, et $K_p, K_d$ sont diagonales définies positives. Le point
+méthodologique est que $\epsilon_j$ n'est pas postulé: il est mesuré sur la
+partition de validation du modèle entraîné, par un outil dédié qui reconstruit
+exactement la même partition que l'entraînement et rapporte, par axe, l'erreur
+quadratique moyenne et les quantiles de $|\taupred - \taureal|$. Les gains sont
+donc une conséquence chiffrée de la qualité du modèle, et non un réglage
+indépendant. Les valeurs obtenues et la discussion du choix du quantile figurent
+en section~\ref{sec:res-bound}.
+
+\subsubsection{Environnement d'exécution et contraintes de réalisation}
+\label{sec:exec}
+
+\parag{Le planificateur et le matériel simulé.} La planification est assurée
+par MoveIt2 sous ROS2~Jazzy, dans sa configuration standard, avec résolution de
+cinématique inverse par le solveur KDL. Ce choix est délibérément
+minimaliste: la planification n'est pas l'objet de la contribution, et lui
+substituer un planificateur de recherche — par exemple un planificateur
+neuronal résolvant l'équation d'Eikonal comme celui de
+Ni et Qureshi~\cite{ni2024} — aurait introduit une variable de confusion
+supplémentaire dans un système déjà difficile à déboguer. Le matériel simulé, en
+revanche, a changé en cours de projet, et la justification de ce changement fait
+partie de la méthode. La première version utilisait Isaac~Sim comme robot
+simulé, via l'espace de travail ROS2 fourni par l'éditeur, ce qui imposait une
+dépendance de compilation externe au dépôt et non versionnée. Elle a été
+remplacée par MuJoCo à travers le paquet \code{mujoco_ros2_control}, installable
+par le gestionnaire de paquets de la distribution. Deux critères ont motivé la
+bascule: la suppression de la dépendance externe, et surtout un avantage
+structurel — le modèle MJCF utilisé déclare un actionneur de couple direct
+unique par axe, sans asservissement de position interne concurrent, alors que le
+modèle USD d'Isaac~Sim comportait un asservissement de position raide qu'il
+fallait neutraliser explicitement pour que les consignes de couple aient une
+autorité. Cette classe de défaut disparaît par construction. Deux simulateurs
+indépendants coexistent donc dans ce travail~: Isaac~Sim reste la source hors
+ligne des données d'entraînement, MuJoCo est le \og matériel simulé \fg{}
+piloté en temps réel. Cet écart de domaine entre simulateur d'entraînement et
+simulateur d'exécution — un \emph{sim-to-sim gap} — n'est pas anodin et doit
+être explicité plutôt que seulement mentionné~: les deux moteurs physiques
+n'implémentent ni le même solveur de contact, ni le même modèle de frottement
+d'actionneur, ni nécessairement les mêmes paramètres numériques d'intégration,
+de sorte que le couple $\taureal$ appris depuis Isaac~Sim n'est pas
+garanti représenter fidèlement la dynamique que le modèle rencontre effectivement
+une fois inséré dans la boucle de commande sous MuJoCo. Ce travail ne
+neutralise pas cet écart~: il l'assume comme une limite explicite (voir
+section~\ref{sec:limites}), et le distingue soigneusement du sim-to-real
+gap visé par la contribution~4~: la validation en boucle fermée de
+la section~\ref{sec:res-loop} démontre que le modèle appris pilote
+\emph{effectivement} un simulateur physique \emph{différent} de celui sur
+lequel il a été identifié — un test de robustesse involontaire mais réel — et
+non qu'il piloterait un robot réel. Le prix précis de ce choix, et pourquoi il
+a néanmoins été retenu (suppression d'une dépendance de compilation externe et
+d'un asservissement de position concurrent, voir ci-dessus), est discuté plus
+loin en section~\ref{sec:limites}.
+
+\parag{Réalisation temps réel.} La boucle est réalisée par un n\oe ud ROS2
+dédié, cadencé par une minuterie à \SI{1000}{Hz}. À chaque tic: lecture du dernier
+état articulaire reçu, interpolation linéaire de la consigne dans la trajectoire
+courante, appel de la loi~\eqref{eq:ctpd}, publication du vecteur de couples sur
+le contrôleur d'effort de \code{ros2_control}. Conformément à l'avertissement
+d'Ibarz \emph{et al.}~\cite{ibarz2021} sur l'exécution asynchrone, trois détails
+de réalisation se sont révélés critiques et méritent d'être documentés comme
+éléments de méthode plutôt que comme anecdotes.
+
+\begin{description}
+    \item[Indexation par nom, jamais par position.] Le diffuseur d'état
+    articulaire de \code{ros2_control} publie \emph{toutes} les articulations
+    déclarées auprès du gestionnaire de contrôleurs, triées par ordre
+    alphabétique, y compris les deux glissières de la pince. Extraire les sept
+    premiers éléments du message donne donc un vecteur mélangé: les deux
+    doigts précèdent \code{panda_joint1} et rejettent \code{panda_joint6} et
+    \code{panda_joint7} hors des sept premières positions. Le vecteur de
+    configuration passé à RNEA et au réseau était par conséquent incohérent à
+    chaque pas, avec pour symptôme la chute systématique du bras à chaque
+    bascule vers le mode couple. La règle retenue — indexer par nom — a dû
+    être appliquée deux fois, à deux endroits indépendants du code
+    (souscription à l'état articulaire, puis interpolateur de trajectoire).
+    \item[Fenêtre de péremption des consignes.] La trajectoire reçue est
+    considérée comme périmée au bout de 2~s de temps mural après réception,
+    après quoi le n\oe ud se replie sur une compensation de gravité. Ce
+    dispositif de sûreté a une conséquence non évidente sur les couches
+    supérieures: tout producteur de trajectoire doit soit rester sous cette
+    durée, soit republier périodiquement pour maintenir la consigne fraîche.
+    \item[Cadence de la boucle intergicielle.] La configuration de
+    démonstration héritée cadençait la boucle de l'intergiciel à \SI{100}{Hz}, ce
+    qui produisait une oscillation visible en maintien de position. Le passage
+    à \SI{1000}{Hz}, conforme à l'objectif, l'a supprimée.
+\end{description}
+
+\subsection{Transférer sous contrainte: affinage à ossature gelée}
+\label{sec:finetune}
+
+Le protocole de transfert vers un robot physique est en deux temps. Le modèle
+est d'abord pré-entraîné sur la totalité des données de simulation. Puis, pour
+l'adaptation, toutes les couches sont gelées sauf les deux dernières couches
+linéaires, et l'optimisation reprend sur un petit enregistrement réel de
+mouvements exploratoires, pendant un nombre volontairement faible de pas de
+gradient (100 par défaut, plage 50 à 200) avec un pas d'apprentissage réduit à
+$10^{-4}$:
+%
+\begin{equation}
+    \theta^{*} = \arg\min_{\theta \in \Theta_{\mathrm{libre}}}
+    \mathcal{L}\bigl(\theta,\ \mathcal{D}_{\text{réel}}\bigr) .
+    \label{eq:finetune}
+\end{equation}
+%
+Deux critères motivent ce dispositif. D'abord, le gel de l'ossature limite
+l'oubli catastrophique: la représentation apprise sur $1{,}5\cdot 10^{5}$
+échantillons ne doit pas être détruite par quelques milliers d'échantillons
+réels. Ensuite, et c'est le point spécifique à une approche informée par la
+physique, l'affinage se déroule sous la perte complète~\eqref{eq:Ltotal},
+contraintes incluses: le réseau ne peut pas s'ajuster au bruit de mesure en
+violant la dissipativité ou les limites de couple. Les contraintes jouent donc
+le rôle d'un régularisateur physique pendant la phase où le risque de
+surapprentissage est maximal.
+
+Cet argument appelle une précision importante sur son domaine de validité~:
+il concerne le bruit de mesure d'un \emph{capteur physique réel} — jeu de
+codeur, quantification, vibration — sur $\mathcal{D}_{\text{réel}}$, un
+enregistrement effectué sur le Franka matériel. Il ne s'applique pas tel quel
+si $\mathcal{D}_{\text{réel}}$ venait à être approché, pour test du
+mécanisme, par un enregistrement supplémentaire issu d'Isaac~Sim~: un
+simulateur ne génère pas nativement ce bruit de capteur, et l'argument de
+protection contre le surapprentissage du bruit y perdrait sa justification
+physique, même si les contraintes resteraient utiles comme régularisateur
+générique contre le surapprentissage d'un petit échantillon. Comme le rappelle
+la section~\ref{sec:limites}, ce protocole n'a en pratique jamais été exécuté
+sur un enregistrement réel dans ce travail~: l'argument ci-dessus est donc, à
+ce stade, une justification de conception pour le cas d'usage visé, non un
+bénéfice mesuré. Le protocole de gel est repris de
+Duong \emph{et al.}~\cite{duong2024}; son exécution sous perte contrainte en
+est l'extension propre à ce travail.
+
+\subsection{Une tâche de préhension comme test d'intégration}
+\label{sec:tache}
+
+La dernière pièce n'apporte aucune nouveauté scientifique: son rôle est
+d'exercer simultanément toutes les précédentes sur une tâche complète, et donc
+de constituer un test d'intégration au sens fort. La scène MuJoCo comporte un
+sol, un éclairage, et un cube libre de 4~cm de côté posé à 50~cm devant la base
+du robot, largement dans l'espace de travail (portée d'environ 85{,}5~cm). La
+séquence est réalisée par une machine à états dont les phases sont: repos,
+pré-approche, approche, fermeture, levée, maintien, relâchement, et un état
+d'abandon. Le mouvement du bras est délégué à un client qui construit une cible
+cartésienne (contrainte de position et contrainte d'orientation), demande un
+plan à MoveIt2, transmet la trajectoire obtenue au n\oe ud de commande, puis
+vérifie la convergence. Trois choix de conception, tous issus de
+l'expérimentation en boucle réelle, méritent d'être justifiés.
+
+\parag{Un critère de convergence cartésien plutôt qu'articulaire.} Le premier
+critère utilisé était un seuil uniforme en radians sur l'erreur articulaire
+maximale. Il est physiquement mal posé: une même erreur en radians sur l'axe~1
+ou sur l'axe~7 ne produit pas du tout le même écart de l'effecteur. Il a été
+remplacé par une vérification de la distance cartésienne réelle de la bride,
+calculée par cinématique directe avec Pinocchio sur le même URDF que le reste de
+la chaîne. Deux tolérances distinctes sont utilisées: 2~cm pour la descente
+finale, où la précision compte, et 4~cm pour les points de passage
+intermédiaires de survol, où elle ne compte pas.
+
+\parag{L'enregistrement des obstacles auprès du planificateur.} MoveIt2
+ignorait initialement l'existence du cube: les plans étaient déclarés libres,
+mais l'erreur de suivi réelle amenait le bras à toucher effectivement l'objet,
+ce que le moteur physique traduisait par un contact absorbant le couple
+commandé — symptôme visuellement identique à un axe bloqué. Le cube est
+désormais enregistré comme obstacle de la scène de planification, avec une
+taille majorée à 12~cm au lieu de ses 4~cm réels afin d'absorber l'erreur de
+suivi, puis attaché à la pince juste avant la descente et détaché au
+relâchement. Le sol a été enregistré de la même façon.
+
+\parag{Le découpage du mouvement en points de passage.} Le trajet depuis la
+position de repos vers la pose de pré-approche est interpolé en trois
+sous-mouvements par interpolation complète en $SE(3)$ (position linéaire et
+orientation par interpolation sphérique), plutôt qu'exécuté en un seul grand
+mouvement. Le critère est ici la robustesse du suivi: un grand débattement
+demandé en une fois a produit des échecs de convergence que des sous-mouvements
+plus courts n'ont pas.
+
+% =====================================================================
+\section{Validation et résultats}
+\label{sec:resultats}
+% =====================================================================
+
+\subsection{Ce qui doit être démontré, et par quelle grandeur}
+\label{sec:res-quoi}
+
+Aucune mesure unique ne peut valider l'ensemble de la méthode. La stratégie
+adoptée consiste à associer à chaque contribution revendiquée une grandeur
+susceptible de la démentir, puis à progresser du plus contrôlé au plus intégré.
+Le choix de ces grandeurs demande d'être justifié avant d'être appliqué, car
+deux d'entre elles sont moins évidentes qu'il n'y paraît.
+
+\parag{L'erreur de couple doit être lue relativement à la limite d'axe.}
+Une erreur de prédiction exprimée en newton-mètres n'est pas comparable d'un axe
+à l'autre lorsque les limites d'actionneur diffèrent d'un facteur~7
+(tableau~\ref{tab:constantes}). La grandeur qui compte pour la commande est la
+fraction de l'autorité de l'actionneur consommée par l'erreur de modèle, soit
+$\mathrm{RMSE}_j / \bar{\tau}_j$. Les deux lectures — absolue et relative — sont
+rapportées, et la section~\ref{sec:res-stage1} montrera qu'elles ordonnent les
+axes en sens inverse.
+
+\parag{Une moyenne ne suffit pas à valider un modèle destiné à commander.}
+L'avertissement de Deng \emph{et al.}~\cite{deng2024} est explicite: un modèle
+peut afficher une erreur moyenne excellente tout en produisant des prédictions
+localement absurdes que la moyenne dissimule. Les queues de distribution sont
+donc rapportées séparément (section~\ref{sec:res-bound}), et ce sont elles, non
+la moyenne, qui alimentent le calcul des gains~\eqref{eq:gains}. C'est
+d'ailleurs par cette lecture que le défaut de données le plus important du
+travail a été découvert.
+
+Les cinq niveaux de vérification sont alors les suivants. \emph{Niveau~0} —
+cohérence structurelle: chaque module possède un test vérifiant les dimensions,
+l'absence d'activation interdite et, pour le module de frottement, la
+propriété~\eqref{eq:dissip} sur des états tirés aléatoirement; c'est un cas
+simple où la solution est connue analytiquement, puisque la puissance dissipée
+\emph{doit} être négative quels que soient les poids. \emph{Niveau~1} —
+précision hors ligne sur une partition de validation de 10\% jamais vue à
+l'entraînement, décomposée par axe (section~\ref{sec:res-stage1}).
+\emph{Niveau~2} — tenue des garanties physiques au fil des époques
+(section~\ref{sec:res-physique}), puis une expérience contrôlée avec hypothèse
+préalable, seul endroit du travail où une hypothèse a été confirmée par une
+comparaison à réglages identiques (section~\ref{sec:res-satfix}).
+\emph{Niveau~3} — boucle fermée: capture numérique de l'état articulaire mesuré
+et de la décomposition du couple commandé pendant une exécution réelle, pour
+vérifier que le modèle appris pilote effectivement le robot simulé
+(section~\ref{sec:res-loop}). \emph{Niveau~4} — tâche complète: taux de
+réussite et erreur finale de l'effecteur sur douze exécutions instrumentées
+(section~\ref{sec:res-task}). Ce qui manque à ce dispositif est identifié
+explicitement en section~\ref{sec:limites}: il n'y a pas de validation sur
+robot physique, et la mesure de latence d'inférence qui substantierait la
+contribution~2 n'a pas été réalisée.
+
+\subsection{Précision du modèle appris}
+\label{sec:res-stage1}
+
+% TODO(hugo): compléter ici le modèle exact de GPU/CPU utilisé pour
+% l'entraînement (machine `hci-student`) ainsi que le temps d'entraînement
+% mural mesuré pour les 200 époques ci-dessous ; ni le dépôt du projet ni
+% tracking/PROJECT_STATE.md ne précisent la référence matérielle exacte ou
+% une durée chiffrée au moment de cette révision, seulement une mention
+% générique de « machine GPU ». Ne pas inventer de valeur : demander la
+% mesure exacte avant soutenance.
+% TODO(siunitx): conversion \SI{}{} non faite pour les grandeurs numériques
+% des grands tableaux de cette section (tab:perjoint, tab:exp, tab:tau,
+% tab:stage4) et des figures associées, par souci de temps ; les unités
+% (Nm, rad, m, %) y sont donc restées en notation manuelle « 0,80~Nm » etc.
+% Cohérent en soi, mais un passage manuel de conversion vers \SI{}{}/\num{}
+% reste à faire pour une cohérence totale avec le reste du document.
+La configuration de référence, notée ici \code{isaac-satfix}, est un perceptron
+de 4~couches de 256 unités à activation Mish, module de frottement activé,
+optimiseur Adam à pas $10^{-3}$, lots de 256 échantillons, 200~époques,
+$\rho = 1$, entraîné sur les 148\,304 échantillons issus d'Isaac~Sim aux trois
+charges. Sa meilleure perte de validation vaut
+$\mathcal{L}_{\mathrm{val}} = 0{,}3995$, atteinte à l'époque~144 et non à la
+dernière époque. Elle se compare directement à celle d'une exécution
+antérieure identique en tous points sauf le filtrage
+de saturation~\eqref{eq:satfilter}, notée \code{isaac-first-real}, qui plafonne
+à $1{,}4767$; cette comparaison est l'objet de la
+section~\ref{sec:res-satfix}. Quatre exécutions plus anciennes, menées sur
+résidu synthétique, ont servi uniquement à valider la mécanique de la chaîne sur
+processeur et ne sont pas comparables aux précédentes, leur cible étant un
+modèle de frottement inventé, plus facile à apprendre qu'une dynamique de
+moteur physique; elles ne sont mentionnées que pour la traçabilité.
+
+La figure~\ref{fig:courbes} montre les courbes de perte de validation des deux
+exécutions sur données physiques. Deux observations quantitatives s'en dégagent.
+D'abord, l'écart de niveau est net et constant: la courbe de l'exécution
+corrigée s'établit autour de 0{,}42 tandis que celle de l'exécution initiale
+plafonne autour de 1{,}6, soit un facteur voisin de~4. Ensuite, et c'est plus
+instructif, la \emph{régularité} des deux courbes diffère: l'exécution initiale
+présente des sursauts marqués (2{,}40 à l'époque~50 puis 2{,}25 à l'époque~90,
+après être descendue à 1{,}83), alors que l'exécution corrigée décroît puis
+oscille dans une bande étroite. Un écart de niveau seul serait compatible avec
+un simple manque de capacité; la différence de régularité indique que ce n'est
+pas l'optimisation qui échoue, mais la cible qui est par endroits incohérente.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.86\textwidth, height=6.2cm,
+    xlabel={époque},
+    ylabel={$\mathcal{L}_{\mathrm{val}}$},
+    xmin=0, xmax=205, ymin=0, ymax=4.6,
+    grid=both, grid style={black!12},
+    legend pos=north east, legend cell align=left,
+    legend style={font=\small, fill=white, draw=black!30},
+    tick label style={font=\small}, label style={font=\small}
+]
+\addplot[thick, black!55, mark=none] coordinates {
+(1,4.4132) (5,3.1977) (10,2.9846) (15,2.8622) (20,1.9178) (25,2.5414)
+(30,1.8580) (35,1.8264) (40,1.8411) (45,1.6704) (50,2.4013) (55,1.8430)
+(60,1.8795) (65,1.8297) (70,2.0997) (75,1.7269) (80,1.6235) (85,1.6767)
+(90,2.2544) (95,1.7458) (100,1.8017) (105,1.5887) (110,1.6473) (115,1.5979)
+(120,1.6500) (125,1.5593) (130,1.7071) (135,1.7752) (140,1.6060) (145,1.5262)
+(150,1.7044) (155,1.5411) (160,1.6706) (165,1.7199) (170,1.5688) (175,1.5578)
+(180,1.6930) (185,1.4903) (190,1.6666) (195,1.8044) (200,1.5840)
+};
+\addlegendentry{\code{isaac-first-real} (avant filtrage)}
+\addplot[very thick, black, mark=none] coordinates {
+(1,0.8613) (5,0.6507) (10,0.4823) (15,0.4528) (20,0.5327) (25,0.4174)
+(30,0.4253) (35,0.4477) (40,0.4028) (45,0.4336) (50,0.4491) (55,0.4278)
+(60,0.4306) (65,0.4467) (70,0.4021) (75,0.4183) (80,0.4784) (85,0.4335)
+(90,0.4310) (95,0.4498) (100,0.4224) (105,0.4161) (110,0.4300) (115,0.4219)
+(120,0.4287) (125,0.4009) (130,0.4767) (135,0.4439) (140,0.4316) (145,0.4222)
+(150,0.4297) (155,0.4353) (160,0.4222) (165,0.4462) (170,0.4250) (175,0.4021)
+(180,0.4293) (185,0.4248) (190,0.4029) (195,0.4234) (200,0.4144)
+};
+\addlegendentry{\code{isaac-satfix} (après filtrage)}
+\end{axis}
+\end{tikzpicture}
+\caption{Perte de validation~\eqref{eq:Ltotal} au fil des époques, relevée tous
+les 5~pas, pour les deux exécutions sur données physiques. Le filtrage de
+saturation~\eqref{eq:satfilter} abaisse le plateau d'un facteur~4 environ et
+supprime les sursauts de la courbe initiale.}
+\label{fig:courbes}
+\end{figure}
+
+La performance par axe est plus informative que la perte globale, car elle
+s'exprime en newton-mètres et se compare aux limites de couple. La
+figure~\ref{fig:rmse} donne l'erreur quadratique moyenne par axe pour les deux
+exécutions, et le tableau~\ref{tab:perjoint} en tire les conséquences pour la
+commande.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.86\textwidth, height=5.6cm,
+    ybar, bar width=7pt,
+    xlabel={axe articulaire},
+    ylabel={RMSE de validation [Nm]},
+    symbolic x coords={J1,J2,J3,J4,J5,J6,J7},
+    xtick=data, ymin=0, ymax=2.0,
+    grid=major, grid style={black!12},
+    legend pos=north east, legend cell align=left,
+    legend style={font=\small, fill=white, draw=black!30},
+    nodes near coords, every node near coord/.append style={font=\tiny,
+        /pgf/number format/fixed, /pgf/number format/precision=2,
+        /pgf/number format/fixed zerofill},
+    tick label style={font=\small}, label style={font=\small}
+]
+\addplot[fill=black!25, draw=black!50] coordinates {
+(J1,1.5694) (J2,1.4355) (J3,1.1351) (J4,1.7685) (J5,0.9680) (J6,0.4885)
+(J7,0.5180)};
+\addlegendentry{\code{isaac-first-real}}
+\addplot[fill=black!70, draw=black] coordinates {
+(J1,0.7996) (J2,0.8823) (J3,0.8979) (J4,0.5396) (J5,0.3732) (J6,0.3593)
+(J7,0.2986)};
+\addlegendentry{\code{isaac-satfix}}
+\end{axis}
+\end{tikzpicture}
+\caption{Erreur quadratique moyenne de prédiction du couple, par axe, sur la
+partition de validation (14\,830 échantillons), avant et après le filtrage de
+saturation~\eqref{eq:satfilter}. L'amélioration est présente sur les sept axes,
+la plus forte sur l'axe~4 (facteur 3{,}3).}
+\label{fig:rmse}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{Erreur de prédiction par axe pour l'exécution de référence
+\code{isaac-satfix}, borne d'erreur retenue $\epsilon_j$ (quantile 99{,}9 de
+$|\taupred - \taureal|$ sur la validation), et gains PD résultants
+de~\eqref{eq:gains} avec $\kappa = 2$. La dernière ligne rapporte l'erreur
+relative à la limite de couple de l'axe, seule grandeur comparable d'un axe à
+l'autre (section~\ref{sec:res-quoi}).}
+\label{tab:perjoint}
+\small
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+Axe $j$ & 1 & 2 & 3 & 4 & 5 & 6 & 7 \\
+\midrule
+RMSE [Nm] & 0{,}800 & 0{,}882 & 0{,}898 & 0{,}540 & 0{,}373 & 0{,}359
+& 0{,}299 \\
+$\epsilon_j$ [Nm] & 5{,}20 & 5{,}66 & 3{,}06 & 3{,}80 & 2{,}10 & 2{,}38
+& 1{,}57 \\
+$K_{d,jj}$ [Nm$\cdot$s$\cdot$rad$^{-1}$] & 10{,}40 & 11{,}32 & 6{,}12 & 7{,}60
+& 4{,}20 & 4{,}76 & 3{,}14 \\
+$K_{p,jj}$ [Nm$\cdot$rad$^{-1}$] & 27{,}04 & 32{,}04 & 9{,}36 & 14{,}44
+& 4{,}41 & 5{,}66 & 2{,}46 \\
+\midrule
+RMSE $/\ \bar{\tau}_j$ [\%] & 0{,}92 & 1{,}01 & 1{,}03 & 0{,}62 & 3{,}11
+& 2{,}99 & 2{,}49 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+L'erreur absolue est plus faible sur les trois derniers axes (0{,}30 à
+0{,}37~Nm) que sur les quatre premiers (0{,}54 à 0{,}90~Nm), ce qui est attendu
+puisque ces axes portent moins de charge et de couplage inertiel. Rapportée à la
+limite de couple, la hiérarchie s'inverse: l'erreur relative est de 0{,}62 à
+1{,}03\% sur les axes~1 à~4 mais de 2{,}49 à 3{,}11\% sur les axes~5 à~7. Ce
+renversement n'est pas un détail de présentation: il détermine quel axe
+consomme le plus d'autorité d'actionneur pour compenser l'erreur de modèle, et
+il sera invoqué en section~\ref{sec:res-desequilibre} pour justifier de ne pas
+corriger un déséquilibre mesuré.
+
+\subsection{Les garanties physiques survivent-elles à l'entraînement~?}
+\label{sec:res-physique}
+
+Les contraintes ne sont pas seulement déclarées: elles sont mesurées à chaque
+époque, et cette mesure sépare nettement les degrés de garantie introduits en
+section~\ref{sec:residu}.
+
+\parag{Degré~1, limites de couple.} Sur l'exécution de référence, la
+violation maximale de la contrainte~\eqref{eq:gtorque} est de 0{,}0000~Nm à
+chacune des 200~époques enregistrées: le modèle n'a jamais prédit un couple
+hors limites sur les données d'entraînement. À titre de comparaison,
+l'exécution avant filtrage présentait des violations intermittentes atteignant
+22{,}75~Nm à l'époque~200, 4{,}56~Nm à l'époque~80 et 4{,}26~Nm à l'époque~110.
+Ce n'est pas un défaut du mécanisme dual: le modèle prédisait des couples
+irréalisables parce que les échantillons saturés lui présentaient des cibles
+résiduelles absurdes.
+
+\parag{Degré~1, dissipativité.} La violation moyenne de la
+contrainte~\eqref{eq:gdissip} décroît de 0{,}1070 à l'époque~1 jusqu'à 0{,}0006
+à l'époque~200 sur l'exécution de référence, avec une décroissance quasi
+monotone (figure~\ref{fig:dissip}). Sur l'exécution avant filtrage, la même
+quantité oscille sans se stabiliser et remonte jusqu'à 0{,}0914 à l'époque~110
+et 0{,}0657 à l'époque~200. C'est le point d'interprétation le plus important
+de cette sous-section: la contamination des données ne dégradait pas seulement
+la précision, elle déstabilisait le mécanisme de montée duale lui-même. Une
+garantie de degré~1 n'est donc pas seulement statistique, elle est aussi
+\emph{fragile} vis-à-vis de la qualité des données.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{semilogyaxis}[
+    width=0.86\textwidth, height=5.8cm,
+    xlabel={époque},
+    ylabel={violation moyenne de dissipativité},
+    xmin=0, xmax=205, ymin=4e-4, ymax=0.3,
+    grid=both, grid style={black!12},
+    legend pos=south west, legend cell align=left,
+    legend style={font=\small, fill=white, draw=black!30},
+    tick label style={font=\small}, label style={font=\small}
+]
+\addplot[thick, black!55, mark=none] coordinates {
+(1,0.1480) (5,0.0537) (10,0.0141) (15,0.0180) (20,0.0092) (25,0.0138)
+(30,0.0117) (35,0.0610) (40,0.0100) (45,0.0049) (50,0.0082) (55,0.0133)
+(60,0.0085) (65,0.0070) (70,0.0061) (75,0.0033) (80,0.0556) (85,0.0033)
+(90,0.0214) (95,0.0051) (100,0.0028) (105,0.0053) (110,0.0914) (115,0.0043)
+(120,0.0304) (125,0.0025) (130,0.0030) (135,0.0309) (140,0.0020) (145,0.0015)
+(150,0.0029) (155,0.0029) (160,0.0080) (165,0.0014) (170,0.0029) (175,0.0012)
+(180,0.0025) (185,0.0009) (190,0.0017) (195,0.0015) (200,0.0657)
+};
+\addlegendentry{\code{isaac-first-real} (avant filtrage)}
+\addplot[very thick, black, mark=none] coordinates {
+(1,0.1070) (5,0.0522) (10,0.0259) (15,0.0123) (20,0.0186) (25,0.0040)
+(30,0.0083) (35,0.0105) (40,0.0081) (45,0.0041) (50,0.0021) (55,0.0055)
+(60,0.0030) (65,0.0082) (70,0.0039) (75,0.0009) (80,0.0037) (85,0.0040)
+(90,0.0066) (95,0.0036) (100,0.0068) (105,0.0052) (110,0.0060) (115,0.0011)
+(120,0.0018) (125,0.0033) (130,0.0033) (135,0.0035) (140,0.0023) (145,0.0053)
+(150,0.0023) (155,0.0012) (160,0.0068) (165,0.0006) (170,0.0099) (175,0.0026)
+(180,0.0012) (185,0.0029) (190,0.0013) (195,0.0017) (200,0.0006)
+};
+\addlegendentry{\code{isaac-satfix} (après filtrage)}
+\end{semilogyaxis}
+\end{tikzpicture}
+\caption{Violation moyenne de la contrainte de dissipativité~\eqref{eq:gdissip}
+au fil des époques, échelle logarithmique. Après filtrage des échantillons
+saturés, la montée duale converge vers $6\cdot 10^{-4}$; avant filtrage, elle
+oscille et remonte jusqu'à $9{,}1\cdot 10^{-2}$.}
+\label{fig:dissip}
+\end{figure}
+
+\parag{Degré~2, garantie structurelle.} Indépendamment de ce qui précède, la
+propriété~\eqref{eq:dissip} du module de frottement est vérifiée par
+construction et testée numériquement sur des états tirés aléatoirement, y
+compris hors de la distribution d'entraînement. Les coefficients de dissipation
+appris sont strictement positifs, avec des valeurs moyennes par axe de l'ordre
+de 1{,}17 à 1{,}63 sur la campagne multi-charge. C'est le seul résultat du
+travail qui soit vrai pour tout état et tout jeu de poids, et c'est ce qui
+justifie l'existence du degré~2 malgré le bon comportement du degré~1 sur
+données saines.
+
+\parag{Un effet secondaire attendu.} Lorsque le module de frottement est
+actif, le multiplicateur $\lambda_d$ croît plus lentement, puisqu'une partie de
+la contrainte de dissipativité est absorbée structurellement plutôt que
+pénalisée. Ce comportement est intentionnel et cohérent, mais il implique
+qu'une comparaison de $\lambda_d$ entre exécutions avec et sans le module n'est
+pas interprétable telle quelle — remarque à retenir pour toute ablation
+ultérieure.
+
+\subsection{Une hypothèse testée de façon contrôlée: la contamination par
+saturation}
+\label{sec:res-satfix}
+
+C'est le seul résultat de ce travail obtenu par une expérience contrôlée avec
+hypothèse préalable, et il mérite d'être détaillé pour cette raison.
+
+\parag{Observation initiale.} L'outil de mesure de borne d'erreur, écrit pour
+alimenter~\eqref{eq:gains}, a révélé sur la première exécution une erreur de
+prédiction \emph{maximale} par axe de 91 à 110~Nm — supérieure à la limite de
+couple de 87~Nm de l'axe lui-même. Une erreur de modèle plus grande que le
+couple physiquement réalisable n'est pas un défaut de modèle: c'est le signe
+que la cible d'apprentissage est fausse pour certains échantillons. C'est
+exactement la situation contre laquelle Deng \emph{et al.}~\cite{deng2024}
+avertissent, et elle serait restée invisible sur la seule erreur moyenne.
+
+\parag{Hypothèse.} L'inspection des pires échantillons a montré que leur
+couple mesuré se situait presque exactement sur la limite de couple.
+L'hypothèse formulée était donc: l'actionneur simulé sature à son effort
+maximal sous un suivi de trajectoire agressif; $\taureal$ vaut alors la valeur
+d'écrêtage, alors que $\taurbd$ est calculé depuis l'accélération de référence,
+en supposant la trajectoire atteinte. Le résidu cible de ces échantillons est
+donc un artefact.
+
+\parag{Test et résultat.} Le critère~\eqref{eq:satfilter} a été appliqué, les
+trois jeux de données régénérés et l'entraînement relancé à réglages
+strictement identiques. Le tableau~\ref{tab:exp} résume l'effet mesuré. Le
+rapport entre le gain et le coût est ce qui confirme l'hypothèse: 456
+échantillons écartés, soit 0{,}31\% du jeu de données, valent un facteur 3{,}7
+sur la perte de validation, un facteur~110 sur la violation de dissipativité
+finale, et l'annulation complète des violations de limite de couple. Un très
+petit nombre d'échantillons corrompus dominait donc l'optimisation. C'est
+également le seul endroit du travail où une variable a été modifiée seule, tout
+le reste étant tenu constant, ce qui autorise une conclusion causale.
+
+\begin{table}[htbp]
+\centering
+\caption{Expérience contrôlée sur le filtrage de saturation~\eqref{eq:satfilter}:
+deux entraînements identiques en tous points sauf le filtre appliqué aux
+données. $\mathcal{L}_{\mathrm{val}}$ est la perte totale~\eqref{eq:Ltotal}
+évaluée sur la partition de validation; les violations sont celles
+de~\eqref{eq:gtorque} et~\eqref{eq:gdissip} relevées à chaque époque.}
+\label{tab:exp}
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Grandeur mesurée & Avant filtrage & Après filtrage & Variation \\
+\midrule
+Identifiant d'exécution & \code{isaac-first-real} & \code{isaac-satfix} & — \\
+Échantillons retenus & 148\,760 & 148\,304 & $-456$ ($-0{,}31$\%) \\
+Époques d'entraînement & 200 & 200 & inchangé \\
+Meilleure $\mathcal{L}_{\mathrm{val}}$ & 1{,}4767 & 0{,}3995
+& $\div\,3{,}70$ \\
+Époque du meilleur point & 177 & 144 & — \\
+RMSE moyenne axes 1--4 [Nm] & 1{,}477 & 0{,}780 & $-47$\% \\
+RMSE moyenne axes 5--7 [Nm] & 0{,}658 & 0{,}344 & $-48$\% \\
+Violation de dissipativité, dernière époque & 0{,}0657 & 0{,}0006
+& $\div\,110$ \\
+Violation de couple maximale observée [Nm] & 22{,}75 & 0{,}00 & annulée \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{De l'erreur de modèle aux gains: quelle borne, quel certificat~?}
+\label{sec:res-bound}
+
+Les gains de commande dépendent du choix de la borne $\epsilon_j$
+dans~\eqref{eq:gains}, et ce choix mérite d'être exposé plutôt que subi. Après
+filtrage, la queue de distribution de l'erreur de prédiction reste
+asymétrique: le quantile 99{,}9 est de 3 à 6~Nm sur les axes~1 à~4, mais le
+maximum absolu atteint 26 à 65~Nm sur environ 0{,}09\% des échantillons de
+validation. L'origine probable de ces valeurs extrêmes résiduelles est un
+transitoire de correction du servo simulé en début de segment de trajectoire, et
+non un défaut du modèle appris.
+
+Le choix retenu est de prendre pour $\epsilon_j$ le quantile 99{,}9 et non le
+maximum. C'est un compromis assumé, et il doit être présenté comme tel:
+injecter le maximum brut dans~\eqref{eq:gains} produirait des gains de l'ordre
+de $K_d \approx 130$ et $K_p \approx 4000$, incompatibles avec l'exigence de
+couple lisse posée en section~\ref{sec:degre0}, pour un bénéfice négligeable
+puisque l'écrêtage aux limites d'actionneur constitue déjà une protection
+indépendante contre ces rares transitoires. La conséquence logique est un
+affaiblissement du certificat: la garantie obtenue n'est pas \og valable pour
+tout échantillon \fg{} mais \og valable pour 99{,}9\% des conditions de
+fonctionnement observées, avec les limites matérielles comme filet pour le
+reste \fg{}. Les gains résultants figurent au tableau~\ref{tab:perjoint}.
+
+\subsection{Le modèle appris pilote-t-il effectivement le robot~?}
+\label{sec:res-loop}
+
+\parag{Planification et exécution.} La planification MoveIt2 et l'exécution en
+mode position ont été validées: le bras simulé sous MuJoCo suit les plans
+demandés, et les vues MuJoCo et RViz restent cohérentes entre elles. Ce jalon
+est stable et reproductible, mais il ne démontre rien sur le modèle appris,
+puisque c'est l'exécuteur en position de MoveIt2 qui commande.
+
+\parag{Suivi de trajectoire par le modèle appris.} Le jalon décisif est donc le
+routage de la trajectoire planifiée vers le n\oe ud de commande, de sorte que ce
+soit le couple issu de~\eqref{eq:ctpd} — donc le modèle appris — qui pilote le
+robot. Ce jalon a été atteint et confirmé numériquement: sur une fenêtre de
+8~s bracketant un mouvement, chacun des sept axes s'est déplacé de 0{,}2 à
+1{,}15~rad en convergeant vers sa cible. Ce résultat est qualitativement
+différent du défaut qu'il a fallu lever pour l'obtenir, où la position mesurée
+était figée au bit près (minimum égal au maximum en précision flottante double)
+sur toute la fenêtre de capture, alors que le couple commandé était correct et
+variait dans le temps — signature qui reviendra en
+section~\ref{sec:disc-freeze}.
+
+\parag{Décomposition du couple commandé.} Le tableau~\ref{tab:tau} donne une
+capture réelle de la décomposition de~\eqref{eq:ctpd} pendant une phase de
+suivi, relevée à un pas de commande sur trois axes instrumentés. Ces valeurs
+documentent la hiérarchie effective des termes et valident la décomposition
+choisie en~\eqref{eq:decompo}: sur l'axe~4, le terme calculé domine largement
+(22{,}4~Nm, essentiellement de la gravité dans cette configuration), le résidu
+appris est faible (0{,}03~Nm) et la correction PD est intermédiaire
+($-4{,}27$~Nm); sur l'axe~7, dont la limite est de 12~Nm, le terme calculé est
+nul, tandis que le résidu appris ($-0{,}10$~Nm) et la correction PD (0{,}78~Nm)
+sont du même ordre de grandeur. Autrement dit, la part relative du terme appris
+croît là où le terme rigide s'efface, ce qui est le comportement attendu d'une
+architecture grise.
+
+\begin{table}[htbp]
+\centering
+\caption{Décomposition du couple commandé~\eqref{eq:ctpd} relevée en
+fonctionnement, à un pas de commande donné, sur trois axes instrumentés. La
+colonne \og écrêté \fg{} montre que l'écrêtage aux limites n'était pas actif à
+cet instant.}
+\label{tab:tau}
+\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+Axe & $\taurbd$ [Nm] & $\taures$ [Nm] & $K_p e + K_d\dot{e}$ [Nm]
+& somme [Nm] & écrêté [Nm] \\
+\midrule
+4 & $+22{,}352$ & $+0{,}026$ & $-4{,}266$ & $+18{,}112$ & $+18{,}112$ \\
+6 & $+2{,}085$  & $+0{,}070$ & $+1{,}682$ & $+3{,}837$  & $+3{,}837$ \\
+7 & $-0{,}000$  & $-0{,}095$ & $+0{,}782$ & $+0{,}687$  & $+0{,}687$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\parag{Erreur de suivi résiduelle.} La loi~\eqref{eq:ctpd} est purement
+proportionnelle-dérivée, sans terme intégral. Une erreur statique subsiste donc
+sous charge de gravité, et elle a été mesurée: sur un mouvement vers une pose
+de référence, six axes sur sept convergent à moins de 0{,}04~rad de leur cible,
+tandis que l'axe~3 se stabilise sur un résidu d'environ 0{,}14~rad. Ce
+comportement est conforme à ce qu'on attend d'un correcteur PD sans intégrateur
+et n'est pas un défaut de mise en \oe uvre; il a conduit à relâcher le seuil de
+convergence de 0{,}05 à 0{,}15~rad sur la base de cette mesure, valeur qui reste
+bien inférieure aux 0{,}3~rad observés lors d'un échec authentique et ne masque
+donc pas les vraies défaillances.
+
+\parag{Cadence.} Le n\oe ud est configuré et exécuté à
+\code{control_rate_hz = 1000}, ce qui est confirmé par sa trace de démarrage. La
+cadence nominale est donc atteinte. Ce qui n'est \emph{pas} établi est la marge
+temporelle réelle: aucune mesure de latence d'inférence n'a été réalisée, donc
+rien ne prouve pour l'instant que le budget de 1~ms soit respecté avec marge
+plutôt que tout juste. C'est la principale lacune de validation de la
+contribution~2, et la décomposition de latence publiée par
+Agrawal \emph{et al.}~\cite{agrawal2026} indique la forme exacte que devrait
+prendre la mesure manquante (section~\ref{sec:futur}).
+
+\subsection{Le test d'intégration: la tâche de préhension}
+\label{sec:res-task}
+
+Les briques individuelles sont validées séparément: la pince possède une
+physique réelle (glissières prismatiques, contraintes d'égalité de
+synchronisation, coussinets de contact aux extrémités) et exécute des commandes
+d'ouverture et de fermeture avec un résultat d'action confirmé; la scène et
+l'objet sont correctement rendus et positionnés; le client de mouvement
+cartésien planifie et exécute des poses cibles.
+
+En revanche, \textbf{la séquence de préhension complète n'a jamais abouti}.
+Douze exécutions instrumentées ont été enregistrées avec journalisation
+complète; les huit dernières, correspondant à l'état le plus avancé du code,
+sont résumées au tableau~\ref{tab:stage4}. Toutes se terminent par le même
+verdict — dépassement du délai de convergence du bras lors d'un sous-mouvement —
+avant même que la pince n'atteigne l'objet.
+
+\begin{table}[htbp]
+\centering
+\caption{Huit exécutions instrumentées de la séquence de préhension. L'erreur
+finale est la distance cartésienne de la bride à sa cible planifiée, mesurée par
+cinématique directe. Toutes les exécutions échouent sur le même verdict
+(dépassement du délai de convergence), mais avec des amplitudes d'erreur et des
+axes fautifs différents; c'est cette dispersion qui est diagnostique.}
+\label{tab:stage4}
+\small
+\begin{tabular}{@{}lccclc@{}}
+\toprule
+Exécution & Erreur finale [m] & Tolérance [m] & Rapport & Axe le plus fautif
+& Verdict \\
+\midrule
+2  & 0{,}2464 & 0{,}030 & 8{,}2 & \code{panda_joint7} & délai dépassé \\
+9  & 0{,}0824 & 0{,}030 & 2{,}7 & \code{panda_joint4} & délai dépassé \\
+10 & 0{,}0846 & 0{,}030 & 2{,}8 & \code{panda_joint7} & délai dépassé \\
+11 & 0{,}0858 & 0{,}030 & 2{,}9 & \code{panda_joint4} & délai dépassé \\
+12 & 0{,}0322 & 0{,}030 & 1{,}1 & \code{panda_joint5} & délai dépassé \\
+13 & 0{,}0991 & 0{,}030 & 3{,}3 & \code{panda_joint4} & délai dépassé \\
+14 & 0{,}0822 & 0{,}040 & 2{,}1 & \code{panda_joint4} & délai dépassé \\
+15 & 0{,}1009 & 0{,}040 & 2{,}5 & \code{panda_joint7} & délai dépassé \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Le résultat le plus important de cette série n'est pas le taux d'échec de
+100\%, mais la \emph{dispersion} des échecs, qui distingue deux phénomènes de
+nature différente. L'exécution~12 échoue à 0{,}0322~m pour une tolérance de
+0{,}0300~m, c'est-à-dire à 7\% près sur l'axe~5: c'est un échec de précision
+statique de suivi, entièrement cohérent avec l'erreur statique du correcteur PD
+documentée en section~\ref{sec:res-loop}, et sans mystère. Les exécutions 9
+à~11, 13 à~15 échouent au contraire à 0{,}08--0{,}10~m, c'est-à-dire d'un
+facteur 2 à 3 au-delà de la tolérance, et — c'est le point décisif — avec un axe
+fautif dont la position mesurée n'évolue \emph{plus du tout} pendant les huit
+secondes d'attente de convergence. La trace de l'exécution~15 est sans
+ambiguïté: \code{panda_joint7} est relevé à $-0{,}7853$~rad pour une cible de
+$-0{,}4428$~rad, soit une erreur de $-0{,}3425$~rad, et cette valeur est
+identique aux quatre décimales à chacun des huit relevés successifs espacés
+d'une seconde, pendant que l'erreur cartésienne stagne à 0{,}1009~m. Il ne
+s'agit donc pas d'une convergence lente: l'axe est immobile.
+
+Cette distinction entre \og échec de précision \fg{} et \og axe immobile \fg{}
+oriente tout le diagnostic. Le premier phénomène est expliqué et borné; le
+second n'est pas résolu, et son investigation constitue le principal résultat
+négatif de ce travail (section~\ref{sec:disc-freeze}).
+
+% =====================================================================
+\section{Discussion}
+\label{sec:discussion}
+% =====================================================================
+
+\subsection{Ce qui se comporte comme prévu}
+
+Trois éléments se comportent conformément à la conception, et il vaut la peine
+de dire en quoi précisément. D'abord l'architecture grise: une erreur de
+prédiction de 0{,}30 à 0{,}90~Nm par axe sur des données de dynamique d'un
+moteur physique, obtenue avec un réseau modeste, confirme que déléguer la
+dynamique du corps rigide à RNEA laisse au réseau une tâche bien conditionnée —
+ce que corrobore la décomposition du tableau~\ref{tab:tau}, où le résidu ne
+prend de l'importance relative que là où le terme rigide s'annule. Ensuite les
+garanties physiques, aux trois degrés: violation de limites de couple nulle sur
+les 200~époques, violation de dissipativité ramenée à $6\cdot 10^{-4}$, et
+garantie structurelle inconditionnelle sur le terme de frottement. Enfin la
+double prise en compte de la charge, qui n'a exigé aucun ajustement particulier
+pour couvrir \SIlist{0;1;3}{kg} dans un modèle unique, ce qui est l'indice le plus
+direct que la frontière tracée en~\eqref{eq:decompo} — charge à l'analytique,
+état de mouvement au résidu — était la bonne.
+
+\subsection{Deux défauts de données ont pesé plus que tout réglage}
+\label{sec:disc-urdf}
+
+Deux défauts de qualité de données ont eu, à eux seuls, plus d'effet sur les
+résultats que tout réglage d'hyperparamètre effectué dans ce travail. Le premier
+est l'absence de balises inertielles dans l'URDF de référence: RNEA a
+fonctionné pendant toute la première partie du projet sur des inerties de
+remplacement de la bibliothèque, et non sur les propriétés massiques réelles du
+Franka. Ce défaut n'a été découvert que par comparaison avec un moteur physique
+disposant de sa propre source de masses. Il a été corrigé à partir des valeurs
+officielles de la description du constructeur, puis \emph{indépendamment
+recoupé} par une troisième source: les masses et inerties du modèle MJCF
+distribué par le dépôt de modèles MuJoCo, issues de la même description amont,
+coïncident avec les valeurs corrigées. Ce recoupement à trois sources est le
+seul moyen trouvé de se prémunir contre une erreur de ce type, qui ne produit
+aucun symptôme visible et dégrade silencieusement le terme dominant du modèle.
+
+Le second est le filtrage de saturation, dont l'effet est quantifié au
+tableau~\ref{tab:exp}: 0{,}31\% d'échantillons corrompus coûtaient un
+facteur~3{,}7 sur la perte de validation et déstabilisaient la montée duale.
+L'enseignement méthodologique dépasse ce projet: dans une approche informée par
+la physique, un échantillon dont la cible viole la physique n'est pas simplement
+du bruit, il est activement nuisible, car les contraintes de la perte tentent de
+s'y conformer. Une donnée aberrante coûte donc davantage à un modèle contraint
+qu'à un modèle libre — conclusion qui va à l'encontre de l'intuition selon
+laquelle les contraintes protègent du bruit.
+
+\subsection{Un déséquilibre par axe réel mais laissé sans correction}
+\label{sec:res-desequilibre}
+
+L'asymétrie des limites de couple du tableau~\ref{tab:constantes} laisse
+attendre un déséquilibre d'optimisation entre les axes~1 à~4 et les axes~5
+à~7: le terme de fidélité~\eqref{eq:Ldata} étant une erreur quadratique non
+pondérée en newton-mètres, il accorde mécaniquement plus de poids aux axes
+capables de couples élevés. Un diagnostic de suivi a donc été implémenté, qui
+rapporte le rapport entre l'erreur moyenne des trois derniers axes et celle des
+quatre premiers à la fin de chaque campagne.
+
+Le résultat mesuré est instructif à double titre. Sur toutes les campagnes à
+résidu synthétique, ce rapport valait 1{,}0 — aucun déséquilibre. Sur les deux
+campagnes sur données physiques, il vaut 0{,}4 (0{,}780~Nm de moyenne sur les
+axes~1 à~4 contre 0{,}344~Nm sur les axes~5 à~7), et cette valeur est
+\emph{identique avant et après} le filtrage de saturation. Le déséquilibre est
+donc, premièrement, un signal réel de la dynamique du moteur physique et non un
+artefact de données contaminées; et, deuxièmement, un signal invisible sur
+données synthétiques, ce qui constitue une raison supplémentaire de ne pas
+valider une architecture sur résidu inventé. Il reste néanmoins en dessous du
+seuil qui déclencherait une repondération par moyenne mobile exponentielle des
+résidus, et aucune correction n'a été appliquée. La lecture en erreur relative
+du tableau~\ref{tab:perjoint} montre du reste que le déséquilibre s'inverse
+lorsqu'on normalise par la limite de couple; c'est un argument de plus pour ne
+pas corriger \emph{à l'aveugle}, sans un critère explicite portant sur la
+grandeur qui compte réellement pour la commande.
+
+Il faut cependant se garder de présenter cette décision comme mieux établie
+qu'elle ne l'est. Le diagnostic ci-dessus \emph{constate} le déséquilibre a
+posteriori~; il ne \emph{teste} pas la correction qu'il rend pourtant
+évidente~: aucune exécution avec une matrice de pondération diagonale
+$\mathrm{diag}(1/\bar{\tau}_j^2)$ dans~\eqref{eq:Ldata} — la repondération
+directe suggérée par le seuil relatif du tableau~\ref{tab:perjoint} — n'a été
+menée à réglages par ailleurs identiques. L'argument \og le rapport
+s'inverse en relatif \fg{} justifie de ne pas corriger \emph{sans réfléchir},
+mais ne démontre pas que ne pas corriger soit la meilleure décision~: il se
+peut qu'une perte pondérée réduise l'erreur relative sur les axes~5 à~7 sans
+dégrader sensiblement celle des axes~1 à~4, auquel cas l'absence de correction
+serait un choix sous-optimal plutôt que neutre. Cette lacune de rigueur est
+reconnue explicitement ici et reportée comme travail futur bien délimité
+(section~\ref{sec:futur})~: exécuter la même campagne avec perte pondérée par
+$1/\bar{\tau}_j^2$, toutes choses égales par ailleurs, et comparer l'erreur
+relative résultante à celle du tableau~\ref{tab:perjoint}.
+
+\subsection{Le résultat négatif principal: l'immobilisation intermittente
+d'un axe}
+\label{sec:disc-freeze}
+
+Le phénomène décrit en section~\ref{sec:res-task} — un ou plusieurs axes dont la
+position mesurée cesse d'évoluer alors que le couple commandé reste correct —
+n'est pas résolu. L'investigation est présentée ici parce que son étendue et sa
+méthode ont une valeur en elles-mêmes, et parce que les hypothèses écartées le
+sont sur des bases empiriques solides et non par élimination faute de mieux.
+
+Ont été éliminées expérimentalement: la collision avec l'objet saisi (le cube a
+été déplacé à 2{,}5~m hors de portée: le symptôme persiste à l'identique); un
+défaut d'ordre ou de nommage des articulations (vérifié indépendamment en trois
+endroits du code, et l'URDF déclare bien les axes dans l'ordre canonique); un
+écrêtage silencieux aux limites d'actionneur (les couples relevés restent
+largement dans la plage, cf. tableau~\ref{tab:tau}); un verrouillage du mode de
+commande des actionneurs par l'intergiciel (le journal du n\oe ud de commande
+montre les sept axes en mode couple, vérifié trois fois, et la lecture du code
+source de la version exactement installée confirme une liaison par nom, uniforme
+sur les sept axes); et enfin la loi de commande elle-même. Cette dernière
+élimination est la plus concluante: l'axe fautif présente une erreur de
+position réelle et persistante avec une correction PD de signe correct et
+d'amplitude substantielle ($-4$ à $-11$~Nm selon la cible), et sous \emph{trois}
+régimes de couple différents — couple calculé nominal d'environ 18~Nm, une
+exécution à couple nul confirmée, et un couple constant de 40~Nm publié
+manuellement en contournant tout le code de commande — la position mesurée varie
+de moins de $10^{-4}$~rad. Le phénomène se situe donc sous la couche
+ROS2/Python, et aucune modification de la loi de commande ou du modèle appris ne
+peut l'atteindre.
+
+Une cause réelle a été identifiée et corrigée: MuJoCo calcule les collisions
+sur des enveloppes convexes, plus grosses que les maillages fins à partir
+desquels la liste d'exclusions d'auto-collision avait été dérivée; certaines
+paires (main et doigts contre l'avant-bras) pouvaient donc s'interpénétrer dans
+des poses de poignet replié, produisant un contact parasite suffisamment raide
+pour absorber 40~Nm et bloquer précisément les axes qui rapprochent la main de
+l'avant-bras. La désactivation de l'auto-collision robot-robot, en laissant
+intactes les collisions avec le sol et l'objet, a produit deux séquences
+complètes de sous-mouvements convergeant normalement. \textbf{Mais le symptôme
+est réapparu lors des tentatives suivantes avec le correctif actif}, ce qui
+établit que cette cause, bien que réelle, n'explique pas toutes les occurrences.
+L'enregistrement du sol comme obstacle de planification, tenté comme seconde
+atténuation indépendante, n'a pas non plus empêché la récurrence
+(exécution~15). Il faut donc rapporter ce correctif pour ce qu'il est: une
+cause vérifiée mais insuffisante, et non une solution.
+
+L'hypothèse restante à l'issue de ce qui précède était que le solveur de
+cinématique inverse de MoveIt2 (OMPL/KDL) retourne des solutions articulaires
+différentes pour une même cible cartésienne d'un appel à l'autre, et
+qu'aucune des corrections précédentes ne contraint ce choix. Il faut la
+formuler avec précaution~: la planification produit une consigne
+\emph{avant} l'exécution, elle ne peut donc pas être la cause directe d'un
+blocage qui se manifeste \emph{pendant} le suivi, avec un couple de
+correction actif et correctement signé, comme établi plus haut. Ce que cette
+hypothèse peut en revanche expliquer, c'est que des appels successifs à
+MoveGroup pour une même cible cartésienne n'aboutissent pas nécessairement à
+la même consigne articulaire, de sorte que des tentatives réelles
+successives peuvent converger tantôt vers une configuration bénigne, tantôt
+vers une configuration où un phénomène d'exécution encore non identifié se
+déclenche.
+
+Ce point a été testé directement, après la clôture de la campagne
+d'exécutions instrumentées ci-dessus, par un diagnostic dédié qui élimine la
+variable de planification~: plutôt que de laisser MoveGroup planifier (et
+donc invoquer OMPL/KDL, susceptible de retourner l'une de plusieurs solutions
+valides pour une même cible), une unique configuration articulaire est
+calculée une fois pour toutes par une résolution numérique déterministe de la
+cinématique inverse (moindres carrés amortis sous Pinocchio, sur le même URDF
+que le reste de la chaîne, sans composante aléatoire), puis rejouée telle
+quelle cinq fois de suite, avec réinitialisation complète du monde entre
+chaque tentative. Le correctif d'auto-collision de la section précédente est
+resté actif et confirmé présent tout au long de cet essai. Résultat~: les
+cinq tentatives se sont figées de façon identique sur les axes~4, 6 et~7,
+avec des erreurs de position reproductibles au bit près d'une tentative à
+l'autre — par exemple l'axe~6 relevé à exactement $-0{,}7966$~rad, sans
+dérive mesurable, de $t=2{,}2$~s à $t=7{,}2$~s, dans chacune des cinq
+tentatives.
+
+Ce résultat précise le diagnostic qui précède sans le contredire. Retirer la
+variable de choix de solution ne rend pas le phénomène aléatoire~: il le rend
+parfaitement déterministe, pour une configuration articulaire donnée. Ceci
+réconcilie l'intermittence observée au tableau~\ref{tab:stage4} avec
+l'élimination de la loi de commande comme cause~: les tentatives réelles de
+préhension ne rejouent pas la même consigne articulaire d'une exécution à
+l'autre, puisque OMPL/KDL choisit à chaque appel une solution parmi
+plusieurs pour la même cible cartésienne, et seule une partie de ces
+solutions correspond à une configuration qui se fige de façon déterministe
+une fois atteinte. L'intermittence vivait donc entièrement dans le choix de
+la configuration retenue par la planification, et non dans une quelconque
+variabilité de la couche d'exécution elle-même, qui se révèle au contraire
+rigoureusement reproductible à consigne fixée. Il ne faut cependant pas
+sur-interpréter ce résultat en réhabilitant le solveur de cinématique inverse
+comme cause du blocage~: ce qu'il établit est que la planification détermine
+\emph{si} une exécution atteint une configuration défaillante, non ce qui
+rend cette configuration défaillante une fois atteinte — cette seconde
+question reste entièrement du ressort de l'exécution, et son mécanisme précis
+(un contact non couvert par la liste d'exclusions, une saturation
+d'actionneur, un phénomène propre au solveur physique de MuJoCo) n'est pas
+encore isolé. La visualisation des contacts pendant une reproduction sur
+cette configuration désormais fixée et reproductible à volonté est l'étape
+suivante, planifiée mais non encore réalisée (section~\ref{sec:futur}).
+
+\subsection{Une leçon sur l'endroit où se trouvent les défauts}
+
+Sur l'ensemble du travail d'intégration, une quinzaine de défauts réels ont été
+trouvés et corrigés, et leur répartition est plus instructive que leur nombre:
+aucun ne se trouvait dans les mathématiques de la commande ou de
+l'apprentissage, et la quasi-totalité se situait aux interfaces — ordre des
+articulations dans un message, péremption d'une consigne, cadence d'une boucle
+héritée, enveloppes convexes d'un moteur de collision, image clé d'un modèle de
+simulation réinitialisant silencieusement la position d'un objet. C'est
+exactement le constat que dresse Ibarz \emph{et al.}~\cite{ibarz2021} pour
+l'apprentissage sur robots réels, où les difficultés dominantes ne sont pas
+celles que la littérature algorithmique anticipe. Deux règles générales en ont
+été tirées, applicables au-delà de ce projet: ne jamais indexer un message
+d'état articulaire autrement que par nom, et ne jamais proposer de correctif sur
+la base d'une description verbale d'un symptôme sans avoir capturé la trace
+brute correspondante — dans ce travail, un symptôme uniquement décrit oralement
+s'est révélé, une fois journalisé, être un défaut entièrement différent et
+beaucoup plus important.
+
+\subsection{Limites}
+\label{sec:limites}
+
+Les limites suivantes sont énoncées sans atténuation, car elles bornent la
+portée de tout ce qui précède.
+
+\begin{description}
+    \item[Aucune validation sur robot physique.] La totalité des résultats est
+    obtenue en simulation, avec deux simulateurs distincts pour les données
+    (Isaac~Sim) et pour la boucle de commande (MuJoCo), dont l'écart de
+    domaine (\emph{sim-to-sim gap}, section~\ref{sec:exec}) reste, lui aussi,
+    non quantifié~: la validation en boucle fermée de la
+    section~\ref{sec:res-loop} démontre que le modèle appris pilote un
+    simulateur physique différent de celui où il a été identifié, ce qui est
+    un indice de robustesse mais ne mesure pas directement sa précision sous
+    MuJoCo. La contribution~4 (transfert simulation-réalité) est implémentée
+    et vérifiée sur le plan physique, mais elle n'est pas validée: aucun
+    enregistrement de mouvements exploratoires sur le Franka réel n'a été
+    réalisé, donc l'équation~\eqref{eq:finetune} n'a jamais été résolue sur
+    des données réelles.
+    \item[Couverture éparse de l'espace articulaire.] Les données
+    d'entraînement (section~\ref{sec:donnees}) sont générées autour de dix
+    configurations centrales seulement, tirées par une séquence de Sobol dans
+    un espace à 7~dimensions. Même bien réparties, dix configurations laissent
+    de larges régions de l'espace articulaire sans couverture directe~: le
+    modèle appris n'est identifié, à proprement parler, que dans un voisinage
+    de ces dix configurations et de l'excursion locale des trajectoires de
+    Fourier qui les entourent, et non sur l'espace atteignable dans son
+    ensemble. Aucune capacité de généralisation à des régions non couvertes
+    n'est revendiquée dans ce rapport.
+    \item[Latence d'inférence non mesurée.] La boucle est cadencée à \SI{1000}{Hz},
+    mais le temps d'exécution d'un pas de~\eqref{eq:ctpd} n'a pas été
+    instrumenté. La contribution~2 est donc étayée par un fonctionnement
+    observé, non par une marge temporelle mesurée.
+    \item[Comparaison externe non homogène.] Liu \emph{et al.}~\cite{liu2024}
+    rapportent leur erreur en rad$^{2}$ sur un rollout de 2~s; ce travail
+    rapporte une erreur de couple en Nm. Les deux grandeurs ne sont pas
+    convertibles l'une dans l'autre, donc \emph{aucune} comparaison numérique
+    directe avec la référence n'est revendiquée dans ce rapport. Implémenter
+    leur métrique de rollout est une condition préalable à toute affirmation de
+    supériorité chiffrée.
+    \item[Portée restreinte aux trajectoires en distribution.] Suivant le
+    résultat négatif de Prabhakar \emph{et al.}~\cite{prabhakar2026}, selon
+    lequel les contraintes physiques dégradent l'extrapolation temporelle de 6
+    à 10\%, aucune capacité d'extrapolation hors distribution n'est revendiquée.
+    \item[Certificat de stabilité affaibli.] Comme expliqué en
+    section~\ref{sec:res-bound}, la borne d'erreur employée est un quantile
+    99{,}9 et non un maximum; la garantie n'est donc pas un certificat au sens
+    du pire cas.
+    \item[Tâche de préhension non fonctionnelle.] La séquence complète n'a
+    jamais abouti sur aucune des douze exécutions instrumentées
+    (tableau~\ref{tab:stage4}). Le n\oe ud d'orchestration ROS2 correspondant
+    n'existe pas non plus: seuls des scripts de test existent,
+    délibérément, tant qu'une préhension fiable n'est pas obtenue.
+    \item[Matrice d'ablation incomplète.] Le plan d'expériences prévoit des
+    ablations systématiques (structure, dissipation diagonale contre Cholesky
+    complète, choix d'activation, mode de contrainte, efficacité en données via
+    la troncature du jeu d'apprentissage). Seul le drapeau de troncature est
+    implémenté; les autres axes ne le sont pas, et l'effort a été redirigé
+    vers l'intégration temps réel. Deux réglages en particulier sont fixés par
+    convention plutôt que par étude~: le poids de pénalisation $\rho = 1$ du
+    lagrangien augmenté (section~\ref{sec:degre1}), dont aucune sensibilité
+    n'a été mesurée alors que la littérature associe classiquement
+    l'instabilité de la montée duale à son calibrage~; et l'absence de
+    pondération diagonale $1/\bar{\tau}_j^2$ dans la perte de
+    fidélité~\eqref{eq:Ldata}, dont le bénéfice sur le déséquilibre par axe
+    mesuré en section~\ref{sec:res-desequilibre} n'a pas été testé.
+    \item[Opacité d'une dépendance binaire.] Le choix du paquet
+    d'interfaçage MuJoCo, motivé en section~\ref{sec:exec}, s'est retourné en
+    obstacle de diagnostic: sa nature de binaire compilé a imposé de recourir
+    au code source amont de la version exacte installée pour trancher des
+    hypothèses qui, avec une dépendance sous forme de sources, auraient été
+    vérifiables directement.
+    \item[Sous-échantillonnage possible en régime d'ablation.] Pour de très
+    petites tailles d'échantillon (moins d'environ 2\,000 tirés d'un jeu de
+    25\,000), le tirage aléatoire peut sous-représenter les régions à forte
+    vitesse; cette réserve doit accompagner toute étude d'efficacité en
+    données.
+\end{description}
+
+% =====================================================================
+\section{Conclusion et perspectives}
+\label{sec:conclusion}
+% =====================================================================
+
+\subsection{Synthèse}
+
+Ce travail a construit et instrumenté une chaîne allant du fichier de
+description d'un manipulateur jusqu'à un robot effectivement commandé par un
+modèle dynamique appris. Elle repose sur un choix structurant, formulé en
+réponse à un verrou identifié dans la littérature: conserver intact le terme
+analytique de la dynamique du corps rigide, évalué automatiquement depuis
+l'URDF, et n'apprendre qu'un résidu contraint et conditionné par la charge
+portée, en distinguant explicitement trois degrés de garantie — rien, imposé par
+la perte, vrai par construction.
+
+Sur le plan quantitatif, le modèle de référence atteint une erreur de prédiction
+de couple par axe de 0{,}30 à 0{,}90~Nm sur une partition de validation de
+14\,830 échantillons, soit 0{,}62 à 3{,}11\% de la limite de couple de chaque
+axe, pour un modèle unique couvrant trois valeurs de charge (\SIlist{0;1;3}{kg}). Les
+contraintes physiques sont satisfaites: violation de limite de couple nulle sur
+les 200~époques, violation de dissipativité ramenée à $6\cdot 10^{-4}$, et
+garantie structurelle de dissipativité vraie par construction sur le terme de
+frottement. Ce modèle a été inséré dans une loi de couple calculé à \SI{1000}{Hz} dont
+les gains sont dérivés d'un résultat de stabilité appliqué à une borne d'erreur
+mesurée et non postulée, et le suivi de trajectoire piloté par le modèle appris
+a été confirmé numériquement sur les sept axes.
+
+Sur le plan méthodologique, deux résultats de qualité de données méritent d'être
+retenus au-delà de ce projet: un fichier URDF dépourvu d'inerties réelles peut
+fausser silencieusement un terme analytique pendant des mois sans produire aucun
+symptôme, et 0{,}31\% d'échantillons contaminés par la saturation d'un
+actionneur suffisent à dégrader la perte de validation d'un facteur~3{,}7 tout
+en déstabilisant la convergence des contraintes — un modèle contraint est donc
+plus sensible aux données aberrantes qu'un modèle libre, et non moins.
+
+Enfin, ce rapport documente un résultat négatif: la tâche de préhension
+complète n'aboutit pas, et l'immobilisation intermittente d'un axe qui l'en
+empêche n'est qu'à moitié expliquée. Une cause réelle a été trouvée et corrigée,
+sans suffire.
+
+\subsection{Travaux futurs}
+\label{sec:futur}
+
+Les perspectives se hiérarchisent en fonction de ce qui bloque quoi.
+
+\parag{Court terme — lever le verrou de la tâche complète.} Le test proposé en
+section~\ref{sec:disc-freeze} — rejouer plusieurs fois de suite la
+\emph{même} configuration articulaire défaillante en s'affranchissant du choix
+de solution d'OMPL/KDL — a depuis été réalisé et confirme le déterminisme du
+blocage à configuration fixée (cinq tentatives sur cinq, erreurs de position
+reproductibles au bit près). La priorité immédiate se déplace donc vers deux
+tâches distinctes. D'abord, isoler le mécanisme physique exact à la
+configuration désormais reproductible à volonté — le correctif d'auto-collision
+étant actif et confirmé insuffisant sur cet essai — par la visualisation des
+contacts MuJoCo, technique qui s'est avérée la plus discriminante de tout le
+travail de déverminage. Ensuite, et indépendamment du résultat de cette
+visualisation, contraindre ou biaiser le choix de solution d'OMPL/KDL pour
+éviter que la planification ne sélectionne cette configuration défaillante
+devient un travail de planification bien délimité, à traiter en amont de la
+commande, quel que soit le mécanisme physique sous-jacent une fois qu'il est
+identifié.
+
+\parag{Court terme — clore la validation de la contribution 2.}
+Instrumenter le temps d'exécution d'un pas de~\eqref{eq:ctpd} et publier la
+distribution de latence, avec ses quantiles, contre le budget de 1~ms. La forme
+souhaitable de ce résultat est celle d'une décomposition par composant — appel
+RNEA, inférence du résidu, interpolation de consigne, publication du message —
+sur le modèle de ce que rapporte Agrawal \emph{et al.}~\cite{agrawal2026}, car
+c'est le maillon lent qui détermine la faisabilité et non l'inférence seule.
+C'est un travail de faible ampleur qui transformerait une affirmation en mesure.
+
+\parag{Moyen terme — la validation externe.} Implémenter la métrique de
+rollout de 2~s de Liu \emph{et al.}~\cite{liu2024} afin de rendre possible une
+comparaison homogène avec la référence, et compléter la matrice d'ablation, en
+priorité sur trois axes: dissipation diagonale contre factorisation complète,
+pour quantifier ce que coûte réellement l'hypothèse de rang de
+Wang \emph{et al.}~\cite{wang2025spel}~; efficacité en données, pour situer ce
+travail par rapport au seuil de 25\,000 échantillons annoncé par la
+référence~; et perte pondérée par $1/\bar{\tau}_j^2$ contre perte non pondérée
+actuelle, pour trancher la question laissée ouverte en
+section~\ref{sec:res-desequilibre} sur le déséquilibre par axe.
+La méthode de Sutanto \emph{et al.}~\cite{sutanto2020} fournit le protocole
+approprié pour la première: fixer une précision cible et mesurer le coût
+d'apprentissage nécessaire pour l'atteindre, plutôt que comparer des précisions
+finales à budget égal.
+
+\parag{Moyen terme — fermer la boucle simulation-réalité.} Enregistrer un
+jeu de mouvements exploratoires sur le Franka physique afin de résoudre
+effectivement~\eqref{eq:finetune}. C'est la seule voie pour faire passer la
+contribution~4 du statut d'implémentation vérifiée à celui de résultat validé.
+Ce même jeu de données permettrait de rejouer le diagnostic de déséquilibre par
+axe, qui n'a jamais atteint son seuil de déclenchement sur données simulées mais
+pourrait le franchir sur données réelles
+(section~\ref{sec:res-desequilibre}).
+
+\parag{Plus long terme — deux extensions naturelles.} D'une part,
+l'imposition semi-supervisée des contraintes sur des points de l'espace
+articulaire non étiquetés, proposée par
+Djeumou \emph{et al.}~\cite{djeumou2022}: elle étendrait la garantie de
+dissipativité au-delà des trajectoires vues à l'entraînement, c'est-à-dire
+qu'elle rapprocherait le degré~1 du degré~2 sans exiger de le rendre
+structurel. D'autre part, l'identification en ligne de la charge portée, qui
+rendrait $\delta$ observable en fonctionnement au lieu d'être fournie; la voie
+par les courants moteurs de Li \emph{et al.}~\cite{li2025ral} n'est pas
+transposable au Franka en raison de ses réducteurs, mais une estimation par
+moindres carrés sur les couples articulaires mesurés l'est, et constitue le
+préalable à un déploiement sur robot réel.
+
+% =====================================================================
+\printbibliography[title={Références}]
+
+\end{document}
