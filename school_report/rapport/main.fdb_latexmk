@@ -1,12 +1,12 @@
 # Fdb version 4
-["biber main"] 1785476048.34709 "main.bcf" "main.bbl" "main" 1785482454.68791 0
+["biber main"] 1785476048.34709 "main.bcf" "main.bbl" "main" 1785482641.96066 0
   "bibliography.bib" 1785470765.43732 7137 9b144cfe9727051a17bed93fe48c064c ""
-  "main.bcf" 1785482454.57241 108540 25c9d0aa8397c046c999442f13644c7e "pdflatex"
+  "main.bcf" 1785482641.84454 108540 25c9d0aa8397c046c999442f13644c7e "pdflatex"
   (generated)
   "main.bbl"
   "main.blg"
   (rewritten before read)
-["pdflatex"] 1785482453.08671 "main.tex" "main.pdf" "main" 1785482454.6881 0
+["pdflatex"] 1785482640.36449 "main.tex" "main.pdf" "main" 1785482641.96086 0
   "/etc/texmf/web2c/texmf.cnf" 1785128094.77091 475 c0e671620eb5563b2130f56340a5fde8 ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/amsfonts/symbols/msam10.tfm" 1246382020 916 f87d7c45f9c908e672703b83b72241a3 ""
@@ -317,12 +317,12 @@
   "/usr/share/texmf/web2c/texmf.cnf" 1707919699 40399 f2c302f7d2af602abb742093540a5834 ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1785128176.96461 5472669 54eaf61a88b6b7896ebd0dac973cb29c ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1785128248 8213310 c87b9f5fc3aa66e6136de2b95c7fb229 ""
-  "main.aux" 1785482454.55641 21545 71002f5154e648e09c05a0255ee91f91 "pdflatex"
+  "main.aux" 1785482641.82854 21644 30870e58fdf71d40efe39d70f612180b "pdflatex"
   "main.bbl" 1785476451.91463 13809 54b4b670de2aebc7d0938c799d8b6e63 "biber main"
-  "main.out" 1785482454.57141 5272 c5703c0aaba88893b4f7f6a63cbaa6b0 "pdflatex"
-  "main.run.xml" 1785482454.57348 2337 3acfe57ba3f65a4ddc09761182585e81 "pdflatex"
-  "main.tex" 1785482444.56839 61254 0ccfbb1602fe9dd5b6500472471b9622 ""
-  "main.toc" 1785482454.57348 5429 836cea1d1a1a1ad5c60fe4aa6bb594c6 "pdflatex"
+  "main.out" 1785482641.84354 5272 c5703c0aaba88893b4f7f6a63cbaa6b0 "pdflatex"
+  "main.run.xml" 1785482641.84543 2337 3acfe57ba3f65a4ddc09761182585e81 "pdflatex"
+  "main.tex" 1785482628.08239 63047 e915d8b5f6504179f374f6eefabcea8f ""
+  "main.toc" 1785482641.84543 5487 88401f755f2e54cc8e2653ea890cb586 "pdflatex"
   "polytechnique-armes.pdf" 1785470765.47832 219178 2b99ba9f02d2c7193defe3df100738bb ""
   "polytechnique-filetcourt.pdf" 1785470765.47832 8371 34509d06272abb93a39a8577988e90bb ""
   "polytechnique-filetlongrouge.pdf" 1785470765.47832 7218 a88e0b387e2f0e8b9cb79e3f3419147d ""

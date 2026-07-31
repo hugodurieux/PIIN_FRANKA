@@ -705,6 +705,38 @@ concurrents), introduit un écart de domaine assumé, dont
 \label{sec-resultats}
 % =====================================================================
 
+\paragraph{Synthèse.} Cette section établit cinq résultats, tous mesurés sur
+données réservées.
+
+\begin{enumerate}
+    \item \textbf{La chaîne fonctionne de bout en bout.} Partant du seul fichier
+    URDF, le modèle appris pilote effectivement un Franka simulé à
+    \SI{1000}{\hertz}, et la séquence de préhension aboutit
+    (\cref{sec-res-suivi,sec-limites-integration}).
+    \item \textbf{Le modèle gris divise par \num{2.3} l'erreur du modèle
+    analytique} issu de l'URDF, de \SI{1.46}{} à \SI{0.62}{\newton\meter} en
+    moyenne (\cref{tab-baselines}).
+    \item \textbf{Les contraintes physiques tiennent.} Zéro violation de limite
+    de couple sur les \SI{14830}{} échantillons de test, là où le modèle
+    analytique seul en produit sur \SI{0.99}{\percent} d'entre eux
+    (\cref{sec-res-garanties}).
+    \item \textbf{Une boîte noire de capacité identique est plus précise}
+    (\SI{0.45}{} contre \SI{0.62}{\newton\meter}). La valeur de la structure
+    grise ne réside donc pas dans la précision brute
+    (\cref{sec-baselines}).
+    \item \textbf{Le résidu appris dégrade les axes que le terme analytique
+    modélise déjà bien}, d'un facteur~\num{6.9} sur l'axe~7. Le même effet est
+    mesuré indépendamment en boucle fermée, où désactiver le résidu divise
+    par~\num{22} le biais de l'axe~5
+    (\cref{tab-perjoint-baselines,sec-res-ablation}).
+\end{enumerate}
+
+Les résultats~4 et~5 vont contre l'hypothèse de départ. Ils sont rapportés
+comme résultats et non comme échecs: le second identifie un mode de défaillance
+précis et reproductible des résidus gris, corroboré par deux mesures
+indépendantes — une hors ligne et une en boucle fermée — et il indique
+directement la correction à apporter (\cref{sec-limites}).
+
 \paragraph{Protocole de mesure.} Sauf mention contraire, tous les chiffres de
 cette section sont mesurés sur le \textbf{jeu de test réservé}
 (\SI{14830}{} échantillons), jamais vu ni par l'entraînement ni par la
