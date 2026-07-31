@@ -1,0 +1,20 @@
+[MultiPayload] Loaded  49,723 samples from data/isaac_0.0kg.h5
+[MultiPayload] Loaded  49,766 samples from data/isaac_1.0kg.h5
+[MultiPayload] Loaded  48,815 samples from data/isaac_3.0kg.h5
+[MultiPayload] Combined: 148,304 samples from 3 files
+[split] split(seed=12345): train=118,644 val=14,830 test=14,830 (total 148,304)
+[N2] FrictionNet enabled (6087 parameters)
+epoch    1 | train 1.3320 (mse 1.2875) | val 1.1171 (mse 1.0587) | dissip_viol 0.1309
+         D_diag mean/joint: [0.4020, 0.6035, 0.3778, 0.3937, 0.9749, 0.5678, 0.4728]
+epoch    2 | train 0.9885 (mse 0.9522) | val 1.0194 (mse 0.9748) | dissip_viol 0.1149
+         D_diag mean/joint: [0.3853, 0.4541, 0.3238, 0.3454, 1.1260, 0.4668, 0.5876]
+
+[eval] Restored best-validation checkpoint for final metrics.
+
+[eval] Per-joint VAL  RMSE (Nm), in-sample for selection: [1.4054, 1.5111, 1.1777, 0.9356, 0.3601, 0.3434, 0.2463]
+[eval] Per-joint TEST RMSE (Nm), HELD OUT  -> REPORT THIS: [1.4507, 1.2951, 1.0749, 0.9919, 0.3679, 0.3432, 0.2411]
+[eval] Mean test RMSE: 0.8235 Nm
+  Joints 1-4 (87 Nm): 1.2031 Nm  |  Joints 5-7 (12 Nm): 0.3174 Nm
+  -> Scale within tolerance (ratio 0.3x).
+
+Done. Best val loss 1.0194. Saved to models/run_20260731_164239/ (greybox_best.pt + friction_net_best.pt)

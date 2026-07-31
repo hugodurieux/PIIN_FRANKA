@@ -18,8 +18,22 @@ Multi-payload training (0 kg + 1 kg + 3 kg concatenated):
 Data-efficiency ablation (novelty N4 from Liu et al. 2024):
     python -m training.train --data data/fourier_baseline_0kg.h5 --max_samples 5000 --epochs 200
     Truncates the dataset to N random samples (seed=42) before splitting
-    into train/val, enabling direct comparison against Liu et al.'s
+    into train/val/test, enabling direct comparison against Liu et al.'s
     25 000-sample benchmark.
+
+Black-box baseline ("MLP direct" in the school report's baseline table):
+    python -m training.train --data ... --no_rnea --tag baseline-mlp-direct --epochs 200
+    Drops the analytical term so the network predicts the whole torque.
+
+Spatial-encoding ablation (asked for by the report's limitations section):
+    python -m training.train --data ... --encoding raw --tag ablation-raw-q --epochs 200
+    Feeds [q, qdot, delta] instead of [sin q, cos q, qdot, delta].
+
+SPLIT NOTE. As of training/splits.py the partition is 80/10/10 train/val/test.
+The number to quote in any write-up is the TEST RMSE printed at the end and
+stored as ``per_joint_test_rmse`` in config.json. ``per_joint_val_rmse`` is
+in-sample for checkpoint selection and is kept only as a diagnostic. Runs made
+before splits.py used a different 90/10 partition and are NOT comparable.
 """
 
 from __future__ import annotations
@@ -32,50 +46,90 @@ from datetime import datetime
 import torch
 from torch.utils.data import DataLoader
 
-from network.grey_box_net import GreyBoxNet
+from network.grey_box_net import GreyBoxNet, ENCODINGS
 from network.friction_net import FrictionNet
 from training.constraints import AugmentedLagrangian
-from training.dataset import SyntheticDataset, FrankaDynamicsDataset, MultiPayloadDataset
+from training.dataset import (SyntheticDataset, FrankaDynamicsDataset,
+                              MultiPayloadDataset, _random_subsample_indices)
+from training.splits import make_splits, describe, SPLIT_SEED, SPLIT_FRACTIONS
+
+
+def build_dataset(args):
+    """Instantiate the FULL dataset, untruncated.
+
+    --max_samples is deliberately NOT applied here. See build_loaders.
+    """
+    if args.synthetic or not args.data:
+        return SyntheticDataset(n=args.synthetic_n)
+    if len(args.data) > 1:
+        return MultiPayloadDataset(args.data)
+    return FrankaDynamicsDataset(args.data[0])
 
 
 def build_loaders(args):
-    """Build train and validation DataLoaders.
+    """Build train / validation / test DataLoaders.
 
-    Supports single-file and multi-file (multi-payload) HDF5 datasets.
-    When ``args.max_samples`` is set (novelty N4), the dataset is truncated
-    to that many samples *before* the 90/10 train/val split, so both
-    partitions see only the reduced data budget.
+    The split is an 80/10/10 partition from ``training.splits`` -- the single
+    source of truth shared with ``controller/compute_error_bound.py`` and
+    ``evaluation/eval_baselines.py``, so all three see the SAME test set.
+
+    This replaces the old 90/10 train/val split, under which the reported RMSE
+    and the Lyapunov bound epsilon_j were both measured on the very set used to
+    select the checkpoint. See training/splits.py for the full rationale.
     """
+    full = build_dataset(args)
+    print(f"[split] {describe(len(full))}")
+    train_ds, val_ds, test_ds = make_splits(full)
+
+    # --max_samples is a TRAINING BUDGET, applied AFTER the split.
+    #
+    # It used to truncate the dataset BEFORE splitting, which shrank the test
+    # set along with the training set: the 5k/25k/50k runs of 2026-07-31 were
+    # scored on 500/2500/5000 samples drawn from three DIFFERENT subsets, so
+    # their numbers were neither comparable with each other nor with the full
+    # run. The resulting curve was non-monotonic and the 25k run showed val
+    # 0.2601 against test 0.7427 -- small-sample noise, not a data-efficiency
+    # effect. A data-efficiency curve requires the evaluation set held FIXED
+    # while only the training budget varies, which is also what Liu et al.'s
+    # 25 000-sample benchmark means.
     max_samples = getattr(args, "max_samples", None)
+    if max_samples is not None and max_samples > 0:
+        if max_samples < len(train_ds):
+            idx = _random_subsample_indices(len(train_ds), max_samples)
+            train_ds = torch.utils.data.Subset(train_ds, idx.tolist())
+            print(f"[N4] Training budget capped at {len(train_ds):,} samples "
+                  f"(val and test left at full size, identical across budgets)")
+        else:
+            print(f"[N4] max_samples={max_samples} >= train split "
+                  f"({len(train_ds):,}); using the whole training split")
 
-    if args.synthetic or not args.data:
-        full = SyntheticDataset(n=args.synthetic_n, max_samples=max_samples)
-    elif len(args.data) > 1:
-        full = MultiPayloadDataset(args.data, max_samples=max_samples)
-    else:
-        full = FrankaDynamicsDataset(args.data[0], max_samples=max_samples)
-
-    if max_samples is not None:
-        print(f"[N4] Dataset truncated to {len(full)} samples "
-              f"(max_samples={max_samples})")
-
-    n_val = max(1, int(0.1 * len(full)))
-    n_train = len(full) - n_val
-    train_ds, val_ds = torch.utils.data.random_split(
-        full, [n_train, n_val], generator=torch.Generator().manual_seed(0)
-    )
     return (
         DataLoader(train_ds, batch_size=args.batch_size, shuffle=True),
         DataLoader(val_ds, batch_size=args.batch_size, shuffle=False),
+        DataLoader(test_ds, batch_size=args.batch_size, shuffle=False),
     )
 
 
-def step_loss(net, al, batch, device, friction_net=None):
+def step_loss(net, al, batch, device, friction_net=None, use_rnea=True,
+              apply_dissip=True):
     """Compute combined loss for one mini-batch.
 
     When ``friction_net`` is provided (--use_friction_net), the combined
     residual is tau_res = tau_res_grey + tau_res_fric, where the friction
     component is dissipative by construction (novelty N2, Liu et al. 2024).
+
+    Args:
+        use_rnea:     True  -> grey box, tau_pred = tau_theo + tau_res.
+                      False -> black-box baseline (--no_rnea): the network alone
+                      predicts the whole torque, tau_pred = tau_res. This is the
+                      "MLP direct" line of the report's baseline table.
+        apply_dissip: whether the dissipativity constraint is meaningful. It is
+                      NOT for the black-box baseline: there tau_res is the FULL
+                      joint torque, which legitimately does work on the system,
+                      so tau_res . qdot <= 0 would be a physically wrong
+                      constraint and would cripple the baseline unfairly. The
+                      torque-limit constraint stays on in both cases -- it is a
+                      statement about the actuators, true for any model.
     """
     q = batch["q"].to(device)
     qdot = batch["qdot"].to(device)
@@ -87,11 +141,34 @@ def step_loss(net, al, batch, device, friction_net=None):
     if friction_net is not None:
         tau_res_fric = friction_net(q, qdot, delta)
         tau_res = tau_res + tau_res_fric
-    tau_pred = tau_theo + tau_res
+    tau_pred = tau_theo + tau_res if use_rnea else tau_res
 
     mse = torch.nn.functional.mse_loss(tau_pred, tau_real)
-    penalty = al.penalty(tau_pred, tau_res, qdot)
-    return mse + penalty, mse, tau_pred, tau_res, qdot
+    # Zeroing the residual fed to the dissipativity term switches that term off
+    # without touching the torque-limit term (max(0, 0 . qdot) == 0).
+    tau_res_for_dissip = tau_res if apply_dissip else torch.zeros_like(tau_res)
+    penalty = al.penalty(tau_pred, tau_res_for_dissip, qdot)
+    return mse + penalty, mse, tau_pred, tau_res_for_dissip, qdot
+
+
+@torch.no_grad()
+def per_joint_rmse(net, al, loader, device, friction_net=None, use_rnea=True,
+                   apply_dissip=True):
+    """Per-joint RMSE (Nm) over a whole loader. Returns a (7,) CPU tensor."""
+    net.eval()
+    if friction_net is not None:
+        friction_net.eval()
+    se = torch.zeros(7)
+    n = 0
+    for batch in loader:
+        _, _, tau_pred, _, _ = step_loss(
+            net, al, batch, device, friction_net=friction_net,
+            use_rnea=use_rnea, apply_dissip=apply_dissip,
+        )
+        tau_real_b = batch["tau_real"].to(device)
+        se += (tau_pred - tau_real_b).pow(2).sum(dim=0).cpu()
+        n += tau_pred.shape[0]
+    return (se / max(n, 1)).sqrt()
 
 
 def main():
@@ -102,9 +179,11 @@ def main():
     p.add_argument("--synthetic", action="store_true")
     p.add_argument("--synthetic_n", type=int, default=4096)
     p.add_argument("--max_samples", type=int, default=None,
-                   help="Truncate dataset to N random samples (seed=42) before "
-                        "train/val split. Enables data-efficiency ablation "
-                        "(novelty N4, Liu et al. 2024). Default: None (use all).")
+                   help="TRAINING BUDGET: cap the train split at N random "
+                        "samples (seed=42) AFTER the 80/10/10 split, leaving "
+                        "val and test at full size so every budget is scored "
+                        "on the identical test set. Enables the data-efficiency "
+                        "ablation (novelty N4, Liu et al. 2024). Default: all.")
     p.add_argument("--epochs", type=int, default=100)
     p.add_argument("--batch_size", type=int, default=256)
     p.add_argument("--lr", type=float, default=1e-3)
@@ -116,19 +195,47 @@ def main():
                    help="Enable FrictionNet sub-module (novelty N2, Liu et al. "
                         "2024). Adds a structurally dissipative friction torque "
                         "tau_friction = -D*qdot to the residual.")
+    p.add_argument("--no_rnea", action="store_true",
+                   help="BLACK-BOX BASELINE ('MLP direct' in the report's "
+                        "baseline table). Drops the analytical tau_theo term so "
+                        "the network alone predicts the whole torque. Same "
+                        "encoding, same capacity, same budget as the grey box, "
+                        "so the measured gap is attributable to the structure "
+                        "and not to capacity. Also disables the dissipativity "
+                        "constraint, which is meaningless when tau_res is the "
+                        "full torque (see step_loss).")
+    p.add_argument("--encoding", type=str, default="sincos", choices=ENCODINGS,
+                   help="Input encoding. 'sincos' (default) is [sin(q), cos(q), "
+                        "qdot, delta] in R^22. 'raw' is [q, qdot, delta] in R^15 "
+                        "and exists ONLY for the spatial-encoding ablation the "
+                        "report's limitations section asks for. Never deploy a "
+                        "'raw' model: it reintroduces the wrap discontinuity.")
+    p.add_argument("--tag", type=str, default="",
+                   help="Free-text label stored in config.json, e.g. "
+                        "'baseline-mlp-direct'. Makes runs identifiable without "
+                        "having to diff their configs.")
     p.add_argument("--out", type=str, default="models")
     args = p.parse_args()
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    train_loader, val_loader = build_loaders(args)
+    train_loader, val_loader, test_loader = build_loaders(args)
 
-    net = GreyBoxNet(args.hidden_dim, args.n_hidden_layers, args.activation).to(device)
+    use_rnea = not args.no_rnea
+    apply_dissip = use_rnea
+    if args.no_rnea:
+        print("[baseline] --no_rnea: BLACK BOX. tau_pred = network output alone; "
+              "analytical RNEA term dropped; dissipativity constraint disabled.")
+    if args.encoding != "sincos":
+        print(f"[ablation] encoding={args.encoding} (default is 'sincos')")
+
+    net = GreyBoxNet(args.hidden_dim, args.n_hidden_layers, args.activation,
+                     encoding=args.encoding).to(device)
     al = AugmentedLagrangian(rho=args.rho, device=device)
 
     # --- FrictionNet (novelty N2, Liu et al. 2024) ---
     friction_net = None
     if args.use_friction_net:
-        friction_net = FrictionNet().to(device)
+        friction_net = FrictionNet(encoding=args.encoding).to(device)
         all_params = list(net.parameters()) + list(friction_net.parameters())
         fn_params = sum(p.numel() for p in friction_net.parameters())
         print(f"[N2] FrictionNet enabled ({fn_params} parameters)")
@@ -155,6 +262,7 @@ def main():
             opt.zero_grad()
             loss, mse, tau_pred, tau_res, qdot = step_loss(
                 net, al, batch, device, friction_net=friction_net,
+                use_rnea=use_rnea, apply_dissip=apply_dissip,
             )
             loss.backward()
             opt.step()
@@ -170,6 +278,7 @@ def main():
             for batch in val_loader:
                 loss, mse, *_ = step_loss(
                     net, al, batch, device, friction_net=friction_net,
+                    use_rnea=use_rnea, apply_dissip=apply_dissip,
                 )
                 vl += loss.item(); vm += mse.item()
         vl /= len(val_loader); vm /= len(val_loader)
@@ -203,26 +312,43 @@ def main():
                     os.path.join(run_dir, "friction_net_best.pt"),
                 )
 
-    # [N2-WhenPhysics] Per-joint val RMSE diagnostic
-    # Detects 87 Nm vs 12 Nm torque-scale imbalance across joints.
-    net.eval()
-    if friction_net is not None:
-        friction_net.eval()
-    per_joint_se = torch.zeros(7)
-    n_diag = 0
-    with torch.no_grad():
-        for batch in val_loader:
-            _, _, tau_pred, _, _ = step_loss(
-                net, al, batch, device, friction_net=friction_net
-            )
-            tau_real_b = batch["tau_real"].to(device)
-            per_joint_se += (tau_pred - tau_real_b).pow(2).sum(dim=0).cpu()
-            n_diag += tau_pred.shape[0]
-    per_joint_rmse = (per_joint_se / n_diag).sqrt()
-    rmse_str = ", ".join(f"{v:.4f}" for v in per_joint_rmse.tolist())
-    inner = per_joint_rmse[:4].mean().item()
-    outer = per_joint_rmse[4:].mean().item()
-    print(f"\n[N2-WhenPhysics] Per-joint val RMSE (Nm): [{rmse_str}]")
+    # ------------------------------------------------------------------
+    # Final metrics.
+    #
+    # The checkpoint just restored is the one selected on VALIDATION loss, so
+    # validation RMSE is an in-sample number for the selection criterion and
+    # must NOT be the figure reported in the paper. The TEST split has been
+    # untouched by both training and selection: that is the number to quote.
+    # Both are recorded so the gap between them is visible -- a large gap is
+    # itself evidence of overfitting to the selection criterion.
+    # ------------------------------------------------------------------
+    best_ckpt = os.path.join(run_dir, "greybox_best.pt")
+    if os.path.isfile(best_ckpt):
+        net.load_state_dict(torch.load(best_ckpt, map_location=device,
+                                       weights_only=True))
+        if friction_net is not None:
+            fric_ckpt = os.path.join(run_dir, "friction_net_best.pt")
+            if os.path.isfile(fric_ckpt):
+                friction_net.load_state_dict(
+                    torch.load(fric_ckpt, map_location=device, weights_only=True)
+                )
+        print("\n[eval] Restored best-validation checkpoint for final metrics.")
+
+    kw = dict(friction_net=friction_net, use_rnea=use_rnea,
+              apply_dissip=apply_dissip)
+    val_rmse = per_joint_rmse(net, al, val_loader, device, **kw)
+    test_rmse = per_joint_rmse(net, al, test_loader, device, **kw)
+
+    def _fmt(t):
+        return "[" + ", ".join(f"{v:.4f}" for v in t.tolist()) + "]"
+
+    print(f"\n[eval] Per-joint VAL  RMSE (Nm), in-sample for selection: {_fmt(val_rmse)}")
+    print(f"[eval] Per-joint TEST RMSE (Nm), HELD OUT  -> REPORT THIS: {_fmt(test_rmse)}")
+    print(f"[eval] Mean test RMSE: {test_rmse.mean().item():.4f} Nm")
+
+    # [N2-WhenPhysics] 87 Nm vs 12 Nm torque-scale imbalance, on the test split.
+    inner = test_rmse[:4].mean().item()
+    outer = test_rmse[4:].mean().item()
     print(f"  Joints 1-4 (87 Nm): {inner:.4f} Nm  |  Joints 5-7 (12 Nm): {outer:.4f} Nm")
     ratio = outer / inner if inner > 0 else float("inf")
     if ratio > 2.0:
@@ -232,8 +358,15 @@ def main():
         print(f"  -> Scale within tolerance (ratio {ratio:.1f}x).")
 
     # save config + final
-    config = vars(args) | {"best_val_loss": best_val, "run_id": run_id,
-                            "per_joint_val_rmse": per_joint_rmse.tolist()}
+    config = vars(args) | {
+        "best_val_loss": best_val,
+        "run_id": run_id,
+        "split_seed": SPLIT_SEED,
+        "split_fractions": list(SPLIT_FRACTIONS),
+        "per_joint_val_rmse": val_rmse.tolist(),
+        "per_joint_test_rmse": test_rmse.tolist(),
+        "mean_test_rmse": test_rmse.mean().item(),
+    }
     with open(os.path.join(run_dir, "config.json"), "w") as f:
         json.dump(config, f, indent=2)
     saved = "greybox_best.pt"

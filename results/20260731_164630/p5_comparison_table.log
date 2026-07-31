@@ -1,0 +1,79 @@
+[eval] dataset signature ae008bd146 over 3 file(s)
+[eval] every model below is scored on this exact test split.
+[MultiPayload] Loaded  49,723 samples from data/isaac_0.0kg.h5
+[MultiPayload] Loaded  49,766 samples from data/isaac_1.0kg.h5
+[MultiPayload] Loaded  48,815 samples from data/isaac_3.0kg.h5
+[MultiPayload] Combined: 148,304 samples from 3 files
+[eval] split(seed=12345): train=118,644 val=14,830 test=14,830 (total 148,304)
+
+=== rnea    ((none)) ===
+  test samples          : 14,830
+  per-joint RMSE  [Nm]  : 1.5875, 2.8408, 1.8240, 1.9529, 0.8829, 1.0622, 0.0418
+  mean RMSE       [Nm]  : 1.4560
+  RMSE / limit    [%]   : 1.82, 3.27, 2.10, 2.24, 7.36, 8.85, 0.35
+  p99.9 abs err   [Nm]  : 15.252, 14.430, 11.837, 8.481, 2.171, 2.262, 0.125
+  samples over torque limit: 147 / 14,830
+
+=== greybox  greybox-reference  (models/run_20260731_164633) ===
+  test samples          : 14,830
+  per-joint RMSE  [Nm]  : 1.0217, 0.9346, 0.5530, 0.8433, 0.3705, 0.3547, 0.2875
+  mean RMSE       [Nm]  : 0.6236
+  RMSE / limit    [%]   : 1.17, 1.07, 0.64, 0.97, 3.09, 2.96, 2.40
+  p99.9 abs err   [Nm]  : 5.808, 6.943, 3.704, 4.377, 2.099, 2.352, 1.580
+  samples over torque limit: 0 / 14,830
+
+=== mlp  baseline-mlp-direct  (models/run_20260731_165040) ===
+  test samples          : 14,830
+  per-joint RMSE  [Nm]  : 0.9711, 0.8446, 0.4046, 0.7420, 0.0656, 0.0677, 0.0311
+  mean RMSE       [Nm]  : 0.4467
+  RMSE / limit    [%]   : 1.12, 0.97, 0.47, 0.85, 0.55, 0.56, 0.26
+  p99.9 abs err   [Nm]  : 5.886, 6.867, 3.035, 3.682, 0.480, 0.386, 0.126
+  samples over torque limit: 0 / 14,830
+
+=== greybox  ablation-raw-encoding  (models/run_20260731_165409) ===
+  test samples          : 14,830
+  per-joint RMSE  [Nm]  : 1.0345, 0.9290, 0.5623, 0.8597, 0.3739, 0.3606, 0.2978
+  mean RMSE       [Nm]  : 0.6311
+  RMSE / limit    [%]   : 1.19, 1.07, 0.65, 0.99, 3.12, 3.01, 2.48
+  p99.9 abs err   [Nm]  : 6.152, 6.443, 3.564, 4.189, 2.163, 2.477, 1.600
+  samples over torque limit: 0 / 14,830
+
+====================================================================
+% ---- TABLE 1: résumé des lignes de base ----
+% Généré par: python -m evaluation.eval_baselines --latex
+% Même split de test pour toutes les lignes (seed=12345).
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Modèle & RMSE moyenne & RMSE pire axe & Éch. hors limites & Garanties \\
+ & [\si{\newton\meter}] & [\si{\newton\meter}] & de couple & \\
+\midrule
+RNEA seul (analytique) & \num{1.456} & \num{2.841} & 147 (\SI{0.99}{\percent}) & aucune (non entraîné) \\
+MLP direct (boîte noire) & \num{0.447} & \num{0.971} & 0 (\SI{0.00}{\percent}) & limites de couple seules \\
+\textbf{Gris} \code{isaac-satfix} & \num{0.624} & \num{1.022} & 0 (\SI{0.00}{\percent}) & limites + dissipativité \\
+\textbf{Gris} \code{isaac-satfix} & \num{0.631} & \num{1.035} & 0 (\SI{0.00}{\percent}) & limites + dissipativité \\
+\bottomrule
+\end{tabular}
+
+% ---- TABLE 2: RMSE par axe (montre l'axe 7) ----
+% Généré par: python -m evaluation.eval_baselines --latex
+% Même split de test pour toutes les lignes (seed=12345).
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+RMSE de test [\si{\newton\meter}] & J1 & J2 & J3 & J4 & J5 & J6 & J7 \\
+\midrule
+RNEA seul (analytique) & \num{1.588} & \num{2.841} & \num{1.824} & \num{1.953} & \num{0.883} & \num{1.062} & \num{0.042} \\
+MLP direct (boîte noire) & \num{0.971} & \num{0.845} & \num{0.405} & \num{0.742} & \num{0.066} & \num{0.068} & \num{0.031} \\
+\textbf{Gris} \code{isaac-satfix} & \num{1.022} & \num{0.935} & \num{0.553} & \num{0.843} & \num{0.371} & \num{0.355} & \num{0.288} \\
+\textbf{Gris} \code{isaac-satfix} & \num{1.035} & \num{0.929} & \num{0.562} & \num{0.860} & \num{0.374} & \num{0.361} & \num{0.298} \\
+\bottomrule
+\end{tabular}
+
+!! greybox (greybox-reference) is WORSE than RNEA alone on:
+     J7: 0.2875 Nm vs RNEA 0.0418 Nm (6.9x worse)
+   The learned residual is adding error on joints the analytical model already gets right.
+
+!! greybox (ablation-raw-encoding) is WORSE than RNEA alone on:
+     J7: 0.2978 Nm vs RNEA 0.0418 Nm (7.1x worse)
+   The learned residual is adding error on joints the analytical model already gets right.
+
+[eval] wrote results/20260731_164630/p5_comparison.json

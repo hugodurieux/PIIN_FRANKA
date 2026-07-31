@@ -125,14 +125,19 @@ sans dérivation manuelle et dont le résidu neuronal, conditionné par la masse
 portée, expose trois degrés de garantie croissants (libre, imposé par
 lagrangien augmenté, structurel par construction). Ce modèle alimente une loi
 de couple calculé plus PD à \SI{1000}{\hertz} dont les gains sont dérivés d'une borne
-d'erreur mesurée sur un jeu de test indépendant. Le modèle de référence atteint
-une erreur de prédiction de \SIrange{0.30}{0.90}{\newton\meter} par axe, soit
-\SIrange{0.62}{3.11}{\percent} de la limite de couple, avec violation de limite
-nulle et violation de dissipativité résiduelle de \num{6e-4}. En boucle fermée,
-une ablation contrôlée du résidu établit que le résidu appris sur Isaac~Sim
-\emph{dégrade} le suivi sous transfert vers MuJoCo: le biais statique de l'axe~5
-passe de \SI{-0.0337}{\radian} à \SI{-0.0015}{\radian} et l'erreur cartésienne de
-bride de \SI{14.3}{\milli\meter} à \SI{7.5}{\milli\meter} lorsqu'il est désactivé.
+d'erreur mesurée sur un jeu de test réservé. Sur \SI{14830}{} échantillons
+réservés, le modèle gris atteint \SIrange{0.29}{1.02}{\newton\meter} par axe
+(\SIrange{0.64}{3.09}{\percent} de la limite de couple) contre
+\SI{1.46}{\newton\meter} en moyenne pour le modèle analytique seul, avec zéro
+violation de limite de couple là où l'analytique en produit sur
+\SI{0.99}{\percent} des échantillons. Deux résultats vont toutefois contre
+l'hypothèse de départ et sont rapportés comme tels: une boîte noire de capacité
+et de budget identiques fait \emph{mieux} que le modèle gris
+(\SI{0.45}{\newton\meter} contre \SI{0.62}{\newton\meter} en moyenne), et le
+résidu appris \emph{dégrade} les axes que le terme analytique modélise déjà
+bien — d'un facteur~\num{6.9} sur l'axe~7. Le même phénomène se mesure en
+boucle fermée: désactiver le résidu divise par~\num{22} le biais statique de
+l'axe~5 et par deux l'erreur cartésienne de bride.
 
 \medskip
 \begin{otherlanguage}{english}
@@ -149,14 +154,19 @@ no manual derivation and whose payload-conditioned neural residual exposes
 three increasing degrees of guarantee (unconstrained, imposed by an augmented
 Lagrangian, structurally guaranteed by construction). The model feeds a
 \SI{1000}{\hertz} computed-torque-plus-PD law whose gains derive from an error bound
-measured on a held-out test set. The reference model reaches a per-joint torque
-prediction error of \SIrange{0.30}{0.90}{\newton\meter}, i.e.
-\SIrange{0.62}{3.11}{\percent} of the torque limit, with zero torque-limit
-violation and a residual dissipativity violation of \num{6e-4}. In closed loop, a
-controlled ablation establishes that the Isaac-Sim-trained residual
-\emph{degrades} tracking under transfer to MuJoCo: joint~5's steady-state bias
-falls from \SI{-0.0337}{\radian} to \SI{-0.0015}{\radian} and the Cartesian flange
-error from \SI{14.3}{\milli\meter} to \SI{7.5}{\milli\meter} when it is disabled.
+measured on a held-out test set. Over \SI{14830}{} held-out samples the grey-box
+model reaches \SIrange{0.29}{1.02}{\newton\meter} per joint
+(\SIrange{0.64}{3.09}{\percent} of the torque limit) against
+\SI{1.46}{\newton\meter} mean for the analytical model alone, with zero
+torque-limit violations where the analytical model violates them on
+\SI{0.99}{\percent} of samples. Two results run against the starting hypothesis
+and are reported as such: a black box of identical capacity and budget does
+\emph{better} than the grey box (\SI{0.45}{\newton\meter} against
+\SI{0.62}{\newton\meter} mean), and the learned residual \emph{degrades} the
+joints the analytical term already models well -- by a factor of \num{6.9} on
+joint~7. The same phenomenon appears in closed loop: disabling the residual
+divides joint~5's steady-state bias by \num{22} and halves the Cartesian flange
+error.
 \end{otherlanguage}
 \end{minipage}
 \end{center}
@@ -695,8 +705,60 @@ concurrents), introduit un écart de domaine assumé, dont
 \label{sec-resultats}
 % =====================================================================
 
-L'apprentissage a été réalisé sur \acompleter{modèle exact de GPU et de CPU}
-avec un temps d'exécution mural de \acompleter{temps total} pour 200~époques.
+\paragraph{Synthèse.} Cette section établit cinq résultats, tous mesurés sur
+données réservées.
+
+\begin{enumerate}
+    \item \textbf{La chaîne fonctionne de bout en bout.} Partant du seul fichier
+    URDF, le modèle appris pilote effectivement un Franka simulé à
+    \SI{1000}{\hertz}, et la séquence de préhension aboutit
+    (\cref{sec-res-suivi,sec-limites-integration}).
+    \item \textbf{Le modèle gris divise par \num{2.3} l'erreur du modèle
+    analytique} issu de l'URDF, de \SI{1.46}{} à \SI{0.62}{\newton\meter} en
+    moyenne (\cref{tab-baselines}).
+    \item \textbf{Les contraintes physiques tiennent.} Zéro violation de limite
+    de couple sur les \SI{14830}{} échantillons de test, là où le modèle
+    analytique seul en produit sur \SI{0.99}{\percent} d'entre eux
+    (\cref{sec-res-garanties}).
+    \item \textbf{Une boîte noire de capacité identique est plus précise}
+    (\SI{0.45}{} contre \SI{0.62}{\newton\meter}). La valeur de la structure
+    grise ne réside donc pas dans la précision brute
+    (\cref{sec-baselines}).
+    \item \textbf{Le résidu appris dégrade les axes que le terme analytique
+    modélise déjà bien}, d'un facteur~\num{6.9} sur l'axe~7. Le même effet est
+    mesuré indépendamment en boucle fermée, où désactiver le résidu divise
+    par~\num{22} le biais de l'axe~5
+    (\cref{tab-perjoint-baselines,sec-res-ablation}).
+\end{enumerate}
+
+Les résultats~4 et~5 vont contre l'hypothèse de départ. Ils sont rapportés
+comme résultats et non comme échecs: le second identifie un mode de défaillance
+précis et reproductible des résidus gris, corroboré par deux mesures
+indépendantes — une hors ligne et une en boucle fermée — et il indique
+directement la correction à apporter (\cref{sec-limites}).
+
+\paragraph{Protocole de mesure.} Sauf mention contraire, tous les chiffres de
+cette section sont mesurés sur le \textbf{jeu de test réservé}
+(\SI{14830}{} échantillons), jamais vu ni par l'entraînement ni par la
+sélection du point de contrôle. La partition 80/10/10 de \cref{sec-probleme}
+est partagée par l'entraînement, l'évaluation des lignes de base et le calcul
+de $\epsilon_j$, si bien que toutes les lignes de \cref{tab-baselines}
+portent sur exactement les mêmes échantillons. Les comparaisons tiennent la
+capacité, l'architecture et le budget d'époques constants; seul l'élément
+étudié varie.
+
+Cette précaution n'est pas rhétorique. Jusqu'au 31~juillet 2026 le dépôt ne
+contenait aucun jeu de test: la RMSE publiée était celle de la validation, sur
+laquelle le point de contrôle était aussi sélectionné, et $\epsilon_j$ — donc
+les gains embarqués — en était tirée. Les chiffres ci-dessous sont les premiers
+du projet à être réellement hors échantillon, et ils diffèrent des précédents.
+
+L'apprentissage a été réalisé sur une carte NVIDIA GeForce RTX~3090
+(\SI{24}{\gibi\byte}) et un processeur Intel Core i9-12900KF (16~c\oe urs,
+24~fils), sous PyTorch~2.13 avec CUDA~13.2, avec un temps d'exécution mural de
+\SI{245}{\second} pour \num{200} époques sur
+\SI{118644}{} échantillons d'entraînement (\SI{209}{\second} pour la ligne de
+base boîte noire, \SI{242}{\second} pour l'ablation d'encodage).
 
 \subsection{Lignes de base et protocole de comparaison}
 \label{sec-baselines}
@@ -723,51 +785,96 @@ la capacité.
 $\taupred = \taurbd + \taures$ selon \cref{eq-decompo}, avec les trois degrés
 de garantie de \cref{sec-residu}.
 
-% -----------------------------------------------------------------
-% TODO(hugo) — MESURE MANQUANTE, BLOQUANTE POUR LA REVENDICATION.
-% Les RMSE de test de RNEA seul et du MLP direct n'ont jamais été
-% mesurées : seul le modèle gris l'a été. Tant que le tableau
-% ci-dessous n'est pas rempli, la phrase « surpasse les deux lignes
-% de base » n'est PAS soutenue par une mesure et a été retirée du
-% résumé et du texte.
-% ATTENTION : ces deux mesures ne sont PAS accessibles par une simple
-% option de training/train.py — vérifié, il n'existe aucun drapeau
-% --baseline, et aucun script d'évaluation de ligne de base dans le dépôt.
-% Il faut écrire le code correspondant :
-%   (a) RNEA seul  : pas d'entraînement. Évaluer pinocchio_baseline/
-%       rnea_wrapper.py contre tau_real sur le SPLIT DE TEST uniquement,
-%       et rapporter la RMSE par axe avec la même métrique que le tableau 2.
-%   (b) MLP direct : ajouter à training/train.py une option qui supprime
-%       le terme tau_rbd de la composition, en gardant hidden_dim=256,
-%       n_hidden_layers=4, activation=mish, epochs=200 pour que l'écart
-%       mesuré soit imputable à la structure grise et non à la capacité.
-% -----------------------------------------------------------------
+% Mesures faites le 2026-07-31 : bash run_experiments.sh all
+%   phase 2 -> RNEA seul        (aucun entraînement)
+%   phase 3 -> MLP direct       (--no_rnea)
+%   phase 5 -> tableaux LaTeX ci-dessous, générés par
+%              python -m evaluation.eval_baselines --latex
+% Journaux bruts : results/20260731_164630/
 
 \begin{table}[htbp]
 \centering
-\caption{Comparaison aux lignes de base sur le jeu de test indépendant. Les
-deux premières lignes ne sont pas encore mesurées: tant qu'elles le restent,
-l'apport quantitatif de la structure grise n'est pas établi
-(\cref{sec-limites}).}
+\caption{Comparaison aux lignes de base, \SI{14830}{} échantillons de test
+réservés, partition identique pour les trois modèles (\code{seed=12345}),
+\num{200} époques et capacité identiques. Le modèle gris divise par \num{2.3}
+l'erreur du modèle analytique, mais \textbf{la boîte noire fait mieux que lui}.}
 \label{tab-baselines}
 \small
-\begin{tabular}{@{}lcc@{}}
+\begin{tabular}{@{}lcccc@{}}
 \toprule
-Modèle & RMSE de test moyenne [\si{\newton\meter}] & Garanties physiques \\
+Modèle & RMSE moyenne & RMSE pire axe & Éch. hors limites & Garanties \\
+ & [\si{\newton\meter}] & [\si{\newton\meter}] & de couple & \\
 \midrule
-RNEA seul (analytique) & \acompleter{à mesurer} & sans objet \\
-MLP direct (boîte noire) & \acompleter{à mesurer} & aucune \\
-\textbf{Gris \code{isaac-satfix}} & \textbf{\numrange{0,30}{0,90}} par axe
+RNEA seul (analytique) & \num{1.456} & \num{2.841} & 147 (\SI{0.99}{\percent})
+& aucune (non entraîné) \\
+\textbf{MLP direct (boîte noire)} & \textbf{\num{0.447}} & \num{0.971}
+& 0 (\SI{0.00}{\percent}) & limites de couple seules \\
+Gris (proposé) & \num{0.624} & \num{1.022} & 0 (\SI{0.00}{\percent})
 & limites + dissipativité \\
 \bottomrule
 \end{tabular}
 \end{table}
 
+\begin{table}[htbp]
+\centering
+\caption{RMSE de test par axe [\si{\newton\meter}]. L'axe~7 est le cas
+révélateur: RNEA seul y atteint \num{0.042}, et le résidu appris \emph{dégrade}
+ce résultat d'un facteur~\num{6.9}.}
+\label{tab-perjoint-baselines}
+\small
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+Modèle & J1 & J2 & J3 & J4 & J5 & J6 & J7 \\
+\midrule
+RNEA seul & \num{1.588} & \num{2.841} & \num{1.824} & \num{1.953}
+& \num{0.883} & \num{1.062} & \textbf{\num{0.042}} \\
+MLP direct & \num{0.971} & \num{0.845} & \num{0.405} & \num{0.742}
+& \textbf{\num{0.066}} & \textbf{\num{0.068}} & \num{0.031} \\
+Gris (proposé) & \num{1.022} & \num{0.935} & \num{0.553} & \num{0.843}
+& \num{0.371} & \num{0.355} & \num{0.288} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{La boîte noire est plus précise que le modèle gris.} C'est le
+résultat le plus important de cette section, et il contredit l'hypothèse de
+départ. Sur le poignet l'écart est d'un demi-ordre de grandeur: axe~5
+\num{0.066} contre \num{0.371}, axe~6 \num{0.068} contre \num{0.355}, axe~7
+\num{0.031} contre \num{0.288}. Deux mécanismes l'expliquent, et ils se
+cumulent. D'une part RNEA est particulièrement \emph{faux} sur le poignet —
+\SI{7.36}{\percent} et \SI{8.85}{\percent} de la limite de couple sur les axes~5
+et~6, ses pires erreurs relatives — de sorte que le terme analytique y offre un
+mauvais point de départ. D'autre part le résidu gris est contraint d'être
+dissipatif, alors que la boîte noire ne l'est pas: la contrainte limite
+précisément l'ampleur de la correction que le résidu peut apporter là où elle
+serait la plus nécessaire.
+
+\paragraph{Le résidu appris dégrade les axes que RNEA modélise déjà bien.}
+L'axe~7 en est la démonstration nette. Le modèle analytique y atteint
+\SI{0.042}{\newton\meter}, soit \SI{0.35}{\percent} de sa limite: il n'y a
+essentiellement rien à apprendre, l'axe étant un roulis de poignet dont l'axe
+passe par la bride, sur lequel la gravité n'exerce presque aucun couple. Le
+résidu y injecte pourtant une erreur d'un facteur~\num{6.9}. Les pires
+échantillons sont explicites: pour $\tau_{\mathrm{real}} = \SI{-0.01}{\newton\meter}$
+et $\taurbd = \SI{-0.08}{\newton\meter}$ — donc une prédiction analytique déjà
+juste — le réseau produit $\taures = \SI{-2.04}{\newton\meter}$. Le coefficient
+diagonal appris $D_{77}$ converge d'ailleurs vers \num{0.67}, la plus grande
+valeur des sept axes, tandis que $D_{11}$ s'effondre à \num{0.019}: le module
+dissipatif est le plus actif là où il n'y a pas de frottement à modéliser.
+
+\textbf{C'est le même phénomène que l'ablation en boucle fermée de
+\cref{sec-res-ablation}}, mesuré cette fois hors ligne. Désactiver le résidu y
+divisait par~\num{22} le biais de l'axe~5; ici, ne pas l'apprendre du tout
+diviserait par~\num{6.9} l'erreur de l'axe~7. Deux mesures indépendantes, une
+seule cause: le résidu n'est pas régularisé par axe, et la perte MSE non
+pondérée (\cref{sec-res-desequilibre}) ne lui donne aucune raison de rester nul
+là où il devrait l'être.
+
 \subsection{Précision du modèle appris}
 \label{sec-res-stage1}
 
-Le modèle gris atteint une erreur de \SIrange{0.30}{0.90}{\newton\meter} par axe
-(\cref{tab-perjoint}). L'amélioration apportée par le filtrage de
+Le modèle gris atteint \SIrange{0.29}{1.02}{\newton\meter} par axe sur le jeu
+de test réservé (\cref{tab-perjoint}). L'amélioration apportée par le filtrage de
 saturation~\eqref{eq-satfilter} est nette et présente sur les sept axes
 (\cref{fig-rmse}): la comparaison \code{isaac-first-real} contre
 \code{isaac-satfix} est une expérience contrôlée, les deux exécutions ne
@@ -809,27 +916,71 @@ les sept axes.}
 
 \begin{table}[htbp]
 \centering
-\caption{Erreur de prédiction par axe (jeu de test), borne d'erreur $\epsilon_j$ (quantile 99,9\,\%), et gains PD résultants.}
+\caption{Modèle gris sur le jeu de test réservé: erreur de prédiction par axe,
+borne $\epsilon_j$ (quantile \SI{99.9}{\percent}) et gains PD qui en découlent
+par \cref{eq-gains} avec $\kappa = 2$. La queue de distribution est lourde — le
+maximum absolu atteint \SI{74.9}{\newton\meter} sur l'axe~1 contre un $p_{99,9}$
+de \SI{5.81}{\newton\meter} — ce qui est précisément pourquoi la borne est prise
+en quantile et non en maximum (\cref{sec-limites}).}
 \label{tab-perjoint}
 \small
 \begin{tabular}{@{}lccccccc@{}}
 \toprule
 Axe $j$ & 1 & 2 & 3 & 4 & 5 & 6 & 7 \\
 \midrule
-RMSE [\si{\newton\meter}] & \num{0,800} & \num{0,882} & \num{0,898} & \num{0,540} & \num{0,373} & \num{0,359}
-& \num{0,299} \\
-$\epsilon_j$ [\si{\newton\meter}] & \num{5,20} & \num{5,66} & \num{3,06} & \num{3,80} & \num{2,10} & \num{2,38}
-& \num{1,57} \\
-$K_{d,jj}$ & \num{10,40} & \num{11,32} & \num{6,12} & \num{7,60}
-& \num{4,20} & \num{4,76} & \num{3,14} \\
-$K_{p,jj}$ & \num{27,04} & \num{32,04} & \num{9,36} & \num{14,44}
-& \num{4,41} & \num{5,66} & \num{2,46} \\
+RMSE [\si{\newton\meter}] & \num{1.022} & \num{0.935} & \num{0.553} & \num{0.843}
+& \num{0.371} & \num{0.355} & \num{0.288} \\
+$\epsilon_j$ [\si{\newton\meter}] & \num{5.81} & \num{6.94} & \num{3.70} & \num{4.38}
+& \num{2.10} & \num{2.35} & \num{1.58} \\
+$K_{d,jj}$ & \num{11.62} & \num{13.89} & \num{7.41} & \num{8.75}
+& \num{4.20} & \num{4.70} & \num{3.16} \\
+$K_{p,jj}$ & \num{33.73} & \num{48.20} & \num{13.72} & \num{19.15}
+& \num{4.41} & \num{5.53} & \num{2.50} \\
 \midrule
-RMSE $/\ \bar{\tau}_j$ [\si{\percent}] & \num{0,92} & \num{1,01} & \num{1,03} & \num{0,62} & \num{3,11}
-& \num{2,99} & \num{2,49} \\
+RMSE $/\ \bar{\tau}_j$ [\si{\percent}] & \num{1.17} & \num{1.07} & \num{0.64} & \num{0.97}
+& \num{3.09} & \num{2.96} & \num{2.40} \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\subsection{Ablations: ce que chaque composant apporte réellement}
+\label{sec-res-ablations}
+
+Deux composants revendiqués comme contributions ont été ablatés, à protocole
+strictement identique (même partition, même capacité, \num{200} époques).
+
+\begin{table}[htbp]
+\centering
+\caption{Ablations sur le jeu de test réservé. Les deux composants pèsent
+moins de \SI{1.5}{\percent} sur la précision.}
+\label{tab-ablations}
+\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Variante & RMSE moyenne [\si{\newton\meter}] & Écart au modèle complet \\
+\midrule
+Gris complet (\code{sincos} + FrictionNet) & \num{0.624} & --- \\
+Sans encodage $\sin/\cos$ (entrée $\q$ brute) & \num{0.631} & \SI{+1.1}{\percent} \\
+Sans FrictionNet & \num{0.633} & \SI{+1.4}{\percent} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{L'encodage spatial ne pèse presque rien.} L'encodage
+$[\sin(\q), \cos(\q)]$ de \cref{eq-encodage} est justifié en
+\cref{sec-degre0} par deux arguments physiques: lever la discontinuité
+angulaire et permettre de représenter l'ondulation de couple. Mesuré, il
+apporte \SI{1.1}{\percent}. L'argument sur la discontinuité reste valable pour
+un déploiement (un modèle entraîné sur $\q$ brut se comporte mal au voisinage
+de $\pm\pi$, ce que la RMSE moyenne ne capture pas), mais l'ondulation de
+couple n'est manifestement pas un terme dominant dans ces données.
+
+\paragraph{FrictionNet n'apporte pas de précision.} Le module dissipatif
+(\cref{sec-frictionnet}, novelty N2) coûte \SI{1.4}{\percent} de RMSE quand on
+le retire. Sa valeur n'est donc pas la précision mais la \emph{garantie}: il
+rend $\taufric^{\top}\qd \le 0$ vraie par construction plutôt que par pénalité.
+C'est une propriété que la boîte noire, plus précise, n'offre pas. La
+revendication doit être formulée en ces termes et non en termes d'erreur.
 
 \subsection{Tenue des garanties physiques}
 \label{sec-res-garanties}
@@ -983,16 +1134,30 @@ préhension réelle, faute d'avoir fait varier la masse de l'objet saisi.
 \subsection{Limites structurelles et méthodologiques}
 \label{sec-limites}
 \begin{description}
-    \item[Lignes de base non mesurées.] Les RMSE de RNEA seul et du MLP direct
-    (\cref{tab-baselines}) n'ont pas été mesurées. L'apport quantitatif de la
-    structure grise face à ces deux extrêmes n'est donc pas établi par ce
-    document, et n'y est pas revendiqué. C'est la lacune la plus bloquante pour
-    une soumission.
-    \item[Ablation de l'encodage spatial non conduite.] L'apport des termes
-    $\sin(\q), \cos(\q)$ de \cref{eq-encodage} est justifié par un argument
-    physique (\cref{sec-degre0}) mais n'est pas démontré: aucune exécution
-    n'a été menée avec $\q$ brut en entrée. Une soumission exige ce tableau
-    d'ablation.
+    \item[La structure grise n'est pas justifiée par la précision.] Mesurée à
+    protocole identique, une boîte noire de même capacité et de même budget
+    fait \SI{28}{\percent} mieux (\cref{tab-baselines}). La justification de
+    l'approche grise doit donc reposer sur ce que la boîte noire n'offre pas —
+    garanties structurelles, extraction automatique depuis l'URDF, absence de
+    réapprentissage de l'inertie et de la gravité — et non sur l'erreur de
+    prédiction. Le présent document ne revendique plus de supériorité en
+    précision face à la boîte noire.
+    \item[Le résidu n'est pas régularisé par axe.] Il dégrade les axes que
+    RNEA modélise déjà bien, d'un facteur~\num{6.9} sur l'axe~7
+    (\cref{tab-perjoint-baselines}), et le même effet se retrouve en boucle
+    fermée (\cref{sec-res-ablation}). Aucun mécanisme n'incite le résidu à
+    rester nul là où le terme analytique est déjà juste. La pondération
+    $\mathrm{diag}(1/\bar{\tau}_j^2)$ de \cref{sec-res-desequilibre} en est
+    une correction partielle; une pénalité explicite sur $\|\taures\|$ par axe,
+    calibrée sur l'erreur résiduelle de RNEA, en serait une plus directe.
+    \item[Queue de distribution lourde, non traitée.] L'erreur maximale atteint
+    \SI{74.9}{\newton\meter} sur l'axe~1 pour un $p_{99,9}$ de
+    \SI{5.81}{\newton\meter}. L'inspection des pires échantillons montre des
+    couples réels proches de la limite associés à des prédictions analytiques
+    quasi nulles, ce qui suggère des artefacts de collecte (contacts,
+    transitoires) plutôt que des défauts de modèle. Ces échantillons ne sont
+    ni filtrés ni analysés, et ils pilotent directement $\epsilon_j$ donc les
+    gains embarqués.
     \item[Conditionnement par la charge non exercé en boucle fermée.] Le
     modèle est entraîné à $\delta \in \{0,1,3\}\,\si{\kilogram}$, mais la mise à
     jour de $\delta$ lors d'une préhension réelle n'a jamais été déclenchée
@@ -1025,12 +1190,23 @@ d'un Franka Emika Panda 7~DoF et produit un robot simulé effectivement command�
 par un modèle dynamique gris. Le terme analytique est évalué par RNEA sans
 aucune dérivation manuelle, et l'apprentissage est confiné à un résidu
 conditionné par la charge portée, contraint par un lagrangien augmenté et, pour
-sa partie dissipative, structurellement garanti. Le modèle atteint une erreur
-de prédiction de \SIrange{0.30}{0.90}{\newton\meter} par axe avec violation de
-limite de couple nulle, et il est interrogé à \SI{1000}{\hertz} dans une boucle de
-couple calculé qui pilote réellement le robot.
+sa partie dissipative, structurellement garanti. Sur données réservées le
+modèle atteint \SIrange{0.29}{1.02}{\newton\meter} par axe, contre
+\SI{1.46}{\newton\meter} en moyenne pour le modèle analytique seul, avec zéro
+violation de limite de couple là où l'analytique en produit sur
+\SI{0.99}{\percent} des échantillons; et il est interrogé à \SI{1000}{\hertz}
+dans une boucle de couple calculé qui pilote réellement le robot.
 
-Le résultat le plus instructif est négatif au premier abord et exploitable
+Deux mesures contredisent toutefois l'hypothèse de départ, et ce sont les plus
+instructives. Une boîte noire de capacité et de budget identiques est
+\SI{28}{\percent} plus précise que le modèle gris, et le résidu appris dégrade
+les axes que le terme analytique modélise déjà bien — facteur~\num{6.9} sur
+l'axe~7. L'intérêt de la structure grise ne réside donc pas dans la précision
+brute mais dans ce que la boîte noire n'offre pas: des garanties par
+construction, et une chaîne automatique qui n'a jamais à réapprendre l'inertie
+ni la gravité que l'URDF fournit déjà. Il faut le formuler ainsi.
+
+Le troisième résultat est négatif au premier abord et exploitable
 ensuite: une ablation contrôlée montre qu'un résidu appris sur Isaac~Sim
 \emph{dégrade} le suivi lorsqu'il est déployé sous MuJoCo, d'un facteur~22 sur
 le biais statique de l'axe~5. Loin d'invalider l'approche grise, ce constat

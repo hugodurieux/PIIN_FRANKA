@@ -35,22 +35,29 @@
 \contentsline {paragraph}{Une conséquence contre-intuitive du gabarit.}{10}{paragraph*.18}%
 \contentsline {paragraph}{Écart de domaine (\emph {sim-to-sim gap}).}{10}{paragraph*.19}%
 \contentsline {section}{\numberline {6}Validation et résultats}{11}{section.6}%
+\contentsline {paragraph}{Synthèse.}{11}{paragraph*.20}%
+\contentsline {paragraph}{Protocole de mesure.}{11}{paragraph*.21}%
 \contentsline {subsection}{\numberline {6.1}Lignes de base et protocole de comparaison}{11}{subsection.6.1}%
-\contentsline {paragraph}{Ligne de base analytique (RNEA seul).}{11}{paragraph*.20}%
-\contentsline {paragraph}{Ligne de base boîte noire (MLP direct).}{11}{paragraph*.21}%
-\contentsline {paragraph}{Modèle proposé (\mbox {\ttfamilyFB \small isaac-satfix}).}{11}{paragraph*.22}%
-\contentsline {subsection}{\numberline {6.2}Précision du modèle appris}{11}{subsection.6.2}%
-\contentsline {subsection}{\numberline {6.3}Tenue des garanties physiques}{11}{subsection.6.3}%
-\contentsline {subsection}{\numberline {6.4}Suivi de trajectoire en boucle fermée}{12}{subsection.6.4}%
-\contentsline {subsection}{\numberline {6.5}Ablation du résidu appris sous transfert inter-simulateurs}{12}{subsection.6.5}%
-\contentsline {paragraph}{Ce que ce résultat établit, et ce qu'il n'établit pas.}{12}{paragraph*.27}%
-\contentsline {section}{\numberline {7}Discussion et limites}{13}{section.7}%
-\contentsline {subsection}{\numberline {7.1}Le biais d'optimisation non corrigé}{13}{subsection.7.1}%
-\contentsline {subsection}{\numberline {7.2}Limites de l'intégration au moteur physique}{13}{subsection.7.2}%
-\contentsline {paragraph}{Un défaut de configuration qui imitait un défaut de physique.}{13}{paragraph*.28}%
-\contentsline {paragraph}{Une leçon méthodologique transposable.}{13}{paragraph*.29}%
-\contentsline {paragraph}{État après correction.}{14}{paragraph*.30}%
-\contentsline {paragraph}{Ce que cette tâche ne valide pas.}{14}{paragraph*.31}%
-\contentsline {subsection}{\numberline {7.3}Limites structurelles et méthodologiques}{14}{subsection.7.3}%
-\contentsline {section}{\numberline {8}Conclusion}{14}{section.8}%
-\contentsline {paragraph}{Travaux futurs.}{15}{paragraph*.32}%
+\contentsline {paragraph}{Ligne de base analytique (RNEA seul).}{11}{paragraph*.22}%
+\contentsline {paragraph}{Ligne de base boîte noire (MLP direct).}{11}{paragraph*.23}%
+\contentsline {paragraph}{Modèle proposé (\mbox {\ttfamilyFB \small isaac-satfix}).}{12}{paragraph*.24}%
+\contentsline {paragraph}{La boîte noire est plus précise que le modèle gris.}{12}{paragraph*.27}%
+\contentsline {paragraph}{Le résidu appris dégrade les axes que RNEA modélise déjà bien.}{12}{paragraph*.28}%
+\contentsline {subsection}{\numberline {6.2}Précision du modèle appris}{12}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}Ablations: ce que chaque composant apporte réellement}{13}{subsection.6.3}%
+\contentsline {paragraph}{L'encodage spatial ne pèse presque rien.}{13}{paragraph*.32}%
+\contentsline {paragraph}{FrictionNet n'apporte pas de précision.}{14}{paragraph*.33}%
+\contentsline {subsection}{\numberline {6.4}Tenue des garanties physiques}{14}{subsection.6.4}%
+\contentsline {subsection}{\numberline {6.5}Suivi de trajectoire en boucle fermée}{14}{subsection.6.5}%
+\contentsline {subsection}{\numberline {6.6}Ablation du résidu appris sous transfert inter-simulateurs}{14}{subsection.6.6}%
+\contentsline {paragraph}{Ce que ce résultat établit, et ce qu'il n'établit pas.}{14}{paragraph*.35}%
+\contentsline {section}{\numberline {7}Discussion et limites}{15}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Le biais d'optimisation non corrigé}{15}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}Limites de l'intégration au moteur physique}{15}{subsection.7.2}%
+\contentsline {paragraph}{Un défaut de configuration qui imitait un défaut de physique.}{15}{paragraph*.36}%
+\contentsline {paragraph}{Une leçon méthodologique transposable.}{15}{paragraph*.37}%
+\contentsline {paragraph}{État après correction.}{15}{paragraph*.38}%
+\contentsline {paragraph}{Ce que cette tâche ne valide pas.}{16}{paragraph*.39}%
+\contentsline {subsection}{\numberline {7.3}Limites structurelles et méthodologiques}{16}{subsection.7.3}%
+\contentsline {section}{\numberline {8}Conclusion}{16}{section.8}%
+\contentsline {paragraph}{Travaux futurs.}{17}{paragraph*.40}%
