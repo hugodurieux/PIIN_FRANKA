@@ -1,0 +1,30 @@
+[INFO] [1785223790.023449317] [stage4_arm_motion]: ArmMotionClient: FK-based Cartesian convergence check enabled (flange frame 'panda_link8', model '/home/hci-student/projects/pinn_franka/pinocchio_baseline/panda.urdf')
+Registering the floor in the MoveIt2 planning scene...
+[INFO] [1785223790.040349639] [stage4_arm_motion]: add_collision_box('floor', size=(2.0, 2.0, 0.1)): applied to MoveIt2 planning scene
+Registering grasp_object in the MoveIt2 planning scene...
+[INFO] [1785223790.040979008] [stage4_arm_motion]: add_collision_box('grasp_object', size=(0.12, 0.12, 0.12)): applied to MoveIt2 planning scene
+pick('grasp_object')...
+[[ 1.      0.      0.      0.5   ]
+ [ 0.     -1.      0.      0.    ]
+ [ 0.      0.     -1.      0.2299]
+ [ 0.      0.      0.      1.    ]]
+Opening gripper to 0.080 m
+Moving to pre-approach pose, sub-step 1/5
+[INFO] [1785223790.813554862] [stage4_arm_motion]: move_to(): planning succeeded (14 points, 1.23s trajectory duration, 9.97s of overall timeout remaining) -- handing off to Stage 3
+[INFO] [1785223792.044319704] [stage4_arm_motion]: move_to(): trajectory should have finished playing out, 8.74s left to confirm convergence
+[INFO] [1785223792.044651938] [stage4_arm_motion]: move_to(): convergence criterion = Cartesian flange error < 0.0400 m (FK)
+[INFO] [1785223793.045228741] [stage4_arm_motion]: move_to(): still converging, 7.74s left, worst joint panda_joint4=-0.3546 rad (current=-1.6154, target=-1.2608), flange err=0.1018 m
+[INFO] [1785223794.047020272] [stage4_arm_motion]: move_to(): still converging, 6.74s left, worst joint panda_joint4=-0.3546 rad (current=-1.6154, target=-1.2608), flange err=0.1023 m
+[INFO] [1785223795.049290343] [stage4_arm_motion]: move_to(): still converging, 5.74s left, worst joint panda_joint4=-0.3546 rad (current=-1.6154, target=-1.2608), flange err=0.1026 m
+[INFO] [1785223796.050814271] [stage4_arm_motion]: move_to(): still converging, 4.73s left, worst joint panda_joint4=-0.3546 rad (current=-1.6154, target=-1.2608), flange err=0.1027 m
+[INFO] [1785223797.052525609] [stage4_arm_motion]: move_to(): still converging, 3.73s left, worst joint panda_joint4=-0.3546 rad (current=-1.6154, target=-1.2608), flange err=0.1027 m
+[INFO] [1785223798.054366233] [stage4_arm_motion]: move_to(): still converging, 2.73s left, worst joint panda_joint4=-0.3546 rad (current=-1.6154, target=-1.2608), flange err=0.1027 m
+[INFO] [1785223799.054871511] [stage4_arm_motion]: move_to(): still converging, 1.73s left, worst joint panda_joint4=-0.3546 rad (current=-1.6154, target=-1.2608), flange err=0.1027 m
+[INFO] [1785223800.055342353] [stage4_arm_motion]: move_to(): still converging, 0.73s left, worst joint panda_joint4=-0.3546 rad (current=-1.6154, target=-1.2608), flange err=0.1027 m
+[WARN] [1785223800.786186478] [stage4_arm_motion]: move_to(): trajectory handed off, but the arm did not converge to the planned target within the timeout. Final Cartesian flange error: 0.1027 m (needed < 0.0400 m). Final per-joint (current - target) diffs [rad]: {'panda_joint1': -0.05041755122227011, 'panda_joint2': -0.08049048971671709, 'panda_joint3': -0.010345921347194472, 'panda_joint4': -0.35462621253154425, 'panda_joint5': 0.04736882691321788, 'panda_joint6': 0.2905670865277079, 'panda_joint7': -0.0019434795502911717}
+[WARN] [1785223800.786585670] [stage4_arm_motion]: move_to(): absolute current positions at timeout [rad]: {'panda_finger_joint1': 0.03999997264550893, 'panda_finger_joint2': 0.03999954463655186, 'panda_joint1': -0.03294416951782137, 'panda_joint2': 0.06340194464773592, 'panda_joint3': -0.03254332724113731, 'panda_joint4': -1.6154144902210044, 'panda_joint5': -0.00432212966597841, 'panda_joint6': 1.5569158052196692, 'panda_joint7': -0.7853072385239498}
+[WARN] [1785223800.786955497] [stage4_arm_motion]: move_to(): absolute target positions [rad]: {'panda_joint1': 0.01747338170444874, 'panda_joint2': 0.143892434364453, 'panda_joint3': -0.022197405893942836, 'panda_joint4': -1.2607882776894601, 'panda_joint5': -0.05169095657919629, 'panda_joint6': 1.2663487186919613, 'panda_joint7': -0.7833637589736586}
+GraspExecutor FAILED [ARM_TIMEOUT]: arm did not reach target pose
+pick() -> GraspResult.ARM_TIMEOUT (final phase: GraspPhase.ABORTED)
+final gripper status: GripperStatus(width=0.07999950965672362, max_width=0.08, is_grasped=False, temperature=-1.0, state=<GripperState.OPEN: 1>)
+pick() did NOT succeed. This is expected/diagnostic on the first attempt -- see module docstring re: flange-vs-fingertip offset. Check the gripper width above against cfg.grasp_width (0.040 m) to gauge how far off the approach was, and check the controller logs for arm convergence diffs if result is ARM_TIMEOUT.

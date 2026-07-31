@@ -1,0 +1,62 @@
+[INFO] [1785308173.972967387] [stage4_arm_motion]: ArmMotionClient: FK-based Cartesian convergence check enabled (flange frame 'panda_link8', model '/home/hci-student/projects/pinn_franka/pinocchio_baseline/panda.urdf')
+Clearing any stale grasp_object attachment from a previous run...
+[INFO] [1785308173.990130344] [stage4_arm_motion]: detach_object('grasp_object'): applied to MoveIt2 planning scene
+[ERROR] [1785308173.990835423] [stage4_arm_motion]: remove_collision_object('grasp_object'): /apply_planning_scene returned success=False
+Floor collision box intentionally NOT registered (see comment).
+Registering grasp_object in the MoveIt2 planning scene...
+[INFO] [1785308173.991615904] [stage4_arm_motion]: add_collision_box('grasp_object', size=(0.06, 0.06, 0.06)): applied to MoveIt2 planning scene
+pick('grasp_object')...
+[[ 0.70710678 -0.70710678  0.          0.65      ]
+ [-0.70710678 -0.70710678  0.          0.        ]
+ [ 0.          0.         -1.          0.1229    ]
+ [ 0.          0.          0.          1.        ]]
+Opening gripper to 0.080 m
+Moving to pre-approach pose, sub-step 1/5
+[INFO] [1785308174.064939041] [stage4_arm_motion]: move_to(): planning succeeded (12 points, 1.07s trajectory duration, 9.98s of overall timeout remaining) -- handing off to Stage 3
+[INFO] [1785308175.140870836] [stage4_arm_motion]: move_to(): trajectory should have finished playing out, 8.90s left to confirm convergence
+[INFO] [1785308175.141260410] [stage4_arm_motion]: move_to(): convergence criterion = Cartesian flange error < 0.0400 m (FK)
+[INFO] [1785308175.143173369] [stage4_arm_motion]: move_to(): converged -- Cartesian flange error=0.0106 m (tolerance=0.0400 m). Per-joint diffs [rad]: {'panda_joint1': 2.0113425415330122e-05, 'panda_joint2': 0.007108205034291104, 'panda_joint3': -0.005803328995305265, 'panda_joint4': -0.013124710301360754, 'panda_joint5': -0.021328949059570366, 'panda_joint6': 0.01848440712559385, 'panda_joint7': -0.014120480635869348} (worst joint: panda_joint5)
+Moving to pre-approach pose, sub-step 2/5
+[INFO] [1785308175.158789763] [stage4_arm_motion]: move_to(): planning succeeded (14 points, 1.21s trajectory duration, 9.98s of overall timeout remaining) -- handing off to Stage 3
+[INFO] [1785308176.375207478] [stage4_arm_motion]: move_to(): trajectory should have finished playing out, 8.77s left to confirm convergence
+[INFO] [1785308176.375600853] [stage4_arm_motion]: move_to(): convergence criterion = Cartesian flange error < 0.0400 m (FK)
+[INFO] [1785308176.377618738] [stage4_arm_motion]: move_to(): converged -- Cartesian flange error=0.0245 m (tolerance=0.0400 m). Per-joint diffs [rad]: {'panda_joint1': -0.0027232594457507198, 'panda_joint2': 0.007486042313634311, 'panda_joint3': -0.018159461474715338, 'panda_joint4': -0.013880304557061907, 'panda_joint5': -0.0341280352374463, 'panda_joint6': 0.006087095753996463, 'panda_joint7': -0.07798357035306655} (worst joint: panda_joint7)
+Moving to pre-approach pose, sub-step 3/5
+[INFO] [1785308176.393166079] [stage4_arm_motion]: move_to(): planning succeeded (14 points, 1.22s trajectory duration, 9.98s of overall timeout remaining) -- handing off to Stage 3
+[INFO] [1785308177.611046291] [stage4_arm_motion]: move_to(): trajectory should have finished playing out, 8.77s left to confirm convergence
+[INFO] [1785308177.611437839] [stage4_arm_motion]: move_to(): convergence criterion = Cartesian flange error < 0.0400 m (FK)
+[INFO] [1785308177.613409560] [stage4_arm_motion]: move_to(): converged -- Cartesian flange error=0.0226 m (tolerance=0.0400 m). Per-joint diffs [rad]: {'panda_joint1': -0.0019967786722758785, 'panda_joint2': 0.009894694121421466, 'panda_joint3': -0.021187776687190435, 'panda_joint4': -0.015376853848410699, 'panda_joint5': -0.04305091709039127, 'panda_joint6': 0.005877670316258854, 'panda_joint7': -0.08412043463865676} (worst joint: panda_joint7)
+Moving to pre-approach pose, sub-step 4/5
+[INFO] [1785308177.629832781] [stage4_arm_motion]: move_to(): planning succeeded (14 points, 1.25s trajectory duration, 9.98s of overall timeout remaining) -- handing off to Stage 3
+[INFO] [1785308178.879291048] [stage4_arm_motion]: move_to(): trajectory should have finished playing out, 8.73s left to confirm convergence
+[INFO] [1785308178.879684951] [stage4_arm_motion]: move_to(): convergence criterion = Cartesian flange error < 0.0400 m (FK)
+[INFO] [1785308178.881553191] [stage4_arm_motion]: move_to(): converged -- Cartesian flange error=0.0231 m (tolerance=0.0400 m). Per-joint diffs [rad]: {'panda_joint1': -0.0017167901944264985, 'panda_joint2': 0.008352793260123392, 'panda_joint3': -0.021740493642714742, 'panda_joint4': -0.01171029058317341, 'panda_joint5': -0.038813373396387615, 'panda_joint6': 0.0010016088479474217, 'panda_joint7': -0.07973453124885665} (worst joint: panda_joint7)
+Moving to pre-approach pose, sub-step 5/5
+[INFO] [1785308178.907354030] [stage4_arm_motion]: move_to(): planning succeeded (19 points, 1.72s trajectory duration, 9.97s of overall timeout remaining) -- handing off to Stage 3
+[INFO] [1785308180.631254781] [stage4_arm_motion]: move_to(): trajectory should have finished playing out, 8.25s left to confirm convergence
+[INFO] [1785308180.631644970] [stage4_arm_motion]: move_to(): convergence criterion = Cartesian flange error < 0.0400 m (FK)
+[INFO] [1785308180.633594549] [stage4_arm_motion]: move_to(): converged -- Cartesian flange error=0.0023 m (tolerance=0.0400 m). Per-joint diffs [rad]: {'panda_joint1': 0.00022195135805885835, 'panda_joint2': 0.006231987801347594, 'panda_joint3': 0.0018229879880305444, 'panda_joint4': -0.0006499789722769211, 'panda_joint5': -0.013792600915543629, 'panda_joint6': -0.02014202803279197, 'panda_joint7': 0.0011298104726422675} (worst joint: panda_joint6)
+[INFO] [1785308180.634486083] [stage4_arm_motion]: add_collision_box('grasp_object', size=(0.04, 0.04, 0.04)): applied to MoveIt2 planning scene
+Attaching 'grasp_object' to panda_hand in MoveIt2 planning scene
+[INFO] [1785308180.635177530] [stage4_arm_motion]: attach_object('grasp_object' -> panda_hand): applied to MoveIt2 planning scene
+Approaching grasp pose
+Approach sub-step 1/2
+[INFO] [1785308180.651651591] [stage4_arm_motion]: move_to(): planning succeeded (9 points, 0.77s trajectory duration, 9.98s of overall timeout remaining) -- handing off to Stage 3
+[INFO] [1785308181.423439355] [stage4_arm_motion]: move_to(): trajectory should have finished playing out, 9.21s left to confirm convergence
+[INFO] [1785308181.423821079] [stage4_arm_motion]: move_to(): convergence criterion = Cartesian flange error < 0.0300 m (FK)
+[INFO] [1785308181.425700063] [stage4_arm_motion]: move_to(): converged -- Cartesian flange error=0.0135 m (tolerance=0.0300 m). Per-joint diffs [rad]: {'panda_joint1': -0.0011082235190273404, 'panda_joint2': 0.006765277405885284, 'panda_joint3': -0.00979546628325495, 'panda_joint4': -0.00639209416819253, 'panda_joint5': -0.011881284340839626, 'panda_joint6': 0.000488987511874317, 'panda_joint7': -0.0010395951966774009} (worst joint: panda_joint5)
+Approach sub-step 2/2 (final grasp pose, tight tolerance)
+[INFO] [1785308181.442120867] [stage4_arm_motion]: move_to(): planning succeeded (11 points, 0.91s trajectory duration, 9.98s of overall timeout remaining) -- handing off to Stage 3
+[INFO] [1785308182.350974938] [stage4_arm_motion]: move_to(): trajectory should have finished playing out, 9.08s left to confirm convergence
+[INFO] [1785308182.351365726] [stage4_arm_motion]: move_to(): convergence criterion = Cartesian flange error < 0.0200 m (FK)
+[INFO] [1785308182.353271925] [stage4_arm_motion]: move_to(): converged -- Cartesian flange error=0.0064 m (tolerance=0.0200 m). Per-joint diffs [rad]: {'panda_joint1': 0.0007674380977241158, 'panda_joint2': 0.008858659019896908, 'panda_joint3': -0.009903999905420624, 'panda_joint4': -0.011175450266812437, 'panda_joint5': -0.021384485315250334, 'panda_joint6': 0.010117802984109137, 'panda_joint7': 0.0013350496392545708} (worst joint: panda_joint5)
+Grasping: width=0.040 m, force=20.0 N
+Lifting 0.150 m
+[INFO] [1785308182.971484804] [stage4_arm_motion]: move_to(): planning succeeded (16 points, 1.49s trajectory duration, 9.98s of overall timeout remaining) -- handing off to Stage 3
+[INFO] [1785308184.464768157] [stage4_arm_motion]: move_to(): trajectory should have finished playing out, 8.49s left to confirm convergence
+[INFO] [1785308184.465160095] [stage4_arm_motion]: move_to(): convergence criterion = Cartesian flange error < 0.0300 m (FK)
+[INFO] [1785308184.467397747] [stage4_arm_motion]: move_to(): converged -- Cartesian flange error=0.0141 m (tolerance=0.0300 m). Per-joint diffs [rad]: {'panda_joint1': 0.0014739490176141068, 'panda_joint2': 0.013946690428776498, 'panda_joint3': -0.002983049908041935, 'panda_joint4': -0.013851928380237855, 'panda_joint5': -0.024289047868366276, 'panda_joint6': 0.011828749385817794, 'panda_joint7': -0.009544959557549304} (worst joint: panda_joint5)
+Pick complete — object held
+pick() -> GraspResult.SUCCESS (final phase: GraspPhase.HOLDING)
+final gripper status: GripperStatus(width=0.039996128080958045, max_width=0.08, is_grasped=True, temperature=-1.0, state=<GripperState.GRASPING: 3>)
+ALL CHECKS PASSED — cube grasped and lifted

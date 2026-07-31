@@ -1,0 +1,495 @@
+Using gain_safety_margin_override=8.0
+[INFO] [launch]: All log files can be found below /home/hci-student/.ros/log/2026-07-24-14-05-44-718324-hci-student-20789
+[INFO] [launch]: Default logging verbosity is set to INFO
+[INFO] [pinn_controller_node-1]: process started with pid [20792]
+[pinn_controller_node-1] [INFO] [1784865945.741144678] [pinn_franka_controller]: Stage 3 controller loaded (urdf=/home/hci-student/projects/pinn_franka/pinocchio_baseline/panda.urdf, checkpoint=/home/hci-student/projects/pinn_franka/models/run_20260716_121302/greybox_best.pt, gains=lyapunov).
+[pinn_controller_node-1] [INFO] [1784865945.745141826] [pinn_franka_controller]: PinnControllerNode started (rate=1000 Hz, delta=0.00, lyapunov_gains=True)
+[pinn_controller_node-1] [INFO] [1784865980.664068051] [pinn_franka_controller]: New trajectory received with 12 points.
+[pinn_controller_node-1] [INFO] [1784865980.665518873] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.6155 q_meas=-1.6154 e=-0.0000 qdot=-0.00342 | j6: q_des=+1.5570 q_meas=+1.5569 e=+0.0000 qdot=+0.00382 | j7: q_des=-0.7853 q_meas=-0.7853 e=+0.0000 qdot=-0.00892
+[pinn_controller_node-1] [INFO] [1784865980.668466221] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+21.853 res=+0.085 pd=+0.012 unclipped=+21.950 clipped=+21.950 | j6: rnea=+2.026 res=+0.096 pd=-0.011 unclipped=+2.111 clipped=+2.111 | j7: rnea=+0.008 res=-0.148 pd=+0.035 unclipped=-0.106 clipped=-0.106
+[pinn_controller_node-1] [INFO] [1784865981.665991978] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8869 q_meas=-1.6154 e=-0.2715 qdot=+0.00379 | j6: q_des=+1.7761 q_meas=+1.5569 e=+0.2192 qdot=-0.00418 | j7: q_des=-0.4602 q_meas=-0.7853 e=+0.3251 qdot=+0.00892
+[pinn_controller_node-1] [INFO] [1784865981.669822498] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.852 res=+0.027 pd=-4.442 unclipped=+18.437 clipped=+18.437 | j6: rnea=+2.144 res=+0.129 pd=+1.499 unclipped=+3.772 clipped=+3.772 | j7: rnea=-0.009 res=-0.109 pd=+1.101 unclipped=+0.984 clipped=+0.984
+[pinn_controller_node-1] [INFO] [1784865982.284809433] [pinn_franka_controller]: New trajectory received with 1 points.
+[pinn_controller_node-1] [INFO] [1784865982.666659719] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8901 q_meas=-1.6154 e=-0.2746 qdot=+0.00399 | j6: q_des=+1.7786 q_meas=+1.5569 e=+0.2217 qdot=-0.00436 | j7: q_des=-0.4564 q_meas=-0.7853 e=+0.3289 qdot=+0.00892
+[pinn_controller_node-1] [INFO] [1784865982.670554887] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.350 res=-1.111 pd=-3.996 unclipped=+17.242 clipped=+17.242 | j6: rnea=+2.085 res=+0.262 pd=+1.277 unclipped=+3.623 clipped=+3.623 | j7: rnea=-0.000 res=-0.040 pd=+0.783 unclipped=+0.742 clipped=+0.742
+[pinn_controller_node-1] [INFO] [1784865983.668034217] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8901 q_meas=-1.6154 e=-0.2746 qdot=-0.00453 | j6: q_des=+1.7786 q_meas=+1.5569 e=+0.2217 qdot=+0.00488 | j7: q_des=-0.4564 q_meas=-0.7853 e=+0.3289 qdot=-0.00891
+[pinn_controller_node-1] [INFO] [1784865983.671872662] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.350 res=-1.114 pd=-4.000 unclipped=+17.235 clipped=+17.235 | j6: rnea=+2.085 res=+0.261 pd=+1.279 unclipped=+3.624 clipped=+3.624 | j7: rnea=-0.000 res=-0.040 pd=+0.783 unclipped=+0.742 clipped=+0.742
+[pinn_controller_node-1] [INFO] [1784865983.785731265] [pinn_franka_controller]: New trajectory received with 1 points.
+[pinn_controller_node-1] [INFO] [1784865984.669399223] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8901 q_meas=-1.6154 e=-0.2746 qdot=-0.00481 | j6: q_des=+1.7786 q_meas=+1.5569 e=+0.2217 qdot=+0.00514 | j7: q_des=-0.4564 q_meas=-0.7853 e=+0.3289 qdot=-0.00891
+[pinn_controller_node-1] [INFO] [1784865984.673254277] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.352 res=-0.007 pd=-3.929 unclipped=+18.416 clipped=+18.416 | j6: rnea=+2.085 res=+0.114 pd=+1.231 unclipped=+3.430 clipped=+3.430 | j7: rnea=-0.000 res=-0.088 pd=+0.839 unclipped=+0.750 clipped=+0.750
+[pinn_controller_node-1] [INFO] [1784865985.285709410] [pinn_franka_controller]: New trajectory received with 1 points.
+[pinn_controller_node-1] [INFO] [1784865985.670408088] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8901 q_meas=-1.6154 e=-0.2747 qdot=+0.00483 | j6: q_des=+1.7786 q_meas=+1.5569 e=+0.2217 qdot=-0.00516 | j7: q_des=-0.4564 q_meas=-0.7853 e=+0.3289 qdot=+0.00891
+[pinn_controller_node-1] [INFO] [1784865985.674182011] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.351 res=-0.001 pd=-3.929 unclipped=+18.421 clipped=+18.421 | j6: rnea=+2.085 res=+0.114 pd=+1.231 unclipped=+3.430 clipped=+3.430 | j7: rnea=-0.000 res=-0.089 pd=+0.839 unclipped=+0.749 clipped=+0.749
+[pinn_controller_node-1] [INFO] [1784865986.671234622] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8901 q_meas=-1.6154 e=-0.2747 qdot=+0.00480 | j6: q_des=+1.7786 q_meas=+1.5569 e=+0.2217 qdot=-0.00513 | j7: q_des=-0.4564 q_meas=-0.7853 e=+0.3289 qdot=+0.00891
+[pinn_controller_node-1] [INFO] [1784865986.675138768] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.352 res=-1.114 pd=-4.002 unclipped=+17.235 clipped=+17.235 | j6: rnea=+2.085 res=+0.279 pd=+1.280 unclipped=+3.644 clipped=+3.644 | j7: rnea=-0.000 res=-0.034 pd=+0.783 unclipped=+0.748 clipped=+0.748
+[pinn_controller_node-1] [INFO] [1784865986.788784561] [pinn_franka_controller]: New trajectory received with 1 points.
+[pinn_controller_node-1] [INFO] [1784865987.672169881] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8901 q_meas=-1.6154 e=-0.2746 qdot=-0.00476 | j6: q_des=+1.7786 q_meas=+1.5569 e=+0.2217 qdot=+0.00509 | j7: q_des=-0.4564 q_meas=-0.7853 e=+0.3289 qdot=-0.00891
+[pinn_controller_node-1] [INFO] [1784865987.676017923] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.351 res=+0.008 pd=-3.930 unclipped=+18.429 clipped=+18.429 | j6: rnea=+2.085 res=+0.112 pd=+1.232 unclipped=+3.429 clipped=+3.429 | j7: rnea=-0.000 res=-0.093 pd=+0.839 unclipped=+0.745 clipped=+0.745
+[pinn_controller_node-1] [INFO] [1784865988.290182937] [pinn_franka_controller]: New trajectory received with 1 points.
+[pinn_controller_node-1] [INFO] [1784865988.672459963] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8901 q_meas=-1.6154 e=-0.2746 qdot=-0.00473 | j6: q_des=+1.7786 q_meas=+1.5569 e=+0.2217 qdot=+0.00506 | j7: q_des=-0.4564 q_meas=-0.7853 e=+0.3289 qdot=-0.00891
+[pinn_controller_node-1] [INFO] [1784865988.676320005] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.351 res=+0.009 pd=-3.930 unclipped=+18.431 clipped=+18.431 | j6: rnea=+2.085 res=+0.112 pd=+1.232 unclipped=+3.428 clipped=+3.428 | j7: rnea=-0.000 res=-0.095 pd=+0.839 unclipped=+0.744 clipped=+0.744
+[pinn_controller_node-1] [INFO] [1784865989.673732529] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8901 q_meas=-1.6154 e=-0.2747 qdot=+0.00472 | j6: q_des=+1.7786 q_meas=+1.5569 e=+0.2217 qdot=-0.00505 | j7: q_des=-0.4564 q_meas=-0.7853 e=+0.3289 qdot=+0.00891
+[pinn_controller_node-1] [INFO] [1784865989.677535103] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.351 res=+0.010 pd=-3.930 unclipped=+18.431 clipped=+18.431 | j6: rnea=+2.085 res=+0.112 pd=+1.232 unclipped=+3.428 clipped=+3.428 | j7: rnea=-0.000 res=-0.095 pd=+0.839 unclipped=+0.743 clipped=+0.743
+[pinn_controller_node-1] [INFO] [1784865989.789688899] [pinn_franka_controller]: New trajectory received with 1 points.
+[pinn_controller_node-1] [INFO] [1784865990.674274013] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8901 q_meas=-1.6154 e=-0.2747 qdot=+0.00471 | j6: q_des=+1.7786 q_meas=+1.5569 e=+0.2217 qdot=-0.00505 | j7: q_des=-0.4564 q_meas=-0.7853 e=+0.3289 qdot=+0.00891
+[pinn_controller_node-1] [INFO] [1784865990.678030450] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.351 res=+0.010 pd=-3.930 unclipped=+18.431 clipped=+18.431 | j6: rnea=+2.085 res=+0.112 pd=+1.232 unclipped=+3.428 clipped=+3.428 | j7: rnea=-0.000 res=-0.095 pd=+0.839 unclipped=+0.743 clipped=+0.743
+[pinn_controller_node-1] [INFO] [1784865991.675523837] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8901 q_meas=-1.6154 e=-0.2746 qdot=-0.00471 | j6: q_des=+1.7786 q_meas=+1.5569 e=+0.2217 qdot=+0.00504 | j7: q_des=-0.4564 q_meas=-0.7853 e=+0.3289 qdot=-0.00891
+[pinn_controller_node-1] [INFO] [1784865991.679383595] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.351 res=-1.114 pd=-4.002 unclipped=+17.235 clipped=+17.235 | j6: rnea=+2.085 res=+0.284 pd=+1.280 unclipped=+3.649 clipped=+3.649 | j7: rnea=-0.000 res=-0.034 pd=+0.783 unclipped=+0.748 clipped=+0.748
+[pinn_controller_node-1] [WARN] [1784865991.790350407] [pinn_franka_controller]: Trajectory stale (2.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784865992.791188485] [pinn_franka_controller]: Trajectory stale (3.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784865993.791557058] [pinn_franka_controller]: Trajectory stale (4.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784865994.792132998] [pinn_franka_controller]: Trajectory stale (5.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784865995.792170069] [pinn_franka_controller]: Trajectory stale (6.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784865996.792511126] [pinn_franka_controller]: Trajectory stale (7.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784865997.793188672] [pinn_franka_controller]: Trajectory stale (8.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784865998.794143789] [pinn_franka_controller]: Trajectory stale (9.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784865999.794152890] [pinn_franka_controller]: Trajectory stale (10.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866000.795118397] [pinn_franka_controller]: Trajectory stale (11.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866001.795408422] [pinn_franka_controller]: Trajectory stale (12.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866002.796299140] [pinn_franka_controller]: Trajectory stale (13.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866003.797205540] [pinn_franka_controller]: Trajectory stale (14.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866004.797504633] [pinn_franka_controller]: Trajectory stale (15.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866005.798137461] [pinn_franka_controller]: Trajectory stale (16.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866006.798218824] [pinn_franka_controller]: Trajectory stale (17.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866007.799190048] [pinn_franka_controller]: Trajectory stale (18.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866008.800124041] [pinn_franka_controller]: Trajectory stale (19.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866009.800229682] [pinn_franka_controller]: Trajectory stale (20.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866010.801462342] [pinn_franka_controller]: Trajectory stale (21.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866011.802123782] [pinn_franka_controller]: Trajectory stale (22.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866012.802333548] [pinn_franka_controller]: Trajectory stale (23.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866013.803110081] [pinn_franka_controller]: Trajectory stale (24.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866014.803249469] [pinn_franka_controller]: Trajectory stale (25.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866015.804139797] [pinn_franka_controller]: Trajectory stale (26.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866016.804195671] [pinn_franka_controller]: Trajectory stale (27.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866017.805121817] [pinn_franka_controller]: Trajectory stale (28.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866018.805136070] [pinn_franka_controller]: Trajectory stale (29.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866019.805203992] [pinn_franka_controller]: Trajectory stale (30.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866020.805327383] [pinn_franka_controller]: Trajectory stale (31.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866021.805451056] [pinn_franka_controller]: Trajectory stale (32.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866022.805887783] [pinn_franka_controller]: Trajectory stale (33.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866023.806136823] [pinn_franka_controller]: Trajectory stale (34.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866024.806170012] [pinn_franka_controller]: Trajectory stale (35.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866025.806195589] [pinn_franka_controller]: Trajectory stale (36.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866026.806352844] [pinn_franka_controller]: Trajectory stale (37.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866027.807130516] [pinn_franka_controller]: Trajectory stale (38.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866028.807361852] [pinn_franka_controller]: Trajectory stale (39.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866029.807527021] [pinn_franka_controller]: Trajectory stale (40.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866030.808418755] [pinn_franka_controller]: Trajectory stale (41.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866031.808958060] [pinn_franka_controller]: Trajectory stale (42.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866032.809421251] [pinn_franka_controller]: Trajectory stale (43.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866033.810324471] [pinn_franka_controller]: Trajectory stale (44.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866034.811124676] [pinn_franka_controller]: Trajectory stale (45.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866035.811362575] [pinn_franka_controller]: Trajectory stale (46.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866036.812344811] [pinn_franka_controller]: Trajectory stale (47.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866037.813201695] [pinn_franka_controller]: Trajectory stale (48.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866038.814171522] [pinn_franka_controller]: Trajectory stale (49.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866039.814445628] [pinn_franka_controller]: Trajectory stale (50.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866040.815195682] [pinn_franka_controller]: Trajectory stale (51.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866041.816192629] [pinn_franka_controller]: Trajectory stale (52.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866042.816274835] [pinn_franka_controller]: Trajectory stale (53.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866043.817156441] [pinn_franka_controller]: Trajectory stale (54.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866044.818144074] [pinn_franka_controller]: Trajectory stale (55.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866045.818395456] [pinn_franka_controller]: Trajectory stale (56.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866046.819362060] [pinn_franka_controller]: Trajectory stale (57.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866047.820256927] [pinn_franka_controller]: Trajectory stale (58.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866048.820448844] [pinn_franka_controller]: Trajectory stale (59.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866049.821238331] [pinn_franka_controller]: Trajectory stale (60.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866050.821293110] [pinn_franka_controller]: Trajectory stale (61.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866051.822137477] [pinn_franka_controller]: Trajectory stale (62.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866052.822142429] [pinn_franka_controller]: Trajectory stale (63.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866053.822177703] [pinn_franka_controller]: Trajectory stale (64.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866054.823096740] [pinn_franka_controller]: Trajectory stale (65.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866055.823269424] [pinn_franka_controller]: Trajectory stale (66.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866056.823657934] [pinn_franka_controller]: Trajectory stale (67.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866057.823669871] [pinn_franka_controller]: Trajectory stale (68.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866058.824131557] [pinn_franka_controller]: Trajectory stale (69.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866059.824139654] [pinn_franka_controller]: Trajectory stale (70.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866060.824140535] [pinn_franka_controller]: Trajectory stale (71.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866061.824186350] [pinn_franka_controller]: Trajectory stale (72.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866062.824914499] [pinn_franka_controller]: Trajectory stale (73.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866063.825178136] [pinn_franka_controller]: Trajectory stale (74.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866064.826436878] [pinn_franka_controller]: Trajectory stale (75.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866065.827142554] [pinn_franka_controller]: Trajectory stale (76.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866066.828161574] [pinn_franka_controller]: Trajectory stale (77.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866067.829152439] [pinn_franka_controller]: Trajectory stale (78.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866068.830129339] [pinn_franka_controller]: Trajectory stale (79.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866069.830542610] [pinn_franka_controller]: Trajectory stale (80.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866070.831242257] [pinn_franka_controller]: Trajectory stale (81.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866071.831332760] [pinn_franka_controller]: Trajectory stale (82.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866072.832123323] [pinn_franka_controller]: Trajectory stale (83.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866073.832124366] [pinn_franka_controller]: Trajectory stale (84.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866074.832269369] [pinn_franka_controller]: Trajectory stale (85.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866075.833130687] [pinn_franka_controller]: Trajectory stale (86.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866076.833155344] [pinn_franka_controller]: Trajectory stale (87.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866077.834126322] [pinn_franka_controller]: Trajectory stale (88.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866078.834274663] [pinn_franka_controller]: Trajectory stale (89.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866079.835143348] [pinn_franka_controller]: Trajectory stale (90.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866080.836135967] [pinn_franka_controller]: Trajectory stale (91.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866081.836407264] [pinn_franka_controller]: Trajectory stale (92.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866082.837166147] [pinn_franka_controller]: Trajectory stale (93.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866083.837644010] [pinn_franka_controller]: Trajectory stale (94.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866084.838128651] [pinn_franka_controller]: Trajectory stale (95.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866085.838223832] [pinn_franka_controller]: Trajectory stale (96.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866086.839183416] [pinn_franka_controller]: Trajectory stale (97.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866087.839268074] [pinn_franka_controller]: Trajectory stale (98.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866088.840129932] [pinn_franka_controller]: Trajectory stale (99.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866089.840546755] [pinn_franka_controller]: Trajectory stale (100.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866090.841191636] [pinn_franka_controller]: Trajectory stale (101.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866091.841476124] [pinn_franka_controller]: Trajectory stale (102.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866092.841953421] [pinn_franka_controller]: Trajectory stale (103.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866093.842138416] [pinn_franka_controller]: Trajectory stale (104.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866094.842189274] [pinn_franka_controller]: Trajectory stale (105.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866095.842194118] [pinn_franka_controller]: Trajectory stale (106.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866096.843164475] [pinn_franka_controller]: Trajectory stale (107.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866097.843558125] [pinn_franka_controller]: Trajectory stale (108.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866098.844655833] [pinn_franka_controller]: Trajectory stale (109.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866099.845130306] [pinn_franka_controller]: Trajectory stale (110.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866100.845142498] [pinn_franka_controller]: Trajectory stale (111.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866101.846174897] [pinn_franka_controller]: Trajectory stale (112.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866102.847137178] [pinn_franka_controller]: Trajectory stale (113.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866103.847442518] [pinn_franka_controller]: Trajectory stale (114.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866104.847644289] [pinn_franka_controller]: Trajectory stale (115.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866105.848423812] [pinn_franka_controller]: Trajectory stale (116.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866106.849189856] [pinn_franka_controller]: Trajectory stale (117.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866107.850103862] [pinn_franka_controller]: Trajectory stale (118.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866108.850374557] [pinn_franka_controller]: Trajectory stale (119.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866109.850500308] [pinn_franka_controller]: Trajectory stale (120.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866110.850574768] [pinn_franka_controller]: Trajectory stale (121.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866111.851238488] [pinn_franka_controller]: Trajectory stale (122.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866112.852175964] [pinn_franka_controller]: Trajectory stale (123.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866113.853139793] [pinn_franka_controller]: Trajectory stale (124.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866114.854186117] [pinn_franka_controller]: Trajectory stale (125.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866115.855304247] [pinn_franka_controller]: Trajectory stale (126.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866116.856168482] [pinn_franka_controller]: Trajectory stale (127.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866117.857093950] [pinn_franka_controller]: Trajectory stale (128.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866118.857126492] [pinn_franka_controller]: Trajectory stale (129.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866119.857442243] [pinn_franka_controller]: Trajectory stale (130.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866120.858255971] [pinn_franka_controller]: Trajectory stale (131.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866121.858279640] [pinn_franka_controller]: Trajectory stale (132.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866122.858930158] [pinn_franka_controller]: Trajectory stale (133.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866123.859513574] [pinn_franka_controller]: Trajectory stale (134.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866124.859675412] [pinn_franka_controller]: Trajectory stale (135.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866125.860139279] [pinn_franka_controller]: Trajectory stale (136.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866126.860429090] [pinn_franka_controller]: Trajectory stale (137.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866127.861143805] [pinn_franka_controller]: Trajectory stale (138.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866128.861168817] [pinn_franka_controller]: Trajectory stale (139.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866129.861208885] [pinn_franka_controller]: Trajectory stale (140.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866130.862133820] [pinn_franka_controller]: Trajectory stale (141.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866131.862694405] [pinn_franka_controller]: Trajectory stale (142.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866132.863540434] [pinn_franka_controller]: Trajectory stale (143.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866133.864127031] [pinn_franka_controller]: Trajectory stale (144.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866134.864265858] [pinn_franka_controller]: Trajectory stale (145.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866135.865158792] [pinn_franka_controller]: Trajectory stale (146.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866136.865164355] [pinn_franka_controller]: Trajectory stale (147.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866137.865298381] [pinn_franka_controller]: Trajectory stale (148.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866138.866124387] [pinn_franka_controller]: Trajectory stale (149.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866139.866595412] [pinn_franka_controller]: Trajectory stale (150.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866140.867117301] [pinn_franka_controller]: Trajectory stale (151.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866141.867247216] [pinn_franka_controller]: Trajectory stale (152.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866142.867379652] [pinn_franka_controller]: Trajectory stale (153.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866143.868243972] [pinn_franka_controller]: Trajectory stale (154.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866144.868388888] [pinn_franka_controller]: Trajectory stale (155.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866145.869137324] [pinn_franka_controller]: Trajectory stale (156.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866146.869164101] [pinn_franka_controller]: Trajectory stale (157.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866147.869440861] [pinn_franka_controller]: Trajectory stale (158.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866148.870127348] [pinn_franka_controller]: Trajectory stale (159.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866149.870151476] [pinn_franka_controller]: Trajectory stale (160.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866150.870163809] [pinn_franka_controller]: Trajectory stale (161.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866151.871170586] [pinn_franka_controller]: Trajectory stale (162.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866152.871198349] [pinn_franka_controller]: Trajectory stale (163.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866153.872234563] [pinn_franka_controller]: Trajectory stale (164.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866154.872435046] [pinn_franka_controller]: Trajectory stale (165.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866155.873189457] [pinn_franka_controller]: Trajectory stale (166.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866156.873681009] [pinn_franka_controller]: Trajectory stale (167.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866157.874163612] [pinn_franka_controller]: Trajectory stale (168.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866158.875192229] [pinn_franka_controller]: Trajectory stale (169.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866159.875502196] [pinn_franka_controller]: Trajectory stale (170.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866160.876148154] [pinn_franka_controller]: Trajectory stale (171.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866161.876552565] [pinn_franka_controller]: Trajectory stale (172.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866162.877593908] [pinn_franka_controller]: Trajectory stale (173.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866163.878312155] [pinn_franka_controller]: Trajectory stale (174.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866164.879159370] [pinn_franka_controller]: Trajectory stale (175.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866165.879242569] [pinn_franka_controller]: Trajectory stale (176.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866166.879245884] [pinn_franka_controller]: Trajectory stale (177.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866167.880190253] [pinn_franka_controller]: Trajectory stale (178.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866168.880478498] [pinn_franka_controller]: Trajectory stale (179.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866169.881165813] [pinn_franka_controller]: Trajectory stale (180.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866170.881167956] [pinn_franka_controller]: Trajectory stale (181.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866171.882128732] [pinn_franka_controller]: Trajectory stale (182.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866172.882202736] [pinn_franka_controller]: Trajectory stale (183.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866173.883052312] [pinn_franka_controller]: Trajectory stale (184.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866174.885118925] [pinn_franka_controller]: Trajectory stale (185.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866175.537327608] [pinn_franka_controller]: Failed to get parameters: Invalid access to undeclared parameter(s): gain_safety_margin_override
+[pinn_controller_node-1] [WARN] [1784866175.886726077] [pinn_franka_controller]: Trajectory stale (186.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866176.887555185] [pinn_franka_controller]: Trajectory stale (187.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866177.888248490] [pinn_franka_controller]: Trajectory stale (188.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866178.889150630] [pinn_franka_controller]: Trajectory stale (189.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866179.889203120] [pinn_franka_controller]: Trajectory stale (190.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866180.890139742] [pinn_franka_controller]: Trajectory stale (191.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866181.890246727] [pinn_franka_controller]: Trajectory stale (192.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866182.890576652] [pinn_franka_controller]: Trajectory stale (193.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866183.891373806] [pinn_franka_controller]: Trajectory stale (194.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866184.891611916] [pinn_franka_controller]: Trajectory stale (195.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866185.891622994] [pinn_franka_controller]: Trajectory stale (196.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866186.892133891] [pinn_franka_controller]: Trajectory stale (197.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866187.892465607] [pinn_franka_controller]: Trajectory stale (198.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866188.893161758] [pinn_franka_controller]: Trajectory stale (199.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866189.893403940] [pinn_franka_controller]: Trajectory stale (200.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866190.894255921] [pinn_franka_controller]: Trajectory stale (201.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866191.895124017] [pinn_franka_controller]: Trajectory stale (202.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866192.895170495] [pinn_franka_controller]: Trajectory stale (203.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866193.895386445] [pinn_franka_controller]: Trajectory stale (204.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866194.896321262] [pinn_franka_controller]: Trajectory stale (205.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866195.896475342] [pinn_franka_controller]: Trajectory stale (206.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866196.897154151] [pinn_franka_controller]: Trajectory stale (207.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866197.898130809] [pinn_franka_controller]: Trajectory stale (208.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866198.898297689] [pinn_franka_controller]: Trajectory stale (209.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866199.899177923] [pinn_franka_controller]: Trajectory stale (210.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866200.899360459] [pinn_franka_controller]: Trajectory stale (211.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866201.900593074] [pinn_franka_controller]: Trajectory stale (212.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866202.901163754] [pinn_franka_controller]: Trajectory stale (213.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866203.901611968] [pinn_franka_controller]: Trajectory stale (214.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866204.901756808] [pinn_franka_controller]: Trajectory stale (215.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866205.902181403] [pinn_franka_controller]: Trajectory stale (216.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866206.902532580] [pinn_franka_controller]: Trajectory stale (217.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866207.903154350] [pinn_franka_controller]: Trajectory stale (218.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866208.903831377] [pinn_franka_controller]: Trajectory stale (219.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866209.904629831] [pinn_franka_controller]: Trajectory stale (220.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866210.905208953] [pinn_franka_controller]: Trajectory stale (221.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866211.906150864] [pinn_franka_controller]: Trajectory stale (222.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866212.906469058] [pinn_franka_controller]: Trajectory stale (223.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866213.907162800] [pinn_franka_controller]: Trajectory stale (224.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866214.907243021] [pinn_franka_controller]: Trajectory stale (225.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866215.907980224] [pinn_franka_controller]: Trajectory stale (226.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866216.908645061] [pinn_franka_controller]: Trajectory stale (227.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866217.909364949] [pinn_franka_controller]: Trajectory stale (228.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866218.910213689] [pinn_franka_controller]: Trajectory stale (229.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866219.910371702] [pinn_franka_controller]: Trajectory stale (230.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866220.911133642] [pinn_franka_controller]: Trajectory stale (231.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866221.911140044] [pinn_franka_controller]: Trajectory stale (232.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866222.911148461] [pinn_franka_controller]: Trajectory stale (233.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866223.911488740] [pinn_franka_controller]: Trajectory stale (234.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866224.912376118] [pinn_franka_controller]: Trajectory stale (235.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866225.912982493] [pinn_franka_controller]: Trajectory stale (236.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866226.913287781] [pinn_franka_controller]: Trajectory stale (237.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866227.914243653] [pinn_franka_controller]: Trajectory stale (238.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866228.915178388] [pinn_franka_controller]: Trajectory stale (239.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866229.916167355] [pinn_franka_controller]: Trajectory stale (240.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866230.917162953] [pinn_franka_controller]: Trajectory stale (241.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866231.917628222] [pinn_franka_controller]: Trajectory stale (242.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866232.918163319] [pinn_franka_controller]: Trajectory stale (243.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866233.918180706] [pinn_franka_controller]: Trajectory stale (244.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866234.918314375] [pinn_franka_controller]: Trajectory stale (245.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866235.918354530] [pinn_franka_controller]: Trajectory stale (246.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866236.919182814] [pinn_franka_controller]: Trajectory stale (247.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866237.920186492] [pinn_franka_controller]: Trajectory stale (248.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866238.921144278] [pinn_franka_controller]: Trajectory stale (249.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866239.921184119] [pinn_franka_controller]: Trajectory stale (250.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866240.922150924] [pinn_franka_controller]: Trajectory stale (251.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866241.923139916] [pinn_franka_controller]: Trajectory stale (252.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866242.923332382] [pinn_franka_controller]: Trajectory stale (253.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866243.924180870] [pinn_franka_controller]: Trajectory stale (254.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866244.924183722] [pinn_franka_controller]: Trajectory stale (255.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866245.924419832] [pinn_franka_controller]: Trajectory stale (256.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866246.925190867] [pinn_franka_controller]: Trajectory stale (257.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866247.925433280] [pinn_franka_controller]: Trajectory stale (258.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866248.925506023] [pinn_franka_controller]: Trajectory stale (259.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866249.926484874] [pinn_franka_controller]: Trajectory stale (260.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866250.927153167] [pinn_franka_controller]: Trajectory stale (261.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866251.927346468] [pinn_franka_controller]: Trajectory stale (262.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866252.928235516] [pinn_franka_controller]: Trajectory stale (263.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866253.928683847] [pinn_franka_controller]: Trajectory stale (264.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866254.929455040] [pinn_franka_controller]: Trajectory stale (265.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866255.930236587] [pinn_franka_controller]: Trajectory stale (266.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866256.931168350] [pinn_franka_controller]: Trajectory stale (267.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866257.932193358] [pinn_franka_controller]: Trajectory stale (268.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866258.932489731] [pinn_franka_controller]: Trajectory stale (269.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866259.933243242] [pinn_franka_controller]: Trajectory stale (270.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866260.933374857] [pinn_franka_controller]: Trajectory stale (271.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866261.934221238] [pinn_franka_controller]: Trajectory stale (272.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866262.935209401] [pinn_franka_controller]: Trajectory stale (273.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866263.936134362] [pinn_franka_controller]: Trajectory stale (274.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866264.936274611] [pinn_franka_controller]: Trajectory stale (275.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866265.937190468] [pinn_franka_controller]: Trajectory stale (276.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866266.937396911] [pinn_franka_controller]: Trajectory stale (277.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866267.938290935] [pinn_franka_controller]: Trajectory stale (278.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866268.939155981] [pinn_franka_controller]: Trajectory stale (279.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866269.939193062] [pinn_franka_controller]: Trajectory stale (280.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866270.939350549] [pinn_franka_controller]: Trajectory stale (281.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866271.939649483] [pinn_franka_controller]: Trajectory stale (282.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [INFO] [1784866272.671569430] [pinn_franka_controller]: New trajectory received with 12 points.
+[pinn_controller_node-1] [INFO] [1784866272.672211838] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.6154 q_meas=-1.6154 e=-0.0000 qdot=+0.00471 | j6: q_des=+1.5569 q_meas=+1.5569 e=+0.0000 qdot=-0.00504 | j7: q_des=-0.7853 q_meas=-0.7853 e=+0.0000 qdot=+0.00891
+[pinn_controller_node-1] [INFO] [1784866272.672998258] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+21.795 res=-1.136 pd=-0.047 unclipped=+20.612 clipped=+20.612 | j6: rnea=+2.026 res=+0.335 pd=+0.030 unclipped=+2.391 clipped=+2.391 | j7: rnea=+0.005 res=-0.041 pd=-0.024 unclipped=-0.060 clipped=-0.060
+[pinn_controller_node-1] [INFO] [1784866273.672392876] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8859 q_meas=-1.6154 e=-0.2705 qdot=-0.00490 | j6: q_des=+1.7986 q_meas=+1.5569 e=+0.2417 qdot=+0.00523 | j7: q_des=-0.5300 q_meas=-0.7853 e=+0.2554 qdot=-0.00891
+[pinn_controller_node-1] [INFO] [1784866273.673196937] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.907 res=+0.004 pd=-4.435 unclipped=+18.476 clipped=+18.476 | j6: rnea=+2.144 res=+0.071 pd=+1.661 unclipped=+3.876 clipped=+3.876 | j7: rnea=-0.006 res=-0.080 pd=+0.878 unclipped=+0.792 clipped=+0.792
+[pinn_controller_node-1] [INFO] [1784866274.288609717] [pinn_franka_controller]: New trajectory received with 1 points.
+[pinn_controller_node-1] [INFO] [1784866274.673684114] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8889 q_meas=-1.6154 e=-0.2735 qdot=+0.00488 | j6: q_des=+1.8013 q_meas=+1.5569 e=+0.2444 qdot=-0.00521 | j7: q_des=-0.5271 q_meas=-0.7853 e=+0.2582 qdot=+0.00891
+[pinn_controller_node-1] [INFO] [1784866274.674534696] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.352 res=-1.135 pd=-3.986 unclipped=+17.230 clipped=+17.230 | j6: rnea=+2.085 res=+0.357 pd=+1.409 unclipped=+3.851 clipped=+3.851 | j7: rnea=-0.000 res=-0.035 pd=+0.608 unclipped=+0.574 clipped=+0.574
+[pinn_controller_node-1] [INFO] [1784866275.674019529] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8889 q_meas=-1.6154 e=-0.2735 qdot=+0.00482 | j6: q_des=+1.8013 q_meas=+1.5569 e=+0.2444 qdot=-0.00515 | j7: q_des=-0.5271 q_meas=-0.7853 e=+0.2581 qdot=+0.00889
+[pinn_controller_node-1] [INFO] [1784866275.674868490] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.352 res=-1.136 pd=-3.986 unclipped=+17.230 clipped=+17.230 | j6: rnea=+2.085 res=+0.362 pd=+1.409 unclipped=+3.856 clipped=+3.856 | j7: rnea=-0.000 res=-0.034 pd=+0.608 unclipped=+0.574 clipped=+0.574
+[pinn_controller_node-1] [INFO] [1784866275.789407149] [pinn_franka_controller]: New trajectory received with 1 points.
+[pinn_controller_node-1] [INFO] [1784866276.675352380] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8889 q_meas=-1.6154 e=-0.2735 qdot=+0.00477 | j6: q_des=+1.8013 q_meas=+1.5569 e=+0.2444 qdot=-0.00510 | j7: q_des=-0.5271 q_meas=-0.7853 e=+0.2582 qdot=+0.00891
+[pinn_controller_node-1] [INFO] [1784866276.676197099] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.352 res=-1.136 pd=-3.985 unclipped=+17.230 clipped=+17.230 | j6: rnea=+2.085 res=+0.365 pd=+1.408 unclipped=+3.859 clipped=+3.859 | j7: rnea=-0.000 res=-0.034 pd=+0.608 unclipped=+0.575 clipped=+0.575
+[pinn_controller_node-1] [INFO] [1784866277.291397061] [pinn_franka_controller]: New trajectory received with 1 points.
+[pinn_controller_node-1] [INFO] [1784866277.676673680] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8889 q_meas=-1.6154 e=-0.2735 qdot=-0.00473 | j6: q_des=+1.8013 q_meas=+1.5569 e=+0.2444 qdot=+0.00507 | j7: q_des=-0.5271 q_meas=-0.7853 e=+0.2582 qdot=-0.00891
+[pinn_controller_node-1] [INFO] [1784866277.677476528] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.351 res=+0.026 pd=-3.913 unclipped=+18.465 clipped=+18.465 | j6: rnea=+2.085 res=+0.059 pd=+1.360 unclipped=+3.504 clipped=+3.504 | j7: rnea=-0.000 res=-0.091 pd=+0.664 unclipped=+0.573 clipped=+0.573
+[pinn_controller_node-1] [INFO] [1784866278.677424621] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8889 q_meas=-1.6154 e=-0.2735 qdot=+0.00472 | j6: q_des=+1.8013 q_meas=+1.5569 e=+0.2444 qdot=-0.00505 | j7: q_des=-0.5271 q_meas=-0.7853 e=+0.2582 qdot=+0.00891
+[pinn_controller_node-1] [INFO] [1784866278.678274039] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.351 res=-1.137 pd=-3.985 unclipped=+17.230 clipped=+17.230 | j6: rnea=+2.085 res=+0.367 pd=+1.408 unclipped=+3.860 clipped=+3.860 | j7: rnea=-0.000 res=-0.034 pd=+0.608 unclipped=+0.575 clipped=+0.575
+[pinn_controller_node-1] [INFO] [1784866278.791552799] [pinn_franka_controller]: New trajectory received with 1 points.
+[pinn_controller_node-1] [INFO] [1784866279.678172065] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8889 q_meas=-1.6154 e=-0.2735 qdot=+0.00471 | j6: q_des=+1.8013 q_meas=+1.5569 e=+0.2444 qdot=-0.00504 | j7: q_des=-0.5271 q_meas=-0.7853 e=+0.2582 qdot=+0.00891
+[pinn_controller_node-1] [INFO] [1784866279.679024632] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.351 res=-1.137 pd=-3.985 unclipped=+17.230 clipped=+17.230 | j6: rnea=+2.085 res=+0.367 pd=+1.408 unclipped=+3.860 clipped=+3.860 | j7: rnea=-0.000 res=-0.034 pd=+0.608 unclipped=+0.574 clipped=+0.574
+[pinn_controller_node-1] [INFO] [1784866280.291253128] [pinn_franka_controller]: New trajectory received with 1 points.
+[pinn_controller_node-1] [INFO] [1784866280.679036165] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8889 q_meas=-1.6154 e=-0.2735 qdot=+0.00471 | j6: q_des=+1.8013 q_meas=+1.5569 e=+0.2444 qdot=-0.00504 | j7: q_des=-0.5271 q_meas=-0.7853 e=+0.2582 qdot=+0.00891
+[pinn_controller_node-1] [INFO] [1784866280.679889995] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.351 res=-1.137 pd=-3.985 unclipped=+17.230 clipped=+17.230 | j6: rnea=+2.085 res=+0.367 pd=+1.408 unclipped=+3.860 clipped=+3.860 | j7: rnea=-0.000 res=-0.034 pd=+0.608 unclipped=+0.574 clipped=+0.574
+[pinn_controller_node-1] [INFO] [1784866281.679418986] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8889 q_meas=-1.6154 e=-0.2735 qdot=+0.00471 | j6: q_des=+1.8013 q_meas=+1.5569 e=+0.2444 qdot=-0.00504 | j7: q_des=-0.5271 q_meas=-0.7853 e=+0.2582 qdot=+0.00891
+[pinn_controller_node-1] [INFO] [1784866281.680269362] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.351 res=-1.137 pd=-3.985 unclipped=+17.230 clipped=+17.230 | j6: rnea=+2.085 res=+0.367 pd=+1.408 unclipped=+3.860 clipped=+3.860 | j7: rnea=-0.000 res=-0.034 pd=+0.608 unclipped=+0.574 clipped=+0.574
+[pinn_controller_node-1] [INFO] [1784866281.794578606] [pinn_franka_controller]: New trajectory received with 1 points.
+[pinn_controller_node-1] [INFO] [1784866282.680294614] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8889 q_meas=-1.6154 e=-0.2734 qdot=-0.00467 | j6: q_des=+1.8013 q_meas=+1.5569 e=+0.2443 qdot=+0.00500 | j7: q_des=-0.5271 q_meas=-0.7853 e=+0.2582 qdot=-0.00886
+[pinn_controller_node-1] [INFO] [1784866282.681108327] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.351 res=+0.026 pd=-3.913 unclipped=+18.464 clipped=+18.464 | j6: rnea=+2.085 res=+0.060 pd=+1.360 unclipped=+3.505 clipped=+3.505 | j7: rnea=-0.000 res=-0.090 pd=+0.664 unclipped=+0.574 clipped=+0.574
+[pinn_controller_node-1] [INFO] [1784866283.681066371] [pinn_franka_controller]: [DEBUG e] j4: q_des=-1.8889 q_meas=-1.6154 e=-0.2735 qdot=+0.00470 | j6: q_des=+1.8013 q_meas=+1.5569 e=+0.2444 qdot=-0.00504 | j7: q_des=-0.5271 q_meas=-0.7853 e=+0.2582 qdot=+0.00892
+[pinn_controller_node-1] [INFO] [1784866283.681920259] [pinn_franka_controller]: [DEBUG tau] j4: rnea=+22.351 res=-1.137 pd=-3.985 unclipped=+17.230 clipped=+17.230 | j6: rnea=+2.085 res=+0.367 pd=+1.408 unclipped=+3.860 clipped=+3.860 | j7: rnea=-0.000 res=-0.034 pd=+0.608 unclipped=+0.574 clipped=+0.574
+[pinn_controller_node-1] [WARN] [1784866283.795149258] [pinn_franka_controller]: Trajectory stale (2.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866284.796123209] [pinn_franka_controller]: Trajectory stale (3.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866285.796389126] [pinn_franka_controller]: Trajectory stale (4.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866286.797151311] [pinn_franka_controller]: Trajectory stale (5.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866287.797162893] [pinn_franka_controller]: Trajectory stale (6.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866288.797218820] [pinn_franka_controller]: Trajectory stale (7.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866289.797240726] [pinn_franka_controller]: Trajectory stale (8.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866290.798124553] [pinn_franka_controller]: Trajectory stale (9.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866291.798226321] [pinn_franka_controller]: Trajectory stale (10.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866292.799283638] [pinn_franka_controller]: Trajectory stale (11.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866293.800128956] [pinn_franka_controller]: Trajectory stale (12.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866294.800153372] [pinn_franka_controller]: Trajectory stale (13.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866295.800583502] [pinn_franka_controller]: Trajectory stale (14.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866296.801095098] [pinn_franka_controller]: Trajectory stale (15.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866297.801421604] [pinn_franka_controller]: Trajectory stale (16.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866298.802129595] [pinn_franka_controller]: Trajectory stale (17.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866299.802464926] [pinn_franka_controller]: Trajectory stale (18.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866300.802690729] [pinn_franka_controller]: Trajectory stale (19.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866301.802823813] [pinn_franka_controller]: Trajectory stale (20.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866302.803452349] [pinn_franka_controller]: Trajectory stale (21.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866303.804258875] [pinn_franka_controller]: Trajectory stale (22.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866304.805930436] [pinn_franka_controller]: Trajectory stale (23.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866305.806200872] [pinn_franka_controller]: Trajectory stale (24.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866306.807166980] [pinn_franka_controller]: Trajectory stale (25.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866307.807472946] [pinn_franka_controller]: Trajectory stale (26.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866308.807649224] [pinn_franka_controller]: Trajectory stale (27.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866309.808430430] [pinn_franka_controller]: Trajectory stale (28.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866310.809116490] [pinn_franka_controller]: Trajectory stale (29.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866311.809406033] [pinn_franka_controller]: Trajectory stale (30.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866312.809416002] [pinn_franka_controller]: Trajectory stale (31.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866313.809802591] [pinn_franka_controller]: Trajectory stale (32.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866314.810134808] [pinn_franka_controller]: Trajectory stale (33.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866315.811424557] [pinn_franka_controller]: Trajectory stale (34.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866316.812140120] [pinn_franka_controller]: Trajectory stale (35.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866317.813158621] [pinn_franka_controller]: Trajectory stale (36.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866318.813240860] [pinn_franka_controller]: Trajectory stale (37.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866319.813407398] [pinn_franka_controller]: Trajectory stale (38.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866320.814417153] [pinn_franka_controller]: Trajectory stale (39.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866321.815181711] [pinn_franka_controller]: Trajectory stale (40.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866322.815239689] [pinn_franka_controller]: Trajectory stale (41.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866323.816133214] [pinn_franka_controller]: Trajectory stale (42.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866324.816465670] [pinn_franka_controller]: Trajectory stale (43.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866325.816593114] [pinn_franka_controller]: Trajectory stale (44.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866326.817208170] [pinn_franka_controller]: Trajectory stale (45.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866327.818151151] [pinn_franka_controller]: Trajectory stale (46.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866328.818224140] [pinn_franka_controller]: Trajectory stale (47.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866329.819129244] [pinn_franka_controller]: Trajectory stale (48.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866330.819807750] [pinn_franka_controller]: Trajectory stale (49.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866331.820152000] [pinn_franka_controller]: Trajectory stale (50.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866332.820226952] [pinn_franka_controller]: Trajectory stale (51.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866333.821151625] [pinn_franka_controller]: Trajectory stale (52.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866334.821344453] [pinn_franka_controller]: Trajectory stale (53.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866335.821459056] [pinn_franka_controller]: Trajectory stale (54.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866336.822713123] [pinn_franka_controller]: Trajectory stale (55.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866337.823198373] [pinn_franka_controller]: Trajectory stale (56.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866338.823787085] [pinn_franka_controller]: Trajectory stale (57.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866339.824177966] [pinn_franka_controller]: Trajectory stale (58.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866340.824256571] [pinn_franka_controller]: Trajectory stale (59.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866341.825187305] [pinn_franka_controller]: Trajectory stale (60.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866342.825344572] [pinn_franka_controller]: Trajectory stale (61.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866343.826129558] [pinn_franka_controller]: Trajectory stale (62.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866344.827187924] [pinn_franka_controller]: Trajectory stale (63.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866345.828149877] [pinn_franka_controller]: Trajectory stale (64.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866346.829164679] [pinn_franka_controller]: Trajectory stale (65.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866347.829188529] [pinn_franka_controller]: Trajectory stale (66.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866348.829315951] [pinn_franka_controller]: Trajectory stale (67.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866349.829360941] [pinn_franka_controller]: Trajectory stale (68.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866350.830242381] [pinn_franka_controller]: Trajectory stale (69.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866351.830329189] [pinn_franka_controller]: Trajectory stale (70.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866352.831161939] [pinn_franka_controller]: Trajectory stale (71.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866353.831405621] [pinn_franka_controller]: Trajectory stale (72.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866354.831484183] [pinn_franka_controller]: Trajectory stale (73.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866355.832128939] [pinn_franka_controller]: Trajectory stale (74.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866356.832286988] [pinn_franka_controller]: Trajectory stale (75.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866357.832766230] [pinn_franka_controller]: Trajectory stale (76.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866358.833236415] [pinn_franka_controller]: Trajectory stale (77.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866359.834143865] [pinn_franka_controller]: Trajectory stale (78.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866360.835123538] [pinn_franka_controller]: Trajectory stale (79.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866361.835152200] [pinn_franka_controller]: Trajectory stale (80.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866362.835356380] [pinn_franka_controller]: Trajectory stale (81.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866363.836127385] [pinn_franka_controller]: Trajectory stale (82.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866364.836256352] [pinn_franka_controller]: Trajectory stale (83.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866365.837151089] [pinn_franka_controller]: Trajectory stale (84.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866366.837288100] [pinn_franka_controller]: Trajectory stale (85.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866367.838261973] [pinn_franka_controller]: Trajectory stale (86.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866368.839176804] [pinn_franka_controller]: Trajectory stale (87.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866369.839324322] [pinn_franka_controller]: Trajectory stale (88.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866370.840163799] [pinn_franka_controller]: Trajectory stale (89.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866371.841141421] [pinn_franka_controller]: Trajectory stale (90.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866372.841163112] [pinn_franka_controller]: Trajectory stale (91.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866373.841334634] [pinn_franka_controller]: Trajectory stale (92.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866374.842128901] [pinn_franka_controller]: Trajectory stale (93.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866375.842149857] [pinn_franka_controller]: Trajectory stale (94.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866376.842359400] [pinn_franka_controller]: Trajectory stale (95.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866377.843164510] [pinn_franka_controller]: Trajectory stale (96.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866378.843258735] [pinn_franka_controller]: Trajectory stale (97.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866379.844134130] [pinn_franka_controller]: Trajectory stale (98.0s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866380.845166428] [pinn_franka_controller]: Trajectory stale (99.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866381.846137632] [pinn_franka_controller]: Trajectory stale (100.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866382.846546880] [pinn_franka_controller]: Trajectory stale (101.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866383.847159429] [pinn_franka_controller]: Trajectory stale (102.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866384.847304285] [pinn_franka_controller]: Trajectory stale (103.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866385.847411425] [pinn_franka_controller]: Trajectory stale (104.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866386.848236356] [pinn_franka_controller]: Trajectory stale (105.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866387.848576874] [pinn_franka_controller]: Trajectory stale (106.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866388.849170572] [pinn_franka_controller]: Trajectory stale (107.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866389.849797442] [pinn_franka_controller]: Trajectory stale (108.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866390.850123224] [pinn_franka_controller]: Trajectory stale (109.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866391.850248829] [pinn_franka_controller]: Trajectory stale (110.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866392.851181850] [pinn_franka_controller]: Trajectory stale (111.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866393.852105370] [pinn_franka_controller]: Trajectory stale (112.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866394.852513549] [pinn_franka_controller]: Trajectory stale (113.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866395.853238902] [pinn_franka_controller]: Trajectory stale (114.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866396.853468754] [pinn_franka_controller]: Trajectory stale (115.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866397.854128455] [pinn_franka_controller]: Trajectory stale (116.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866398.854230245] [pinn_franka_controller]: Trajectory stale (117.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866399.855122183] [pinn_franka_controller]: Trajectory stale (118.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866400.855149299] [pinn_franka_controller]: Trajectory stale (119.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866401.855345425] [pinn_franka_controller]: Trajectory stale (120.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866402.856218500] [pinn_franka_controller]: Trajectory stale (121.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866403.857121459] [pinn_franka_controller]: Trajectory stale (122.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866404.857301544] [pinn_franka_controller]: Trajectory stale (123.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866405.858176876] [pinn_franka_controller]: Trajectory stale (124.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866406.858466795] [pinn_franka_controller]: Trajectory stale (125.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866407.859230183] [pinn_franka_controller]: Trajectory stale (126.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866408.860179039] [pinn_franka_controller]: Trajectory stale (127.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866409.860387078] [pinn_franka_controller]: Trajectory stale (128.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866410.860831519] [pinn_franka_controller]: Trajectory stale (129.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866411.861154793] [pinn_franka_controller]: Trajectory stale (130.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866412.862143100] [pinn_franka_controller]: Trajectory stale (131.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866413.862192230] [pinn_franka_controller]: Trajectory stale (132.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866414.862354798] [pinn_franka_controller]: Trajectory stale (133.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866415.863744492] [pinn_franka_controller]: Trajectory stale (134.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866416.864136573] [pinn_franka_controller]: Trajectory stale (135.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866417.864649757] [pinn_franka_controller]: Trajectory stale (136.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866418.865224044] [pinn_franka_controller]: Trajectory stale (137.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866419.865662721] [pinn_franka_controller]: Trajectory stale (138.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866420.866139105] [pinn_franka_controller]: Trajectory stale (139.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866421.867154587] [pinn_franka_controller]: Trajectory stale (140.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866422.867604942] [pinn_franka_controller]: Trajectory stale (141.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866423.868138243] [pinn_franka_controller]: Trajectory stale (142.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866424.868351842] [pinn_franka_controller]: Trajectory stale (143.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866425.869149458] [pinn_franka_controller]: Trajectory stale (144.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866426.869715905] [pinn_franka_controller]: Trajectory stale (145.1s > 2.0s) -- holding at last known position via gravity compensation.
+[pinn_controller_node-1] [WARN] [1784866427.870131179] [pinn_franka_controller]: Trajectory stale (146.1s > 2.0s) -- holding at last known position via gravity compensation.
