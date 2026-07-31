@@ -148,9 +148,18 @@ TARGETS: dict[str, np.ndarray] = {
     # rotation: _TOP_DOWN_FINGERS_ALIGNED (not plain _TOP_DOWN) so the FINGERS,
     # not just panda_link8, are square to the cube -- see that constant's comment
     # and run29's 0.0526 m diagonal-corner grasp.
+    # 2026-07-29 (configuration sweep): x is now a SWEPT variable, not a fixed
+    # placement. x=0.65 is retained in the comments above as the pose run30/31/35
+    # succeeded at, but it sits near the IK envelope -- 3 clean picks in 8 runs,
+    # with the failures all `Unable to sample any valid states for goal tree`
+    # (runs 25, 27, 33, 34). Swept inwards first for margin.
+    # ALL FIVE SITES must change together, or MoveIt2 plans to one place while
+    # MuJoCo puts the cube in another: this entry, panda_arm_mujoco.xml's
+    # grasp_object body pos, that file's `home` keyframe freejoint qpos, and
+    # test_grasp_pick.py's add_collision_box + collision_object_position.
     "grasp_object": _pose(
-        x=0.65,
-        y=0.0,
+        x=0.55,
+        y=-0.25,
         z=0.02 + _FLANGE_TO_FINGERTIP_Z,
         rotation=_TOP_DOWN_FINGERS_ALIGNED,
     ),

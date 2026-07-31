@@ -40,6 +40,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import math
 import sys
 
 import rclpy
@@ -235,7 +236,7 @@ def main() -> int:
         log.info("Registering grasp_object in the MoveIt2 planning scene...")
         arm.add_collision_box(
             "grasp_object",
-            position=(0.65, 0.0, 0.02),
+            position=(0.55, -0.25, 0.02),
             size=(0.06, 0.06, 0.06),
         )
 
@@ -249,7 +250,7 @@ def main() -> int:
             # Used to shrink the collision object back down right before
             # attach, so it no longer overlaps the floor collision box below.
             collision_object_bare_size=(0.04, 0.04, 0.04),
-            collision_object_position=(0.65, 0.0, 0.02),
+            collision_object_position=(0.55, -0.25, 0.02),
         )
         executor = GraspExecutor(cfg, gripper, arm_controller=arm)
 
@@ -273,7 +274,46 @@ def main() -> int:
             )
             return 1
 
-        log.info("ALL CHECKS PASSED — cube grasped and lifted")
+        # 2026-07-29 (run32): pick() returned SUCCESS and the status line read
+        # is_grasped=True while the cube was lying on the floor -- it slipped
+        # out during the lift and this test called it a pass. is_grasped is a
+        # LATCH (gripper_controller.py: self._last_grasp_succeeded), set once by
+        # grasp() at contact time and never re-derived, so no check downstream of
+        # the lift could ever notice a drop. Gating only on GraspResult.SUCCESS
+        # had the same blind spot: pick() also returns before the lift settles.
+        #
+        # The live width CAN see it, because grasp() commands the fingers to
+        # grasp_width - GRASP_OVERTRAVEL_M (deliberately past the object's
+        # surface, to generate real squeeze force) and they can only ever REACH
+        # that setpoint if nothing is between them:
+        #     held    -> settles at the object's true width  (~0.040 in run30/31)
+        #     dropped -> reaches the commanded setpoint      ( 0.030 in run32)
+        # Those are ~10 mm apart, i.e. the overtravel itself is the signal.
+        #
+        # Checked against the same epsilon band grasp() itself uses, so a held
+        # object passes here exactly when it passed there -- the difference is
+        # purely that this runs AFTER the lift, when the drop has happened.
+        held_lo = cfg.grasp_width - cfg.epsilon_inner
+        held_hi = cfg.grasp_width + cfg.epsilon_outer
+        if math.isnan(status.width) or not (held_lo <= status.width <= held_hi):
+            log.error(
+                "OBJECT DROPPED DURING THE LIFT. Final width %.6f m is outside "
+                "the held band [%.3f, %.3f] m (grasp_width=%.3f). A width at or "
+                "near %.3f m means the fingers reached their commanded setpoint, "
+                "i.e. closed through empty air. pick() reported %s and "
+                "is_grasped=%s -- both are latched at contact time and cannot "
+                "see a post-lift drop; do not trust them on their own.",
+                status.width, held_lo, held_hi, cfg.grasp_width,
+                cfg.grasp_width - MuJoCoGripperController.GRASP_OVERTRAVEL_M,
+                result, status.is_grasped,
+            )
+            return 1
+
+        log.info(
+            "ALL CHECKS PASSED — cube grasped and lifted (final width %.6f m "
+            "in held band [%.3f, %.3f] m)",
+            status.width, held_lo, held_hi,
+        )
         return 0
     finally:
         rclpy.shutdown()

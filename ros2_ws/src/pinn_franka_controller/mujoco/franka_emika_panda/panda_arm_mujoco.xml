@@ -403,7 +403,7 @@
          SESSION.md's 2026-07-24 account instead: the cube is not the
          cause of this specific joint4 immobility. Reverted to the real
          position below. -->
-    <body name="grasp_object" pos="0.65 0 0.02">
+    <body name="grasp_object" pos="0.55 -0.25 0.02">
       <freejoint/>
       <geom type="box" size="0.02 0.02 0.02" density="1000" friction="1 0.005 0.0001" rgba="0.8 0.25 0.1 1"/>
     </body>
@@ -571,7 +571,11 @@
          state for a future grasp demo than closed.
          + 7 more values for grasp_object's <freejoint/> (added later, same session, right
          after the fingers in body-tree order): 3 position + 4 quaternion (MuJoCo order
-         w x y z), matching that body's own pos="0.65 0 0.02" with identity orientation.
+         w x y z), matching that body's own pos (a SWEPT value as of 2026-07-29,
+         currently "0.55 -0.25 0.02") with identity orientation. These two must always
+         agree: the body pos sets where the cube starts at LOAD, the keyframe sets
+         where reset_world puts it, so a mismatch means the first run tests one
+         configuration and every run after a reset tests a different one.
          Found live 2026-07-23: an XML-specified <key qpos="..."/> shorter than the model's
          actual nq gets the missing trailing values padded with ZERO by MuJoCo's compiler,
          not the body's real starting pose, so reset_world with this keyframe was silently
@@ -586,6 +590,6 @@
          this keyframe's) + 1 new value for the finger's <position> actuator, matching its
          qpos so it doesn't snap on startup. grasp_object has no actuator (free body), so
          ctrl's length is unaffected by the freejoint addition. -->
-    <key name="home" qpos="0 0 0 -1.57079 0 1.57079 -0.7853 0.04 0.04 0.65 0 0.02 1 0 0 0" ctrl="0 0 0 0 0 0 0 0.04"/>
+    <key name="home" qpos="0 0 0 -1.57079 0 1.57079 -0.7853 0.04 0.04 0.55 -0.25 0.02 1 0 0 0" ctrl="0 0 0 0 0 0 0 0.04"/>
   </keyframe>
 </mujoco>
