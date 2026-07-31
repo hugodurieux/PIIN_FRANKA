@@ -3,7 +3,163 @@
      Do not edit by hand. CLAUDE.md imports it at every startup. -->
 
 ## Last updated
-2026-07-29 (STAGE 4 SOLVED AND WORKING END-TO-END — "JOINT 4/6/7 FREEZE" ROOT CAUSE FOUND: `ResetWorld` SILENTLY REVERTS mujoco_ros2_control TO ITS INTERNAL POSITION PID. FIVE FURTHER BUGS FIXED BEHIND IT. FULL pick() SUCCEEDS 2/2 AT x=0.65: CUBE GRASPED AND LIFTED.)
+2026-07-29 SESSION 2 — CONFIGURATION SWEEP BEGUN. **HEADLINE: THE ISAAC-TRAINED RESIDUAL DEGRADES TRACKING IN MUJOCO — DISABLING IT CUTS joint5's BIAS 22x AND HALVES THE FLANGE ERROR.** Phase A distance sweep complete, baseline moved x=0.65 -> 0.55. Post-lift drop check added and immediately caught a false success. Full matrix and prep in `tracking/STAGE4_TEST_PLAN.md`.
+
+**Goal for the day:** re-run the working Stage 4 pick, then start varying the cube's
+configuration (distance, height, weight) instead of claiming Stage 4 works from a
+single pose.
+
+**READ `tracking/STAGE4_TEST_PLAN.md` FIRST NEXT SESSION.** It carries the full
+matrix, every result, and step-by-step prep for the phases not yet run (yaw, mass,
+table). This entry is the summary; that file is the working document.
+
+### THE MAIN RESULT — phase F, residual ablation
+
+At x=0.55, margin 4.0, everything else identical, residual ON vs OFF:
+
+| Run | Residual | joint5 (final grasp) | joint3 | joint4 | Flange err |
+|-----|----------|----------------------|--------|--------|------------|
+| 36 | on | -0.0264 | -0.0155 | -0.0104 | 0.0141 |
+| 37 | on | -0.0434 | -0.0183 | -0.0095 | 0.0139 |
+| 38 | on | -0.0312 | -0.0162 | -0.0111 | 0.0149 |
+| 45 | **off** | **-0.0011** | -0.0003 | +0.0003 | **0.0076** |
+| 46 | **off** | **-0.0019** | -0.0007 | -0.0010 | **0.0073** |
+
+**Mean joint5 bias -0.0337 -> -0.0015 (22x). Mean flange error 0.0143 -> 0.0075
+(halved).** Every joint improved by ~an order of magnitude, not just joint5. The gain
+confound pushes the OTHER way (lower Kp would make errors LARGER via `e_ss = tau/Kp`),
+so the result survives it.
+
+**Interpretation, and this matters:** the checkpoint is
+`isaac-multipayload-frictionnet-satfix`, trained on **Isaac Sim** data and deployed in
+**MuJoCo**. It learned the gap between RNEA and *Isaac's* dynamics and is adding that
+to a MuJoCo model which does not have them — i.e. evaluated out of distribution.
+Defensible claim: *the Isaac-trained residual degrades tracking under sim-to-sim
+transfer*. NOT defensible: that the grey-box approach fails. **This gives the
+sim-to-real fine-tuning novelty (N3-Duong, already implemented) a measured baseline to
+beat** — fine-tune on MuJoCo data and re-run this exact comparison.
+
+Use `ros2_ws/launch_pinn_controller_ablation.sh` (new). **Do NOT use
+`launch_pinn_controller_no_residual.sh` for the ablation** — it omits
+`gain_safety_margin_override`, so it changes Kp and the residual at once and makes the
+comparison meaningless.
+
+### Phase A — distance sweep (complete)
+
+| x | Rate | Grasp error | Character |
+|---|------|-------------|-----------|
+| 0.45 | 2/3 | 0.0051 | folded arm; one drop |
+| **0.55** | **3/3** | 0.0139-0.0149 (1.0 mm spread) | **new baseline** |
+| 0.65 | 3/8 * | 0.0064-0.0186 (12 mm spread) | planner failures |
+| 0.70 | 3/3 | 0.0107-0.0135 | succeeds via a large detour EVERY run; margins 0.0-0.4 mm |
+
+**Baseline moved from x=0.65 to x=0.55.** \* 0.65's 3/8 spans several code versions
+and is NOT comparable — re-run it 3x on current code before quoting any of this.
+
+**x=0.70 characterises the envelope edge as a gradient, not a wall.** Before planning
+fails outright, the system first produces long null-space reconfiguration detours
+(47-56 points / 4.6-5.5 s, versus 12-20 points / ~1.2 s everywhere else) and converges
+by fractions of a millimetre (run44: 0.0400 against a 0.0400 tolerance). Observed
+directly as "a big slow movement in the opposing direction then fastly go to grab the
+cube". Reproducible across all 3 runs => geometry, not OMPL sampling.
+
+**`panda_joint5`'s bias scales with reach** (~-0.044 at 0.45, -0.047 at 0.55, -0.050 at
+0.65, -0.066 at 0.70) and grows further off-axis (-0.051 at y=+0.25). Load-dependent,
+not a constant offset — consistent with `e_ss = tau/Kp`.
+
+**Phase B (lateral y) is PARTIAL:** y=+0.25 done at n=1 (success; tracking degraded,
+joint5 -0.051, planning healthy). y=-0.25 is CONFIGURED BUT NOT RUN.
+
+### Fixes made this session
+
+**1. Post-lift drop check — `stage4/test_grasp_pick.py`. It fired immediately.**
+run32 printed `ALL CHECKS PASSED` with `is_grasped=True` while the cube lay on the
+floor: `is_grasped` is a LATCH set once by `grasp()` and never re-derived, and the test
+gated only on `GraspResult.SUCCESS`. The live width can see a drop, because `grasp()`
+commands `grasp_width - GRASP_OVERTRAVEL_M` and the fingers only REACH that setpoint if
+nothing is between them (held ~0.040, dropped ~0.020). run40 was caught by it — without
+it, x=0.45 would have been recorded as 3/3 instead of 2/3.
+
+**2. Grip overtravel 0.01 -> 0.02 — `stage4/gripper_controller.py`. Insufficient.**
+The old value's own comment computed a 3.2x static margin and said "NOT YET
+LIVE-VALIDATED"; run32 disproved it. Doubling gives 2 N/finger (6.4x static) and
+**still dropped** run40. **Static margin is the wrong model for a lift** — acceleration
+and off-centre contact dominate. Phase D blocker: a 1 kg cube cannot be held at all at
+the current `kp=200` (worked numbers in the plan file).
+
+**3. Damped safe-fallback — `pinn_controller_node.py`. WRITTEN, VALIDATED, THEN
+STASHED (`stash@{0}`).** The old fallback published gravity compensation ALONE,
+recomputed at the CURRENT measured q every tick — so it did not hold a pose, it made
+the arm neutrally buoyant and followed it wherever it drifted. Added Kd damping
+(dissipative, cannot drive the arm), a Kp hold about a pose latched on entry against a
+CLAMPED error, and a teleport detector that re-latches on `ResetWorld` (a >0.05 rad
+single-tick jump is impossible at 2.61 rad/s). Both paths fired correctly on the first
+live run. **Stashed deliberately** so Stage 3 stayed byte-identical to the run35
+baseline through the sweep — reapply and re-validate, but never mid-series.
+
+### Two live defects found, NOT fixed
+
+- **Ctrl-C drops the arm.** `main()` catches `KeyboardInterrupt`, logs, destroys the
+  node — no handoff. Effort mode is safe only while the node publishes; the moment it
+  stops, gravity compensation vanishes and the arm collapses. On hardware this is what
+  brakes are for. Fix is a handoff to position mode, but that PID is untuned
+  (`mujoco_pid.yaml` self-documents a "small, fast, constant buzz"), so answer this
+  first: **where does the arm go when position mode engages from a pose that is not
+  home?** One experiment unblocks both this and the reset slew.
+- **`ResetWorld` produced one uncommanded fast slew.** Root cause not established.
+  Measured: the teleport lands ~7 s before effort mode is restored, because
+  `force_effort_mode.sh` deliberately routes through position mode via two separate
+  `ros2 service call` invocations. Seven seconds under an untuned PID is real exposure.
+
+### Operating lesson re-learned the hard way
+
+**A fresh sim does not have effort mode.** The first run36 attempt was voided:
+`switch_to_effort.sh` was not run after `rebuild_and_relaunch_sim.sh`, every torque was
+discarded, and the arm sat at home with joint7 at **-0.78529** — the exact
+discarded-torque fingerprint from session 1. `force_effort_mode.sh` then returned
+`ok=False, "panda_arm_controller is already active"`, proving it. Triage table:
+
+| Symptom | Meaning |
+|---------|---------|
+| `planning failed, error_code=99999` after ~5 s | IK envelope; no trajectory ever existed |
+| `still converging` full 10 s, error FLAT, arm at home | torques discarded — check the plugin log |
+| `still converging`, error shrinking but too slowly | genuine tracking limit; the only one implicating Stage 1/3 |
+
+### Repo state at session end
+
+Branch `fix/effort-mode-actuator-lock`, **nothing committed this session.**
+
+**The five cube sites are left at x=0.55, y=-0.25, z=0.02** — staged for a phase B run
+that was NOT executed. Do not assume y=0 next session.
+
+Modified (uncommitted): `panda_arm_mujoco.xml`, `stage4/demo_targets.py`,
+`stage4/test_grasp_pick.py`, `stage4/gripper_controller.py`. New (untracked):
+`ros2_ws/launch_pinn_controller_ablation.sh`, `tracking/STAGE4_TEST_PLAN.md`.
+`scene_dump.txt` is debug cruft, safe to delete. `stash@{0}` holds the damped-fallback
+fix.
+
+### What to do next session (ordered)
+
+1. **Finish phase B** — y=-0.25 is already configured, just run it. Then top up to n=3.
+2. **Phase D (mass/weight)** and **phase E (height/table)** — the user's explicit ask.
+   Both need prep, both fully specified in `tracking/STAGE4_TEST_PLAN.md`:
+   - **Mass:** change the cube's `density` (1000 -> 15625 for 1 kg, 46875 for 3 kg),
+     match `GraspConfig.object_mass`, **raise the finger actuator `kp`** (490 needed for
+     1 kg, 1470 for 3 kg; `forcerange="-20 20"` caps the ceiling near 4 kg) and re-tune
+     `kv` with it, and **actually wire `update_payload(delta)`**, which has never been
+     called. Then run each mass with correct `delta` AND `delta=0`.
+   - **Height/table:** **fix the attach ordering FIRST** (attach after the gripper
+     closes, `finally` detach, restore the floor box) — otherwise the phantom attached
+     cube descends into the table and no table height works.
+3. **Phase C (yaw)** — needs the grasp yaw derived from the object pose instead of
+   hardcoded.
+4. **Re-run x=0.65 3x on current code** so phase A's table stops mixing code versions.
+5. **Reapply `stash@{0}`** and re-validate the damped fallback, outside a measurement
+   series.
+
+---
+
+[Session continuation entry: 2026-07-29 session 1 — STAGE 4 SOLVED AND WORKING END-TO-END — "JOINT 4/6/7 FREEZE" ROOT CAUSE FOUND: `ResetWorld` SILENTLY REVERTS mujoco_ros2_control TO ITS INTERNAL POSITION PID. FIVE FURTHER BUGS FIXED BEHIND IT. FULL pick() SUCCEEDS 2/2 AT x=0.65: CUBE GRASPED AND LIFTED.)
 
 **Goal for the day:** Re-test the untested `initial_positions.yaml` fix with correct rebuild/restart methodology, then get a working Stage 4 pick.
 
@@ -290,7 +446,9 @@ Entirely separately from Stage 4 work: `school_report/rapport/main.tex` (a Frenc
 
 **Stage 2/3 (ROS2 + MoveIt2 + Controller):** **Milestone 1 and 2 FULLY CLOSED.** Position-mode MoveIt2 execution and Stage 3 effort-mode trajectory tracking are both empirically validated.
 
-**Stage 4 (grasping) — WORKING END-TO-END as of 2026-07-29.** `pick()` completes successfully: cube grasped and lifted, **2/2 consecutive runs** (`test_grasp_pick_run30/31.log`), with the cube at x=0.65 m (30% farther than the original 0.50 m placement). Final grasp convergence 0.0066 / 0.0186 m against a 0.0200 m tolerance; gripper closes to 0.03999612 / 0.03990805 m against a 0.040 m target; `is_grasped=True`.
+**Stage 4 (grasping) — WORKING, AND NOW PARTIALLY CHARACTERISED (2026-07-29 session 2).** `pick()` is no longer a single-pose demo. Distance sweep complete: **x=0.55 is the baseline at 3/3 with a 1.0 mm error spread**; 0.45 is 2/3, 0.70 succeeds 3/3 but only via large null-space detours with 0.0-0.4 mm convergence margins, and 0.65's older 3/8 spans multiple code versions and needs re-measuring. Lateral offset partially done (y=+0.25 succeeds, tracking degrades). Mass, height/table and yaw NOT yet tested — all specified in `tracking/STAGE4_TEST_PLAN.md`.
+
+**Stage 1 result from Stage 4 instrumentation (the session's headline):** disabling the learned residual **cut `panda_joint5`'s steady-state bias 22x and halved the Cartesian flange error**. The Isaac-trained residual degrades tracking when transferred to MuJoCo — it is being evaluated out of distribution. This does NOT show the grey-box approach fails; it gives the sim-to-real fine-tuning novelty (N3-Duong) a measured baseline to beat.
 
 The blocking "panda_joint4/6/7 freeze" is SOLVED: **`mujoco_ros2_control`'s `ResetWorld` silently reverts every joint to its internal position PID**, bypassing `perform_command_mode_switch()` so no layer reports it, and every effort command is discarded. Fixed by `ros2_ws/force_effort_mode.sh`, now called automatically from `reset_world_home.sh`. The 2026-07-28 conclusion (plugin command pathway) was **wrong** — see the correction section in the 2026-07-29 entry. Five further bugs were fixed behind it, each only reachable once the previous was cleared: the gain-override startup crash, a leaked planning-scene attachment, the attach-before-descent floor conflict, KDL IK budget at longer reach, and two gripper-geometry errors (both traceable to `panda_hand_joint`'s `xyz="0 0 0" rpy="0 0 -0.785"`).
 
@@ -314,6 +472,16 @@ The blocking "panda_joint4/6/7 freeze" is SOLVED: **`mujoco_ros2_control`'s `Res
 - **Working tree:** all of 2026-07-23/24/28/29 committed on `fix/effort-mode-actuator-lock` (NOT merged to main, not pushed). `school_report/rapport/main.tex` §5.4 still carries the old physics/plugin framing and needs a prose rewrite.
 
 ## What to do next session
+
+> **SUPERSEDED BY THE 2026-07-29 SESSION 2 ENTRY AT THE TOP OF THIS FILE.**
+> The startup sequence below is still exactly correct and validated across ~15 runs
+> — keep using it, and note step 3 is NOT optional on a fresh sim (skipping it voided
+> a run this session: every torque discarded, arm parked at home, joint7 at -0.78529).
+> The *priorities* listed after it are from session 1 and are largely done. The live
+> priority list is in the top entry and in `tracking/STAGE4_TEST_PLAN.md`, which is
+> the working document for the configuration sweep: mass, height/table and yaw are
+> the outstanding user-requested variations, each with worked prep steps.
+
 **Startup sequence that works (use exactly this order):**
 1. **Terminal 1:** `bash ros2_ws/rebuild_and_relaunch_sim.sh` — kills stale processes, verifies they are gone, rebuilds, and only then launches. Wait for `OK: build succeeded` and the sim to come up.
 2. **Terminal 2:** `bash ros2_ws/launch_pinn_controller_boosted.sh 4.0` — confirm it prints `gain_safety_margin_override=4.00 active` and NOT `No checkpoint_path set`.
