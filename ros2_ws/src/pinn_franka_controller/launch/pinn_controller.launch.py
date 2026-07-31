@@ -78,6 +78,28 @@ def generate_launch_description() -> LaunchDescription:
         description="Use Lyapunov-based gain tuning (Stage 3).",
     )
 
+    # 2026-07-24 TEMPORARY DEBUG (Stage 3 investigation, remove once
+    # resolved): forwards to pinn_controller_node's gain_safety_margin_override
+    # parameter. -1.0 (default) preserves existing behavior exactly.
+    gain_safety_margin_override_arg = DeclareLaunchArgument(
+        "gain_safety_margin_override",
+        default_value="-1.0",
+        description="If > 0, recompute Kp/Kd at this safety_margin instead of "
+        "the default 2.0 -- live test of whether a stronger PD push can move "
+        "panda_joint4/6/7.",
+    )
+
+    # 2026-07-28 DIAGNOSTIC (Stage 4 investigation, remove once resolved):
+    # forwards to pinn_controller_node's disable_residual parameter. false
+    # (default) preserves existing behavior exactly.
+    disable_residual_arg = DeclareLaunchArgument(
+        "disable_residual",
+        default_value="false",
+        description="If true, force tau_res=0 and never call the learned "
+        "GreyBoxNet/FrictionNet -- live test of whether the trained residual "
+        "model is a factor in the panda_joint4/6/7 freeze.",
+    )
+
     # ---- Controller node --------------------------------------------
     controller_node = Node(
         package="pinn_franka_controller",
@@ -91,6 +113,10 @@ def generate_launch_description() -> LaunchDescription:
                 "delta": LaunchConfiguration("delta"),
                 "control_rate_hz": LaunchConfiguration("control_rate_hz"),
                 "use_lyapunov_gains": LaunchConfiguration("use_lyapunov_gains"),
+                "gain_safety_margin_override": LaunchConfiguration(
+                    "gain_safety_margin_override"
+                ),
+                "disable_residual": LaunchConfiguration("disable_residual"),
             }
         ],
     )
@@ -102,6 +128,8 @@ def generate_launch_description() -> LaunchDescription:
             delta_arg,
             control_rate_hz_arg,
             use_lyapunov_gains_arg,
+            gain_safety_margin_override_arg,
+            disable_residual_arg,
             controller_node,
         ]
     )

@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<!--
+Stage 2/3: top-level Franka Panda description for the MuJoCo simulator.
+
+Modeled directly on IsaacSim-ros_workspaces/jazzy_ws's own panda_isaac.urdf.xacro
+(same shape: base panda.urdf unchanged, only the ros2_control include/instantiation
+swapped out).
+
+2026-07-22: the hand/fingers are no longer a separate mock_components ros2_control
+system here. They previously were (hardcoded mock_components, "PandaHandMockSystem"),
+justified at the time by Stage 2/3 only ever driving the 7 arm joints — but mock
+joints are entirely synthetic (commanded position trivially mirrored back as state,
+zero physical presence), which became a real blocker once Stage 4 needed a gripper
+that can actually open/close/contact an object in the same physics world as the arm.
+panda_finger_joint1/2 are now declared inside panda_mujoco.ros2_control.xacro's own
+single <ros2_control> block instead (see that file's header comment for why: a
+second mujoco-plugin hardware component would spin up a second, disconnected
+simulation). The upstream panda_hand.ros2_control.xacro include below this comment
+is therefore no longer used.
+
+initial_positions_file is unchanged from moveit_resources_panda_moveit_config's own
+config/initial_positions.yaml (arm-only content, simulator-agnostic).
+
+Uses panda_mujoco_description.urdf (a patched copy of moveit_resources_panda_description's
+panda.urdf with real Franka inertial data added) instead of the upstream file directly:
+the upstream URDF has zero mass/inertia on every link (a kinematics-only demo package),
+which mock_components/Isaac never needed but MuJoCo's compiler requires. See that file's
+own header comment for details. -->
+
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="panda">
+    <xacro:arg name="initial_positions_file" default="$(find moveit_resources_panda_moveit_config)/config/initial_positions.yaml" />
+    <xacro:arg name="ros2_control_hardware_type" default="mujoco" />
+    <xacro:arg name="headless" default="false" />
+    <!-- 'both' (position+effort, Milestone 1 position path) or 'effort' (effort-only,
+         Stage 3 computed-torque path). See panda_mujoco.ros2_control.xacro's
+         panda_ros2_control macro comment for why effort mode requires dropping the
+         position command interface + PID. -->
+    <xacro:arg name="arm_control_mode" default="both" />
+
+    <!-- Import our patched panda urdf file (real inertials added, see file header) -->
+    <xacro:include filename="$(find pinn_franka_controller)/urdf/panda_mujoco_description.urdf" />
+
+    <!-- Import our MuJoCo ros2_control description (arm AND hand/fingers, see file header) -->
+    <xacro:include filename="$(find pinn_franka_controller)/urdf/panda_mujoco.ros2_control.xacro" />
+
+    <xacro:panda_ros2_control name="PandaMujocoSystem" initial_positions_file="$(arg initial_positions_file)" ros2_control_hardware_type="$(arg ros2_control_hardware_type)" arm_control_mode="$(arg arm_control_mode)"/>
+</robot>

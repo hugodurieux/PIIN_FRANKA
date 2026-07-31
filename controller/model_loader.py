@@ -18,7 +18,90 @@ from typing import Optional
 
 import torch
 
+from network.friction_net import FrictionNet
 from network.grey_box_net import GreyBoxNet
+
+# Filename training/train.py saves the FrictionNet weights under, alongside
+# greybox_best.pt in the same run directory (see train.py's save block).
+_FRICTION_CHECKPOINT_NAME = "friction_net_best.pt"
+
+
+def load_friction_net(
+    checkpoint_path: str,
+    config_path: Optional[str] = None,
+    device: str = "cpu",
+) -> Optional[FrictionNet]:
+    """
+    Load the FrictionNet that was trained *jointly* with a GreyBoxNet checkpoint.
+
+    2026-07-27: this closes a real train/deploy mismatch. ``training/train.py``
+    composes the residual as
+
+        tau_res = tau_res_grey + tau_res_fric      (step_loss(), --use_friction_net)
+
+    and saves the two nets to two separate files in the same run directory
+    (``greybox_best.pt`` and ``friction_net_best.pt``). Stage 3 only ever loaded
+    the first one, so the deployed feedforward was missing a term the GreyBoxNet
+    weights had been *jointly optimised against* -- the greybox head never had to
+    explain the dissipative part of the residual, because FrictionNet was
+    explaining it during training. Dropping it at inference does not just remove a
+    small friction correction, it makes the remaining greybox output a biased
+    estimate of the full residual. The current reference checkpoint
+    (models/run_20260716_121302, config.json ``"use_friction_net": true``) is
+    exactly such a checkpoint, and it is the one Stage 3 runs.
+
+    Detection is driven by the checkpoint's OWN config.json (``use_friction_net``),
+    not by a new caller-facing flag: a checkpoint knows how it was trained, and
+    the controller must reproduce that composition or it is evaluating a different
+    model than the one that was validated.
+
+    Args:
+        checkpoint_path: Path to the GreyBoxNet ``.pt`` file. The FrictionNet
+            weights are looked for as ``friction_net_best.pt`` in the same directory.
+        config_path: Path to ``config.json``. If *None*, looked up next to
+            *checkpoint_path* (same rule as :func:`load_grey_box_model`).
+        device: Torch device string.
+
+    Returns:
+        A ``FrictionNet`` in eval mode with gradients disabled, or *None* when the
+        checkpoint was trained without one (``use_friction_net`` absent/false).
+
+    Raises:
+        FileNotFoundError: If the config says ``use_friction_net: true`` but the
+            weights file is missing. This is deliberately loud rather than a
+            silent fall-through to a greybox-only model -- a silently incomplete
+            feedforward is precisely the failure this function exists to remove.
+    """
+    if config_path is None:
+        candidate = os.path.join(os.path.dirname(checkpoint_path), "config.json")
+        config_path = candidate if os.path.isfile(candidate) else None
+
+    if config_path is None or not os.path.isfile(config_path):
+        return None
+
+    with open(config_path, "r") as fh:
+        cfg = json.load(fh)
+    if not cfg.get("use_friction_net", False):
+        return None
+
+    friction_path = os.path.join(
+        os.path.dirname(checkpoint_path), _FRICTION_CHECKPOINT_NAME
+    )
+    if not os.path.isfile(friction_path):
+        raise FileNotFoundError(
+            f"{config_path} declares use_friction_net=true, but "
+            f"{friction_path} is missing. Stage 3 would silently run a "
+            "greybox-only feedforward that does not match the trained model."
+        )
+
+    friction_net = FrictionNet()
+    state_dict = torch.load(friction_path, map_location=device, weights_only=True)
+    friction_net.load_state_dict(state_dict)
+    friction_net.to(device)
+    friction_net.eval()
+    for param in friction_net.parameters():
+        param.requires_grad_(False)
+    return friction_net
 
 
 def load_grey_box_model(

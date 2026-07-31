@@ -41,6 +41,39 @@ _TOP_DOWN = np.array([
     [0,  0, -1],
 ], dtype=float)
 
+# 2026-07-29: TOP_DOWN with the hand's own 45 deg mounting twist compensated.
+#
+# WHY. The IK/grasp target is panda_link8, but the FINGERS slide along
+# panda_hand's y-axis, and panda_hand is mounted on panda_link8 with a pure
+# -45 deg twist (pinocchio_baseline/panda.urdf:
+#     <joint name="panda_hand_joint"> parent panda_link8, child panda_hand,
+#         origin rpy="0 0 -0.785398163397" xyz="0 0 0"
+# -- zero translation, rotation only). So commanding plain _TOP_DOWN on link8
+# presents the fingers at 45 deg to the world axes: square to the cube by eye in
+# RViz, but diagonal across it in reality.
+#
+# CONFIRMED LIVE, test_grasp_pick_run29.log -- the first run to make real
+# contact with the cube. Every waypoint converged (final grasp 0.0120 m against
+# a 0.0200 m tolerance) and the gripper closed onto the object, but stopped at
+#     0.0526 m
+# rather than the cube's 0.040 m width. That is the CUBE'S DIAGONAL
+# (0.04 * sqrt(2) = 0.0566 m), less a little corner squeeze at 20 N: the fingers
+# were pinching two opposite corners instead of two flat faces. Contrast run28,
+# where the fingers closed clean through empty air to 0.0336 m -- so 0.0526 is
+# genuine contact, just on the wrong geometry.
+#
+# THE CORRECTION. Right-multiplying by Rz(+45 deg) means
+#     R_hand = R_link8 @ Rz(-45) = (_TOP_DOWN @ Rz(+45)) @ Rz(-45) = _TOP_DOWN
+# i.e. the HAND ends up axis-aligned (fingers opening along world y) even though
+# link8 itself is now the one carrying the 45 deg twist. The approach axis is
+# untouched: the z column stays (0, 0, -1), straight down.
+_Rz45 = np.array([
+    [np.cos(np.pi / 4), -np.sin(np.pi / 4), 0],
+    [np.sin(np.pi / 4),  np.cos(np.pi / 4), 0],
+    [0,                  0,                 1],
+], dtype=float)
+_TOP_DOWN_FINGERS_ALIGNED = _TOP_DOWN @ _Rz45
+
 # TILTED_30: approach at 30° tilt (useful for objects near the table edge)
 _c, _s = np.cos(np.radians(30)), np.sin(np.radians(30))
 _TILTED_30 = np.array([
@@ -56,7 +89,81 @@ _TILTED_30 = np.array([
 # Typical reachable workspace: x in [0.3, 0.7], y in [-0.4, 0.4], z in [0.0, 0.6]
 # ---------------------------------------------------------------------------
 
+# 2026-07-23: flange-to-fingertip offset used to correct grasp_object below.
+# ArmMotionClient's IK target is panda_link8 (the flange), not the fingertip
+# contact point -- computed directly from panda_arm_mujoco.xml's own body
+# chain (all offsets along the flange's local Z, which stays approach-axis-
+# aligned since the hand's mounting quat is a pure Z-axis twist):
+#   panda_link8 -> panda_hand               0.0     m  (see correction below)
+#   panda_hand  -> panda_leftfinger origin  0.0584  m
+#   finger origin -> fingertip pad contact  0.0445  m  (mean of the 5
+#     fingertip_pad_collision box z-centers/spans; 0.0445 is
+#     both pad_1's own center AND the midpoint of the full pad span
+#     0.036-0.053, so it's a reasonable "grasp contact height" regardless
+#     of which interpretation is used)
+#   total: 0.0 + 0.0584 + 0.0445 = 0.1029 m
+#
+# 2026-07-29 CORRECTION, 0.2099 -> 0.1029. The original chain opened with
+# "panda_link8 -> panda_hand = 0.107 m", read off the MJCF body tree. That
+# 0.107 is the panda_link7 -> panda_link8 offset, NOT link8 -> hand. Confirmed
+# in pinocchio_baseline/panda.urdf -- the very model ArmMotionClient runs FK
+# against:
+#     <joint name="panda_joint8">      link7 -> link8   xyz="0 0 0.107"
+#     <joint name="panda_hand_joint">  link8 -> hand    xyz="0 0 0"
+#                                                       rpy="0 0 -0.785398"
+# The hand is mounted on link8 with a PURE -45 deg rotation and ZERO
+# translation. Since the IK target is panda_link8 itself, that 0.107 was being
+# counted twice, commanding the flange 0.107 m too high and holding the
+# fingertips ~10 cm above the cube.
+#
+# CONFIRMED LIVE, test_grasp_pick_run28.log -- the first run in this project to
+# reach grasp() at all: every arm waypoint converged (final approach 0.0168 m
+# against a 0.0200 m tolerance), then the gripper closed to 0.0336 m against a
+# 0.040 m target, i.e. straight through empty air, with the fingers visibly
+# about 10 cm above the cube. Both the observed height error and the arithmetic
+# error are 0.107 m. This is the flange-vs-fingertip offset that this test's own
+# module docstring was written to expose; it is now measured, not assumed.
+_FLANGE_TO_FINGERTIP_Z = 0.1029
+
 TARGETS: dict[str, np.ndarray] = {
+    # The actual grasp_object cube added to the MuJoCo scene 2026-07-22
+    # (mujoco/franka_emika_panda/panda_arm_mujoco.xml): a 4cm cube resting on
+    # the floor at x=0.65, y=0, center height z=0.02. z here is the panda_link8
+    # (flange) IK target, corrected by _FLANGE_TO_FINGERTIP_Z above so the
+    # FINGERTIP contact point (not the flange itself) lands at the cube's
+    # center height. Before this correction (raw z=0.02 for the flange), the
+    # commanded fingertip position was ~0.02 - 0.2099 = -0.19m -- 19cm BELOW
+    # the floor, physically unreachable -- which is the most likely root cause
+    # of both the "arm never gets near the object" symptom AND the severe
+    # (0.2+ rad, plateaued, not shrinking) joint tracking errors seen
+    # 2026-07-23 during the approach-phase move: MoveIt2's IK can still
+    # "solve" for the flange alone to reach z=0.02 (a valid point on its own),
+    # but likely only via a contorted, near-limit configuration that Stage 3's
+    # controller genuinely cannot hold, not a normal PD steady-state droop.
+    # 2026-07-29: x moved 0.5 -> 0.65 to test the pick at a significantly farther
+    # reach. Must stay in sync with panda_arm_mujoco.xml's grasp_object body pos
+    # AND its 'home' keyframe freejoint qpos, and with test_grasp_pick.py's
+    # planning-scene registration -- four places, all 0.65 now. If they disagree,
+    # MoveIt2 plans to one location while MuJoCo puts the cube at another.
+    # rotation: _TOP_DOWN_FINGERS_ALIGNED (not plain _TOP_DOWN) so the FINGERS,
+    # not just panda_link8, are square to the cube -- see that constant's comment
+    # and run29's 0.0526 m diagonal-corner grasp.
+    # 2026-07-29 (configuration sweep): x is now a SWEPT variable, not a fixed
+    # placement. x=0.65 is retained in the comments above as the pose run30/31/35
+    # succeeded at, but it sits near the IK envelope -- 3 clean picks in 8 runs,
+    # with the failures all `Unable to sample any valid states for goal tree`
+    # (runs 25, 27, 33, 34). Swept inwards first for margin.
+    # ALL FIVE SITES must change together, or MoveIt2 plans to one place while
+    # MuJoCo puts the cube in another: this entry, panda_arm_mujoco.xml's
+    # grasp_object body pos, that file's `home` keyframe freejoint qpos, and
+    # test_grasp_pick.py's add_collision_box + collision_object_position.
+    "grasp_object": _pose(
+        x=0.55,
+        y=-0.25,
+        z=0.02 + _FLANGE_TO_FINGERTIP_Z,
+        rotation=_TOP_DOWN_FINGERS_ALIGNED,
+    ),
+
     # A small box placed roughly in front of the robot at table height
     "box_center": _pose(x=0.45, y=0.0,  z=0.12, rotation=_TOP_DOWN),
 

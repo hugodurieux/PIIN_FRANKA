@@ -1,0 +1,39 @@
+L'évaluation (rapport et présentation)
+
+Votre évaluation sera basée sur un rapport écrit et une présentation orale.
+Le rapport
+
+Le rapport écrit doit être une description précise du travail que vous avez effectué. Il doit être organisé en tant que rapport de recherche typique (ou article) décrivant, respectivement,
+
+    Une introduction présenter le contexte de votre travail, et l’objectif scientifique et technique précis.
+        A l’issue de votre introduction, nous devons comprendre clairement : quel est l’objectif de votre stage, la problématique scientifique ou technique (/pourquoi la question que vous essayez de résoudre est difficile ou non triviale), quelle est la contribution scientifique ou technique que vous proposez (la nouveauté que vous apportez via votre stage dans un sens de recherche).
+    Un état de l'art présenter, de manière structurée, les travaux scientifiques pertinents liés à votre projet.
+        L'état de la technique doit être structuré en parties principales (regroupement de types d'approches similaires), vous devriez éviter de présenter de manière linéaire un article après l'autre.
+        L'état de l'art doit être utilisé pour "positionner" votre travail dans un contexte. (Ex. réutilisez-vous une sous-partie du travail, l'étendez-vous ou proposez-vous quelque chose de différent qui améliore certaines des limites)
+        L'état de l'art devrait présenter des articles de recherche publiés. Les logiciels ou la « solution industrielle » non publiée ne sont pas entièrement considérés comme un « état de l'art ».
+    La méthode Vous proposez de résoudre votre objectif.
+        La méthode elle-même peut être divisée en plusieurs parties pour être adaptée à votre cas de travail. Le choix que vous pouvez prendre pour votre méthodologie doit être justifié par des critères clairs.
+    Les résultats qui devraient présenter des résultats qualitatifs et quantitatifs avec leur analyse, proposer idéalement une validation, et discuter des résultats.
+        Les résultats qualitatifs sont généralement des illustrations d'images lorsque cela est approprié (dans des cas simples et plus complexes).
+        Vous devez également inclure des résultats quantitatifs (mesures d’erreurs, graphiques, etc.) permettant d’avoir des valeurs
+        Idéalement, vous devriez présenter un moyen de « valider » vos résultats
+            Cela peut être via le test de votre méthode sur des cas simples où la vraie solution est connue
+            Ou via une expérience spécifique qui est d'accord ou non avec une hypothèse, ou en utilisant des données/environnement spécifiques.
+            Notez que selon le temps, une validation complète peut être complexe à effectuer. Cependant, vous devriez au moins inclure une proposition de la façon dont cela pourrait être fait.
+        Une analyse et une discussion: ne présentez pas seulement des résultats bruts, mais vous devriez les commenter pour expliquer les points clés (éléments qui fonctionnent bien, mais aussi des valeurs qui ne sont pas attendues et des limites que vous découvrez)
+    Une conclusion
+        Résumant les éléments clés et la contribution
+        Ouverture à l'extension et travaux futurs possibles
+
+Commentaires supplémentaires :
+
+    Il n'y a pas de nombre spécifique de pages pour votre rapport. Dans une situation typique, il sera entre 20 et 40 pages.
+    Votre rapport doit être précis et cohérent de manière globale. Vérifiez que:
+        Toutes vos pages sont numérotées.
+        Toutes vos équations sont cohérentes (conservez une notation cohérente pour les mêmes variables dans tout le document). Toutes vos variables doivent être introduites dans le texte.
+        Tous vos chiffres sont référencés dans le texte, et devraient avoir une légende.
+        Tous les graphiques ont un étiquetage clair et peuvent être lus facilement.
+        Toutes les entrées dans la bibliographie doivent être mentionnées dans le texte. Chaque article de la bibliographie doit mentionner le nom de l'auteur, l'année de la publication, et le nom de la revue ou de la conférence où elle a été publiée.
+    Vos résultats doivent être précis et associés à des valeurs quantifiées
+        Évitez les phrases floues comme "les résultats sont bons", ou "on obtient des résultats presque parfaits". Vous avez besoin de valeurs/mesures précises pour l'analyse quantitative.
+

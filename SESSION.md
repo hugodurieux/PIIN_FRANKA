@@ -3,290 +3,515 @@
      Do not edit by hand. CLAUDE.md imports it at every startup. -->
 
 ## Last updated
-2026-07-16 (MILESTONE 2 ATTEMPTED, CRITICAL BUGS IDENTIFIED, FULL REVERT AT USER REQUEST): Continuation of same day as prior "STAGE 2/3 BOOTSTRAP" entry (Milestone 1 baseline work). This session attempted Milestone 2 (rerouting MoveIt2's planned trajectory through `pinn_controller_node` so the trained PINN model + Lyapunov-gain PD control actually drives the simulated robot) and discovered several real bugs the moment `ComputedTorquePDController` was exercised live for the first time ever. However, the human requested a complete revert to the prior stable state after encountering frustration with Claude executing commands autonomously across multiple ROS2/Isaac terminals instead of the human running them manually.
+2026-07-29 SESSION 2 — CONFIGURATION SWEEP BEGUN. **HEADLINE: THE ISAAC-TRAINED RESIDUAL DEGRADES TRACKING IN MUJOCO — DISABLING IT CUTS joint5's BIAS 22x AND HALVES THE FLANGE ERROR.** Phase A distance sweep complete, baseline moved x=0.65 -> 0.55. Post-lift drop check added and immediately caught a false success. Full matrix and prep in `tracking/STAGE4_TEST_PLAN.md`.
 
-**IMPLEMENTATION PHASE (Milestone 2 code, subsequently reverted):**
+**Goal for the day:** re-run the working Stage 4 pick, then start varying the cube's
+configuration (distance, height, weight) instead of claiming Stage 4 works from a
+single pose.
 
-1. **New node `ros2_ws/src/pinn_franka_controller/pinn_franka_controller/moveit_plan_bridge.py`** (since deleted via revert): Raw `moveit_msgs/action/MoveGroup` action client (chosen over `moveit_py` to avoid dependency rabbit-hole), sending `plan_only=True` goal to `panda_arm` motion group, then republishing the planned `trajectory_msgs/JointTrajectory` to `/pinn_controller/desired_trajectory` where `pinn_controller_node` subscribes. Registered as console_script entry point in `setup.py`.
+**READ `tracking/STAGE4_TEST_PLAN.md` FIRST NEXT SESSION.** It carries the full
+matrix, every result, and step-by-step prep for the phases not yet run (yaw, mass,
+table). This entry is the summary; that file is the working document.
 
-2. **ROS2 controller-manager interaction:** Required manually deactivating `panda_arm_controller` first via `/controller_manager/switch_controller` service, since that controller continuously publishes position commands to `isaac_joint_commands` and would race Stage 3's effort commands on the same topic. The MoveIt2 framework keeps `panda_arm_controller` active by default.
+### THE MAIN RESULT — phase F, residual ablation
 
-3. **Bug fix found in `pinn_controller_node.py`:** Exception handler passed `exc_info=True` to `self.get_logger().error(...)`, but rclpy's logger does not support that kwarg (unlike Python stdlib logging module). Replaced with `traceback.format_exc()` appended to message string — this fix was committed before the full session revert (commits 72a5826, aa866be, 4a0f32c).
+At x=0.55, margin 4.0, everything else identical, residual ON vs OFF:
 
-**POLICY CHANGE (autonomy experiment, subsequently reverted):**
+| Run | Residual | joint5 (final grasp) | joint3 | joint4 | Flange err |
+|-----|----------|----------------------|--------|--------|------------|
+| 36 | on | -0.0264 | -0.0155 | -0.0104 | 0.0141 |
+| 37 | on | -0.0434 | -0.0183 | -0.0095 | 0.0139 |
+| 38 | on | -0.0312 | -0.0162 | -0.0111 | 0.0149 |
+| 45 | **off** | **-0.0011** | -0.0003 | +0.0003 | **0.0076** |
+| 46 | **off** | **-0.0019** | -0.0007 | -0.0010 | **0.0073** |
 
-4. **User requested removal of Python-execution restriction** (CLAUDE.md § "NEVER run Python code" + the pre-tool hook `.claude/hooks/block-python-run.sh`), choosing "full removal" from a clarifying question. This was to allow Claude to drive multi-terminal ROS2/Isaac Sim workflows directly instead of relaying every command for the human to paste output back. Committed in separate commits 4a0f32c and aa866be, then pushed. Hook file deleted, registration removed from `.claude/settings.json`, CLAUDE.md section rewritten.
+**Mean joint5 bias -0.0337 -> -0.0015 (22x). Mean flange error 0.0143 -> 0.0075
+(halved).** Every joint improved by ~an order of magnitude, not just joint5. The gain
+confound pushes the OTHER way (lower Kp would make errors LARGER via `e_ss = tau/Kp`),
+so the result survives it.
 
-**LIVE DEBUGGING WITH AUTONOMOUS EXECUTION (subsequently reverted):**
+**Interpretation, and this matters:** the checkpoint is
+`isaac-multipayload-frictionnet-satfix`, trained on **Isaac Sim** data and deployed in
+**MuJoCo**. It learned the gap between RNEA and *Isaac's* dynamics and is adding that
+to a MuJoCo model which does not have them — i.e. evaluated out of distribution.
+Defensible claim: *the Isaac-trained residual degrades tracking under sim-to-sim
+transfer*. NOT defensible: that the grey-box approach fails. **This gives the
+sim-to-real fine-tuning novelty (N3-Duong, already implemented) a measured baseline to
+beat** — fine-tune on MuJoCo data and re-run this exact comparison.
 
-With the Python-execution policy relaxed, Claude drove the ROS2/Isaac Sim terminals directly (building ros2_ws, launching pinn_controller_node in background, triggering trajectories, checking topics/services). This exposed two real, previously-latent bugs the moment `ComputedTorquePDController` executed live for the first time:
+Use `ros2_ws/launch_pinn_controller_ablation.sh` (new). **Do NOT use
+`launch_pinn_controller_no_residual.sh` for the ablation** — it omits
+`gain_safety_margin_override`, so it changes Kp and the residual at once and makes the
+comparison meaningless.
 
-5. **`pinocchio_baseline/rnea_wrapper.py` RneaBaseline class incompatibility with live 7-DoF operation:** The class built the full URDF via `pin.buildModelFromUrdf()` (nq=9: 7 arm joints + 2 prismatic finger joints) with no joint reduction. First live RNEA call crashed with `ValueError: wrong argument size: expected 9, got 7`. The correct fix already existed in `generate_isaac_dataset.py`'s `_load_pin_model()` function (mirrored via `pin.buildReducedModel()` locking `panda_finger_joint1`/`2` at neutral), but was never ported to `RneaBaseline.__init__` used by the live controller. Applied the fix; this is a real bug independent of all other session context and will re-occur in the next Milestone 2 attempt unless reapplied.
+### Phase A — distance sweep (complete)
 
-6. **Validated RNEA + residual + Lyapunov PD executed end-to-end:** Once the 9-vs-7 DOF crash was fixed, Stage 3 briefly computed and published real, physically plausible non-zero torques (e.g., 47.5, 31.4, 24.3, -29.8 Nm across joints, all within per-joint torque limits). This is the first proof that `ComputedTorquePDController` works when actually exercised, though the physical behavior was problematic (see points 7-8 below).
+| x | Rate | Grasp error | Character |
+|---|------|-------------|-----------|
+| 0.45 | 2/3 | 0.0051 | folded arm; one drop |
+| **0.55** | **3/3** | 0.0139-0.0149 (1.0 mm spread) | **new baseline** |
+| 0.65 | 3/8 * | 0.0064-0.0186 (12 mm spread) | planner failures |
+| 0.70 | 3/3 | 0.0107-0.0135 | succeeds via a large detour EVERY run; margins 0.0-0.4 mm |
 
-7. **First live-motion test showed only tiny movement.** Investigation found Isaac Sim's Franka USD has a high-stiffness built-in position-hold servo (~22918 stiffness, ~4584 damping) that `IsaacArticulationController.apply_action()` does NOT disable when effort commands arrive — both the servo and Stage 3's torque commands act simultaneously in PhysX, with the servo dwarfing the ~30-47 Nm control torques. Isaac's own documentation: "For effort control, set zero stiffness and damping, or remove DOF's drive." Added a fix to `simulation/isaac_franka_moveit_bridge.py`: call `set_dof_gains(stiffnesses=0.0, dampings=0.0, dof_indices=<arm joints>)` right after `app_utils.play()` to zero the servo gains. This fix was NOT persisted in the final revert and will need reapplication next session.
+**Baseline moved from x=0.65 to x=0.55.** \* 0.65's 3/8 spans several code versions
+and is NOT comparable — re-run it 3x on current code before quoting any of this.
 
-8. **Second live test (after zeroing stiffness/damping) showed violent, shaking, unstable motion,** confirmed by the human watching Isaac Sim's viewport directly ("violent, shaking, did weird movement"). Two contributing issues identified:
-   - **Franka free-falls immediately on startup** — with drive stiffness zeroed (required per point 7) and `pinn_controller_node`'s "no trajectory yet" / "trajectory stale" fallback publishing literal zero torque, nothing holds the arm up against gravity. The arm collapsed into an extreme/possibly-tangled pose before every trajectory trigger. Started two attempted fixes but neither was fully live-validated before session end: (a) changed zeroed damping to small non-zero value (~2.0 Nm/(rad/s), matching FrictionNet's learned friction magnitude 1.2-1.6 from stage-1 training) as baseline dissipation; (b) added `_publish_safe_fallback()` method to compute RNEA gravity-compensation torque at last known joint position (q, qdot=0, qddot=0) instead of literal zero for all "no valid trajectory" guard branches. Rebuilt and relaunched with fix (a) only (ran out of time to validate fix (b) before user request to stop).
-   - The "violent" recovery motion was the controller fighting to both recover from the free-fall AND reach the target simultaneously, not purely a damping/gain-tuning issue. Fix (b) is likely the more important fix, since the free-fall-before-every-trigger was probably the dominant cause of instability.
+**x=0.70 characterises the envelope edge as a gradient, not a wall.** Before planning
+fails outright, the system first produces long null-space reconfiguration detours
+(47-56 points / 4.6-5.5 s, versus 12-20 points / ~1.2 s everywhere else) and converges
+by fractions of a millimetre (run44: 0.0400 against a 0.0400 tolerance). Observed
+directly as "a big slow movement in the opposing direction then fastly go to grab the
+cube". Reproducible across all 3 runs => geometry, not OMPL sampling.
 
-**USER REQUEST — REVERT ENTIRE SESSION:**
+**`panda_joint5`'s bias scales with reach** (~-0.044 at 0.45, -0.047 at 0.55, -0.050 at
+0.65, -0.066 at 0.70) and grows further off-axis (-0.051 at y=+0.25). Load-dependent,
+not a constant offset — consistent with `e_ss = tau/Kp`.
 
-9. **Human frustration with autonomous execution:** After witnessing the violent motion and after several terminal commands being driven by Claude instead of the human, the user stated it "does not seem to work, it was better when i did the commands myself in the terminal." Explicitly requested: (a) revert the Python-execution policy change back to the original restricted version, and (b) discard ALL Milestone 2 work — code and policy — back to the end of Milestone 1 (commit d81851b).
+**Phase B (lateral y) is PARTIAL:** y=+0.25 done at n=1 (success; tracking degraded,
+joint5 -0.051, planning healthy). y=-0.25 is CONFIGURED BUT NOT RUN.
 
-10. **Full revert executed:** Ran `git status` (clean, no uncommitted work), then `git revert --no-commit d81851b..HEAD` to revert commits 72a5826, aa866be, and 4a0f32c (controller logger fix, Python-policy removal, Milestone 2 code changes) in one operation with no conflicts. Verified via `git log` that the revert commit landed and the tree is now identical to d81851b. Re-tested the Python-execution hook (`python3 -c ...`, correctly blocked). Cleaned up leftover background processes (Isaac Sim, RViz, `pinn_controller_node` from testing).
+### Fixes made this session
 
-**CURRENT STATE at end of session:**
-- HEAD at revert commit 0ca77ee (on top of d81851b).
-- Repository is functionally identical to end of Milestone 1.
-- CLAUDE.md's original Python-execution restriction is LIVE and blocking again.
-- `simulation/isaac_franka_moveit_bridge.py` has no stiffness/damping zeroing fix.
-- `pinn_controller_node.py` has no gravity-compensation safe-fallback.
-- `pinocchio_baseline/rnea_wrapper.py` still has the unfixed 9-vs-7 DOF bug.
-- `moveit_plan_bridge.py` no longer exists.
-- Nothing is uncommitted.
+**1. Post-lift drop check — `stage4/test_grasp_pick.py`. It fired immediately.**
+run32 printed `ALL CHECKS PASSED` with `is_grasped=True` while the cube lay on the
+floor: `is_grasped` is a LATCH set once by `grasp()` and never re-derived, and the test
+gated only on `GraspResult.SUCCESS`. The live width can see a drop, because `grasp()`
+commands `grasp_width - GRASP_OVERTRAVEL_M` and the fingers only REACH that setpoint if
+nothing is between them (held ~0.040, dropped ~0.020). run40 was caught by it — without
+it, x=0.45 would have been recorded as 3/3 instead of 2/3.
 
-**WORKFLOW PREFERENCE RECORDED:** The human prefers to run ROS2/Isaac Sim terminal commands themselves in their own terminal windows and have Claude diagnose from pasted output/logs and written code, rather than Claude executing commands autonomously across multiple terminals. This workflow was tried once (this session) and explicitly reverted in favor of the prior manual back-and-forth approach. For future Milestone 2 attempts, human will run the commands; Claude will read output and guide implementation/fixes.
+**2. Grip overtravel 0.01 -> 0.02 — `stage4/gripper_controller.py`. Insufficient.**
+The old value's own comment computed a 3.2x static margin and said "NOT YET
+LIVE-VALIDATED"; run32 disproved it. Doubling gives 2 N/finger (6.4x static) and
+**still dropped** run40. **Static margin is the wrong model for a lift** — acceleration
+and off-centre contact dominate. Phase D blocker: a 1 kg cube cannot be held at all at
+the current `kp=200` (worked numbers in the plan file).
 
-**CRITICAL FINDINGS FOR NEXT MILESTONE 2 ATTEMPT (will need re-discovery/reapplication):**
-- Isaac Sim Franka USD needs `set_dof_gains(stiffnesses=0.0, dampings=0.0)` after `play()` for effort control to have authority (point 7 above).
-- Arm free-falls to ground on startup without gravity-compensation torque fallback in the controller (point 8a, fix (b)).
-- The raw `moveit_msgs/action/MoveGroup` action client + `plan_only=True` approach to get planned trajectories IS validated and worth reusing.
-- `pinocchio_baseline/rnea_wrapper.py` RneaBaseline.__init__ needs `pin.buildReducedModel()` reduction for 7-DOF live operation (point 5).
+**3. Damped safe-fallback — `pinn_controller_node.py`. WRITTEN, VALIDATED, THEN
+STASHED (`stash@{0}`).** The old fallback published gravity compensation ALONE,
+recomputed at the CURRENT measured q every tick — so it did not hold a pose, it made
+the arm neutrally buoyant and followed it wherever it drifted. Added Kd damping
+(dissipative, cannot drive the arm), a Kp hold about a pose latched on entry against a
+CLAMPED error, and a teleport detector that re-latches on `ResetWorld` (a >0.05 rad
+single-tick jump is impossible at 2.61 rad/s). Both paths fired correctly on the first
+live run. **Stashed deliberately** so Stage 3 stayed byte-identical to the run35
+baseline through the sweep — reapply and re-validate, but never mid-series.
 
-2026-07-16 (STAGE 2/3 BOOTSTRAP — ROS2 JAZZY + MOVEIT2 + ISAAC SIM WIRING VALIDATED): Refocused from Stage 1 (PINN/paper experiments) to "Path B" — building the Stage 2 (MoveIt2 motion planning) + Stage 3 (computed-torque + PD controller) pipeline for the first time, targeting simulated Franka Panda in Isaac Sim, as a demoable end-to-end pipeline. This also unblocks Stage 4 grasping (`stage4/grasp_executor.py`'s `_move_arm()` stub). Milestone 1 (system wiring) is now COMPLETE; Milestone 2 (controller integration) remains.
+### Two live defects found, NOT fixed
 
-**PLANNING & RESEARCH PHASE:**
+- **Ctrl-C drops the arm.** `main()` catches `KeyboardInterrupt`, logs, destroys the
+  node — no handoff. Effort mode is safe only while the node publishes; the moment it
+  stops, gravity compensation vanishes and the arm collapses. On hardware this is what
+  brakes are for. Fix is a handoff to position mode, but that PID is untuned
+  (`mujoco_pid.yaml` self-documents a "small, fast, constant buzz"), so answer this
+  first: **where does the arm go when position mode engages from a pose that is not
+  home?** One experiment unblocks both this and the reset slew.
+- **`ResetWorld` produced one uncommanded fast slew.** Root cause not established.
+  Measured: the teleport lands ~7 s before effort mode is restored, because
+  `force_effort_mode.sh` deliberately routes through position mode via two separate
+  `ros2 service call` invocations. Seven seconds under an untuned PID is real exposure.
 
-1. **ROS2 Infrastructure Discovery:** Found no ROS2 installed on this machine (Ubuntu 24.04; matching distro is ROS2 Jazzy, not Humble). Discovered an existing ROS2 package scaffold at `ros2_ws/src/pinn_franka_controller/` from an earlier, unlogged session — well-structured but had multiple issues: (a) stale "ROS2 Humble" docstring (should be Jazzy for this OS), (b) unwired `TODO(stage3)` placeholder in trajectory interpolator, (c) assumed real-hardware-style topic contract (`std_msgs/Float64MultiArray` on `/franka/effort_joint_trajectory_controller/commands`) that doesn't match Isaac Sim's actual ROS2 bridge conventions, (d) wrong comment claiming `delta` payload input was normalized [0,1] instead of literal kg.
+### Operating lesson re-learned the hard way
 
-2. **Research via direct source inspection:** Confirmed `franka_ros2` v3.0.0+ supports ROS2 Jazzy. Found MoveIt2 has Jazzy binaries via `sudo apt install ros-jazzy-moveit`. Discovered Isaac Sim's own bundled reference script at `~/isaac-sim/standalone_examples/api/isaacsim.ros2.bridge/moveit.py` (read directly, which revealed Isaac Sim's ROS2 bridge is OmniGraph-based). Confirmed `IsaacArticulationController` accepts effort commands via `sensor_msgs/JointState` (effort field) on topic `isaac_joint_commands`, with joint state published on `isaac_joint_states`. Located NVIDIA's ready-made Franka MoveIt2 config matched to these topic names at `github.com/isaac-sim/IsaacSim-ros_workspaces` (`jazzy_ws` → `isaac_moveit` package, requires `topic_based_ros2_control` submodule with `TopicBasedSystem` plugin).
+**A fresh sim does not have effort mode.** The first run36 attempt was voided:
+`switch_to_effort.sh` was not run after `rebuild_and_relaunch_sim.sh`, every torque was
+discarded, and the arm sat at home with joint7 at **-0.78529** — the exact
+discarded-torque fingerprint from session 1. `force_effort_mode.sh` then returned
+`ok=False, "panda_arm_controller is already active"`, proving it. Triage table:
 
-**CODE WRITTEN THIS SESSION (NOT YET COMMITTED):**
+| Symptom | Meaning |
+|---------|---------|
+| `planning failed, error_code=99999` after ~5 s | IK envelope; no trajectory ever existed |
+| `still converging` full 10 s, error FLAT, arm at home | torques discarded — check the plugin log |
+| `still converging`, error shrinking but too slowly | genuine tracking limit; the only one implicating Stage 1/3 |
 
-3. **Controller fallback gains:** Added `MANUAL_ERROR_BOUND`, `MANUAL_PD_KP`, `MANUAL_PD_KD` constants to `controller/lyapunov_gains.py` — a conservative fixed-gain fallback for when `use_lyapunov_gains=False`, so that existing node parameter (which existed but was a dead no-op) actually does something. Exported these constants via `controller/__init__.py`.
+### Repo state at session end
 
-4. **ROS2 node rewiring:** Modified `ros2_ws/src/pinn_franka_controller/pinn_franka_controller/pinn_controller_node.py` to wire the real `ComputedTorquePDController` (previously, `_try_load_controller()` was a placeholder that always left `self._controller = None`, and `_compute_torques()` always returned zero torques). Added a guard: if checkpoint_path is set but urdf_path is empty, log an error and stay in zero-torque safe mode rather than crash. Switched torque publisher from `std_msgs/Float64MultiArray` on `/franka/effort_joint_trajectory_controller/commands` to `sensor_msgs/JointState` (effort field populated, positions/velocities left empty) on `isaac_joint_commands` — matches Isaac's bridge. Switched joint-state subscriber's default topic from `/franka/joint_states` to `isaac_joint_states`. Fixed "ROS2 Humble" → "ROS2 Jazzy" docstring. Added `_JOINT_NAMES = [f"panda_joint{i}" for i in range(1, 8)]` (confirmed against `pinocchio_baseline/panda.urdf`).
+Branch `fix/effort-mode-actuator-lock`, **nothing committed this session.**
 
-5. **ROS2 workspace config files:** Updated `ros2_ws/src/pinn_franka_controller/{package.xml,setup.py,launch/pinn_controller.launch.py,config/controller_params.yaml}` — fixed "ROS2 Humble" → "ROS2 Jazzy" everywhere; fixed wrong delta-units comment (was: normalized [0,1], correct: literal kg per `network/constants.PAYLOADS = (0.0, 1.0, 3.0)`); updated launch file's docstring to describe Isaac Sim + isaac_moveit workflow instead of real-hardware franka_ros2 workflow; removed now-unused `std_msgs` exec_depend from package.xml.
+**The five cube sites are left at x=0.55, y=-0.25, z=0.02** — staged for a phase B run
+that was NOT executed. Do not assume y=0 next session.
 
-6. **NEW FILE `simulation/isaac_franka_moveit_bridge.py`:** Created new top-level `simulation/` directory and standalone script (run via Isaac Sim's `./python.sh`, same execution pattern as `generate_isaac_dataset.py`), closely adapted from NVIDIA's own `moveit.py` reference at `~/isaac-sim/standalone_examples/api/isaacsim.ros2.bridge/moveit.py`. Loads Franka Panda using the same `FRANKA_USD_REL = "/Isaac/Robots/FrankaRobotics/FrankaPanda/franka.usd"` asset path as `generate_isaac_dataset.py`, builds an OmniGraph ROS2 bridge action graph publishing joint state on `isaac_joint_states` and subscribing to `isaac_joint_commands` with position/velocity/effort passthrough to `IsaacArticulationController`. This is the "simulated hardware" half of the pipeline.
+Modified (uncommitted): `panda_arm_mujoco.xml`, `stage4/demo_targets.py`,
+`stage4/test_grasp_pick.py`, `stage4/gripper_controller.py`. New (untracked):
+`ros2_ws/launch_pinn_controller_ablation.sh`, `tracking/STAGE4_TEST_PLAN.md`.
+`scene_dump.txt` is debug cruft, safe to delete. `stash@{0}` holds the damped-fallback
+fix.
 
-7. **Syntax verification:** All files verified with `python -m py_compile` (syntax-check only, no execution, per CLAUDE.md policy).
+### What to do next session (ordered)
 
-**LIVE DEBUGGING SESSION (Bootstrap ROS2 + MoveIt2 + Isaac):**
+1. **Finish phase B** — y=-0.25 is already configured, just run it. Then top up to n=3.
+2. **Phase D (mass/weight)** and **phase E (height/table)** — the user's explicit ask.
+   Both need prep, both fully specified in `tracking/STAGE4_TEST_PLAN.md`:
+   - **Mass:** change the cube's `density` (1000 -> 15625 for 1 kg, 46875 for 3 kg),
+     match `GraspConfig.object_mass`, **raise the finger actuator `kp`** (490 needed for
+     1 kg, 1470 for 3 kg; `forcerange="-20 20"` caps the ceiling near 4 kg) and re-tune
+     `kv` with it, and **actually wire `update_payload(delta)`**, which has never been
+     called. Then run each mass with correct `delta` AND `delta=0`.
+   - **Height/table:** **fix the attach ordering FIRST** (attach after the gripper
+     closes, `finally` detach, restore the floor box) — otherwise the phantom attached
+     cube descends into the table and no table height works.
+3. **Phase C (yaw)** — needs the grasp yaw derived from the object pose instead of
+   hardcoded.
+4. **Re-run x=0.65 3x on current code** so phase A's table stops mixing code versions.
+5. **Reapply `stash@{0}`** and re-validate the damped fallback, outside a measurement
+   series.
 
-The human ran all ROS2/Isaac commands on this machine while I read output and diagnosed issues. Started from zero ROS2 infrastructure; the following issues and fixes are load-bearing — each is likely to recur in future sessions on similar setups:
+---
 
-a. **`ros-jazzy-*` packages not found:** ROS2 apt repo was not configured. Root cause: default Ubuntu 24.04 setup includes no Debian sources for ROS2. Fixed via the modern `ros2-apt-source` `.deb` method (not the deprecated `apt-key` approach): downloaded `ros2-apt-source_<version>_noble_all.deb` from `github.com/ros-infrastructure/ros-apt-source/releases`, installed it, then `apt update && apt install ros-jazzy-desktop ros-jazzy-moveit ros-jazzy-rmw-cyclonedds-cpp`.
+[Session continuation entry: 2026-07-29 session 1 — STAGE 4 SOLVED AND WORKING END-TO-END — "JOINT 4/6/7 FREEZE" ROOT CAUSE FOUND: `ResetWorld` SILENTLY REVERTS mujoco_ros2_control TO ITS INTERNAL POSITION PID. FIVE FURTHER BUGS FIXED BEHIND IT. FULL pick() SUCCEEDS 2/2 AT x=0.65: CUBE GRASPED AND LIFTED.)
 
-b. **`colcon` not found:** Build-system missing. Fixed with `python3-colcon-common-extensions`.
+**Goal for the day:** Re-test the untested `initial_positions.yaml` fix with correct rebuild/restart methodology, then get a working Stage 4 pick.
 
-c. **`PackageNotFoundError: moveit_resources_panda_moveit_config`:** `ros2 launch isaac_moveit isaac_moveit.launch.py` failed. Root cause: `ros-jazzy-moveit` metapackage does not pull in the MoveIt2 demo-robot config packages. Fixed with `sudo apt install ros-jazzy-moveit-resources`.
+**High-level outcome: THE WEEK-LONG "panda_joint4/6/7 FREEZE" IS SOLVED, AND `pick()` NOW COMPLETES END-TO-END — cube grasped and lifted, twice in a row.** The freeze was never physics, never the MJCF, never the trained model, and NOT the `mujoco_ros2_control` command pathway either (the 2026-07-28 conclusion — see the correction banner below). It is this:
 
-d. **RViz opened but showed nothing (blank scene):** `robot_state_publisher` and `move_group` both crashed with `pluginlib::LibraryLoadException: ... libsdformat14.so.14: cannot open shared object file`. Diagnosed directly via `ls /opt/ros/jazzy/opt/sdformat_vendor/lib/libsdformat14.so.14` — file EXISTS on disk (from already-installed `ros-jazzy-sdformat-vendor` package). Root cause: stale terminal session whose `LD_LIBRARY_PATH` predated the package's installation. Fixed by opening a fresh terminal and re-sourcing `/opt/ros/jazzy/setup.bash` + the workspace overlay (`install/setup.bash` from `colcon build` output). Environment hooks are correctly configured; issue was purely the old shell state.
+> **`mujoco_ros2_control`'s `ResetWorld` service silently reverts every joint to its INTERNAL position PID** (`config/mujoco_pid.yaml`). It does not route the change through `perform_command_mode_switch()`, so **nothing reports it**: the plugin logs no mode line, `controller_manager` still lists `panda_effort_controller` as ACTIVE, `ros2 control list_controllers` looks healthy, commands still publish and `ros2 topic echo` shows them, and the arm holds itself up convincingly. Every torque published to `/panda_effort_controller/commands` is discarded. The arm settles at `(home_keyframe - tau_gravity / p_position_pid)`, pinned to ~1e-5 rad.
 
-e. **`START_STATE_IN_COLLISION` errors, Execute did nothing:** `ros2_control_node` was permanently stuck logging `Waiting for data on 'robot_description' topic to finish initialization`, so no controllers ever activated, so MoveIt2 had no live `joint_states` and fell back to the URDF's self-colliding zero-configuration as "current state". First suspected QoS mismatch on `/robot_description` — ruled out via `ros2 topic info /robot_description --verbose` (both sides showed matching RELIABLE/TRANSIENT_LOCAL QoS, one publisher and one subscriber). True root cause found by reading `panda.ros2_control.xacro` (from apt-installed `moveit_resources_panda_moveit_config`): for `ros2_control_hardware_type=isaac`, the launch file requires the `topic_based_ros2_control/TopicBasedSystem` plugin, subscribing to `/isaac_joint_states` and publishing `/isaac_joint_commands`. That package turned out to be a **git submodule in `IsaacSim-ros_workspaces` that was never initialized** — `git submodule status` showed a `-` prefix on `jazzy_ws/src/moveit/topic_based_ros2_control` (indicating not checked out), and the directory was empty on disk. `colcon build` silently skipped it (no package.xml found), so the plugin was never built, and `ros2_control_node` never finished initialization. Fixed with `git submodule update --init --recursive`, then `colcon build` (which then hit two more missing *test-only* build dependencies for that submodule: `ros2_control_test_assets`, then `ros_testing` — rather than installing each one by one, worked around both at once with `colcon build --cmake-args -DBUILD_TESTING=OFF`, since we only need the library, not its tests).
+**Why it survived a week:**
+1. **All seven joints freeze**, but only joints whose target is far from home LOOK frozen. The symptom therefore presented as a "joint 4/6/7" problem and sent three sessions hunting for what those three joints have in common. They have nothing in common — 4/6/7 simply had far targets. Joints 1/2/3/5 were equally frozen.
+2. **Every status layer reports healthy.** The only signal that ever contradicted it was arithmetic: `p * (home - measured)` reproducing the measured effort.
+3. **`reset_world_home` is exactly what you run between tests to get a clean start** — so the more carefully a test was isolated, the more reliably the bug was reintroduced.
 
-f. **Empty controller list after plugin fix:** `ros2_control_node` came up (service responded immediately) but `ros2 service call /controller_manager/list_controllers ...` returned an EMPTY controller list — the launch file's `joint_state_broadcaster` and `panda_arm_controller` spawner nodes are one-shot processes that had tried-and-failed earlier (before the plugin fix landed) and don't retry. Manually re-spawning with `ros2 run controller_manager spawner joint_state_broadcaster --controller-manager /controller_manager` failed with `Failed loading controller ... Loader for controller ... not found` — `ros2_control_node`'s "Available classes" list was missing `joint_state_broadcaster/JointStateBroadcaster` and `joint_trajectory_controller/JointTrajectoryController`. Root cause: those plugins come from `ros-jazzy-ros2-controllers` (separate metapackage; `ros-jazzy-desktop` does NOT pull it in), which wasn't installed yet. Fixed with `sudo apt install ros-jazzy-ros2-controllers`. However, the already-running `ros2_control_node` process didn't see the newly-installed plugins (pluginlib caches available-plugins list at process startup). Needed a FULL restart of the entire `ros2 launch isaac_moveit isaac_moveit.launch.py` process (not just re-sourcing) to pick up the new plugins.
+**Decisive evidence (all live):**
+- Runs 13/14/15 (2026-07-24) hold **bit-identical** positions across three separate runs, each equal to `home - tau_gravity/p`, on three joints with two different gains, agreeing to **1e-5 rad**:
+  `joint4: 22.351/500 -> -1.61549 (logged -1.61540)`, `joint6: 2.085/150 -> +1.55689 (logged +1.55691)`, `joint7: 0.000/150 -> -0.78530 (logged -0.78529)`.
+- Raw 40 Nm to joint4 after a reset: **commanded 40 Nm, measured effort +23.5 Nm** = `500 * (home - current)`, i.e. the position PID, not the command. Joints 1/3 commanded 0 Nm read **±87 Nm saturated** and oscillated — the same PID unstable.
+- Running `force_effort_mode.sh` with the controller stopped made the arm **go limp instantly**. Same sim, same second, opposite behaviour. That is the proof.
 
-g. **Verified end-to-end success:** After the full restart, `ros2 service call /controller_manager/list_controllers ...` showed both `joint_state_broadcaster` and `panda_arm_controller` as `active` with correct claimed interfaces. **Plan & Execute in RViz successfully moved the simulated Franka Panda in Isaac Sim** via position commands — Milestone 1 achieved.
+**Why `switch_to_effort.sh` cannot fix it:** `panda_effort_controller` is still ACTIVE from `controller_manager`'s point of view, so a switch activating it is rejected as a no-op (`ok=False, "already active"`) and `perform_command_mode_switch()` is never called. Only a real deactivate -> activate cycle works.
 
-**RESULT — MILESTONE 1 VALIDATED:**
-ROS2 Jazzy + MoveIt2 + Isaac Sim wiring is fully operational end-to-end. The simulated hardware (Isaac Sim running `isaac_franka_moveit_bridge.py`) publishes joint state and subscribes to effort commands on the correct topics. MoveIt2's standard motion planner generates trajectories and executes them via position commands (not yet through our own Stage 3 controller). **This baseline wiring is ready for Milestone 2.**
+### Fixes made (all live-validated unless stated)
 
-**NOT YET DONE — MILESTONE 2 (Controller Integration):**
-Reroute `panda_arm_controller`'s planned/executed trajectory through `pinn_controller_node` (Stage 3) so the trained PINN + Lyapunov-gain computed-torque + PD controller is what actually drives the robot (as effort commands on `isaac_joint_commands`), instead of MoveIt2's default `joint_trajectory_controller` position-command execution path. Needs figuring out the cleanest interception point. Likely approaches: (1) Swap `panda_arm_controller`'s type/config to not directly drive `isaac_joint_commands`, or (2) Add a bridge node that subscribes to whatever `panda_arm_controller`'s action interface exposes and republishes onto `/pinn_controller/desired_trajectory`, which `pinn_controller_node` already listens on. Not started.
+**1. The freeze — `ros2_ws/force_effort_mode.sh` (NEW).** Forces effort -> position -> effort so the plugin re-runs `perform_command_mode_switch()`. Verifies against the PLUGIN'S OWN LOG (`controller_manager` is the layer that lies). **`ros2_ws/reset_world_home.sh` now calls it automatically** whenever `panda_effort_controller` is active — the trap is defused where it cannot be forgotten. (It fired a third time mid-session and silently invalidated run26 before this was added.)
 
-**EXTERNAL SETUP (not part of git repo, already installed/built on this machine):**
-- `~/IsaacSim-ros_workspaces/jazzy_ws` cloned, submodules initialized, built with colcon (without tests)
-- ROS2 Jazzy packages installed: `ros-jazzy-desktop`, `ros-jazzy-moveit`, `ros-jazzy-moveit-resources`, `ros-jazzy-ros2-controllers`, `ros-jazzy-rmw-cyclonedds-cpp`
-- Python tools: `python3-colcon-common-extensions`
+**2. Steady-state tracking — `gain_safety_margin_override:=4.0`.** Flange error 0.054 m -> 0.005-0.027 m; worst joint 0.10 rad -> ~0.01-0.05. Predicted from `e_ss = tau_residual/Kp` and matched to three decimals. Passed via `ros2_ws/launch_pinn_controller_boosted.sh 4.0`. NOT yet made the default in `controller/lyapunov_gains.py`.
 
-**WORKING TREE STATE at end of session:** Nothing from this session has been committed yet. Uncommitted: `controller/__init__.py`, `controller/lyapunov_gains.py`, `ros2_ws/src/pinn_franka_controller/config/controller_params.yaml`, `ros2_ws/src/pinn_franka_controller/launch/pinn_controller.launch.py`, `ros2_ws/src/pinn_franka_controller/package.xml`, `ros2_ws/src/pinn_franka_controller/pinn_franka_controller/pinn_controller_node.py`, `ros2_ws/src/pinn_franka_controller/setup.py` (all modified), plus new untracked directory `simulation/` (containing `isaac_franka_moveit_bridge.py`). The ROS2 system-level changes (`apt install`, `~/IsaacSim-ros_workspaces` clone/build) are not part of this git repo but are now installed/built on this machine for use in next session.
+**3. Latent crash in the gain-override path — `pinn_controller_node.py`.** `get_logger().warn()` was called with logging-style lazy `%s` args; rclpy's `RcutilsLogger` takes ONE pre-formatted string and raises `TypeError`. This killed the node at startup, so `launch_pinn_controller_boosted.sh` had been **dead on arrival since it was written on 2026-07-24** — the "do stronger gains move joints 4/6/7?" experiment was never actually run.
 
-2026-07-16 (URDF FIX VALIDATED, SATURATION DATA BUG FOUND + FIXED, FIRST REAL TRAINING RUNS, LYAPUNOV GAINS RECOMPUTED): Continued directly from the prior "CRITICAL URDF BUG DISCOVERED" entry below. The `panda.urdf` inertial fix (real `franka_description` masses) and the 5 `generate_isaac_dataset.py` fixes from that entry were already present in the working tree at session start (done earlier, uncommitted) — this session verified, extended, and committed them, then went two levels deeper into data-quality issues before finally recomputing the Stage 3 controller gains.
+**4. Leaked planning-scene attachment — `stage4/test_grasp_pick.py`.** `pick()` attaches `grasp_object` before the approach and, on an `ARM_TIMEOUT` there, aborts without reaching `_detach_object()`. The planning scene lives in `move_group`, so the attachment survives every restart of the test script. Confirmed via `/get_planning_scene`: a phantom box hanging **0.307 m** off `panda_hand` at a tumbled orientation, riding along with every plan and rejecting goals `run20` had planned fine minutes earlier. Now cleared defensively at startup (`detach_object` + `remove_collision_object`).
 
-1. **URDF fix verified and committed.** Re-ran `--payload 0.0`: `tau_res` per-joint RMSE dropped from the massless baseline (J1=3.44, **J2=30.18**, J3=11.32, **J4=14.15**, J5=0.55, J6=0.63, J7=0.0005 Nm) to a plausible, roughly-uniform range (J1=1.99, J2=3.58, J3=2.23, J4=2.18, J5=0.87, J6=1.04, J7=0.02 Nm) — confirms the mass fix resolved the gravity-compensation gap. Generated payloads 1.0 and 3.0 too (similar magnitudes, no blow-ups). Committed `generate_isaac_dataset.py` + `pinocchio_baseline/panda.urdf` together as commit `c179740`, pushed to `origin/main`.
-2. **Data-location gotcha found:** `./python.sh generate_isaac_dataset.py --payload X` writes to `<cwd>/data/`, not the project root — since the command is run as `cd ~/isaac-sim && ./python.sh /home/.../generate_isaac_dataset.py ...`, output lands in `~/isaac-sim/data/`, not `~/projects/pinn_franka/data/`. Must `mv` after every generation run. Worth fixing with an absolute output path in a future session, not done this session.
-3. **First real GPU training run** (`training.train --data data/isaac_0.0kg.h5 data/isaac_1.0kg.h5 data/isaac_3.0kg.h5 --epochs 200 --use_friction_net`, 148,760 samples): best val loss 1.4767 (epoch 177, not the final epoch — val loss was noisy/non-monotonic, `dissip_viol` oscillated up to 0.0657 late in training rather than settling). Per-joint val RMSE [1.57, 1.44, 1.14, 1.77, 0.97, 0.49, 0.52] Nm. Logged as `isaac-multipayload-frictionnet-first-real` in `tracking/experiments_log.csv`.
-4. **Wrote `controller/compute_error_bound.py`** to get a real per-joint error bound for the Stage 3 Lyapunov gains (`DEFAULT_ERROR_BOUND` was still the `[5,5,5,5,2,2,2]` Nm placeholder). Reconstructs the exact train/val split, evaluates GreyBoxNet+FrictionNet on validation data, reports RMSE/percentiles/worst-offenders.
-5. **CRITICAL FINDING #2 — actuator-saturation data contamination:** first run of the new script found per-joint **max** validation error of 91–110 Nm — exceeding the 87 Nm torque limit itself. Root cause, confirmed via the worst-offender dump: a small fraction of samples (~0.1%) had `tau_real` pegged almost exactly at the joint's torque limit (e.g. `tau_real=87.00` repeatedly) — Isaac Sim's simulated actuator saturating at `maxEffort` under aggressive Fourier-reference tracking. Since `tau_theo` is computed from the *reference* acceleration (assumes the trajectory was actually achieved), saturated samples produce huge but physically meaningless residual targets. The existing over-torque filter (`|tau| > limit`, strict) let these through because clamped samples sit exactly *at* the limit, not over it.
-6. **Fix: `SATURATION_MARGIN = 0.97`** added to `generate_isaac_dataset.py` — drops samples within 3% of the torque limit, not just samples strictly over it. Regenerated all 3 payload datasets (148,304 samples total, down slightly as saturated timesteps are now excluded) and retrained.
-7. **Second training run, much better:** best val loss **0.3995** (~4x better than run 1), `dissip_viol` converges smoothly to 0.0006 instead of oscillating — the saturated samples were destabilizing training broadly, not just inflating a diagnostic tail. Per-joint val RMSE [0.80, 0.88, 0.90, 0.54, 0.37, 0.36, 0.30] Nm. Logged as `isaac-multipayload-frictionnet-satfix` — **now the reference baseline**, superseding run 1.
-8. **Re-ran `compute_error_bound.py` on the new checkpoint:** J5/J6/J7 outliers are now genuinely clean (max 4.0/2.75/1.69 Nm). J1–J4 still show a smaller, *different* outlier population (p99.9 ≈ 3–6 Nm, true max 26–65 Nm on ~0.09% of samples) — but this time `tau_real` is nowhere near the torque limit, so it's not saturation. Likely a transient PD-servo correction spike at the start of each Fourier trajectory segment (unconfirmed, not investigated further this session — diminishing returns vs. effort).
-9. **Lyapunov gain decision:** used the **p99.9 percentile**, not the literal max, as `tau_error_bound` — the true max is an extremely rare transient (<0.1%), the joint's own torque limit already backstops it as hardware, and demanding gains defend against a one-in-14,830 spike would make the controller uselessly stiff for normal operation. This is a deliberate, explicitly-documented weakening of Liu et al. (2024) Proposition 1's "holds for every sample" guarantee to "holds for 99.9% of observed conditions, backstopped by hardware limits for the remainder." `DEFAULT_ERROR_BOUND` in `controller/lyapunov_gains.py` updated to `[5.20, 5.66, 3.06, 3.80, 2.10, 2.38, 1.57]` Nm — no longer a placeholder.
-10. **Documentation pass:** PAPER_DRAFT.md (§3.2 URDF-fix note, §3.6 Lyapunov methodology, new §4.3 before/after saturation-fix results), `tracking/PROJECT_STATE.md` (Stage 1 + Stage 3 sections, Objective 1, open items), `experiments/EXPERIMENT_PLAN.md` (Block G fine-grained interpolation payloads 0.5/1.5/2.5 kg, eval-only) all updated this session.
+**5. Attach-before-descent vs the floor box — floor registration REMOVED.** `_attach_object()` runs at the pre-approach pose while the cube is still on the floor, so MoveIt stores it at `0.02 - 0.3299 = -0.3099 m` below the flange. On the descent the *phantom* cube follows the gripper down to `z = -0.08`, through any floor box. There is no floor height both deep enough to clear it and shallow enough to be useful. The floor box was itself added 2026-07-24 for the disproven freeze theory; MuJoCo's real floor plane still stops the arm physically. **Proper fix, deferred:** do not attach before the descent — attach only after the gripper closes (what MoveIt's own pick pipeline does, and what is physically true), then the floor box can return.
 
-**WORKING TREE STATE at end of session:** all of the above still needs a final commit — `generate_isaac_dataset.py` (SATURATION_MARGIN), `controller/compute_error_bound.py` (new file), `controller/lyapunov_gains.py`, `PAPER_DRAFT.md`, `tracking/PROJECT_STATE.md`, `SESSION.md`, `experiments/EXPERIMENT_PLAN.md`, `tracking/experiments_log.csv`. See "What to do next session" for what's left.
+**6. IK reliability at longer reach — `config/kinematics.yaml` (NEW), wired via `MoveItConfigsBuilder.robot_description_kinematics()`.** Stock KDL gets `kinematics_solver_timeout: 0.05`; near-singular top-down goals at x=0.65 then failed intermittently with `Unable to sample any valid states for goal tree` (run25 planned approach 1/2 and failed 2/2; run27 failed 1/2 — same poses). Raised to 0.25 s + explicit attempts. `num_planning_attempts` 1 -> 10 in `arm_motion_client.py` as well (not sufficient alone — every attempt re-samples through the same under-budgeted solver).
 
-2026-07-15 19:20 UTC (Isaac Sim 6.0.1 DATA GENERATION — PAYLOAD 0.0 WORKING, BUT CRITICAL URDF BUG DISCOVERED): Continued directly from the prior "PARTIAL, UNVERIFIED" entry below — all work this session done on the GPU machine, iterating on `generate_isaac_dataset.py` run-by-run against real tracebacks pasted back from `./python.sh`. Fixed five sequential bugs to get from "doesn't run" to "runs end-to-end and saves data":
-1. **Pinocchio import (FIX #2, now VERIFIED):** confirmed via isolated check (`./python.sh -c "import cmeel_pth; import pinocchio; print(pinocchio.__file__)"` → OK) that `setup_python_env.sh` already puts `exts/isaacsim.robot_motion.pink/pip_prebundle` on `PYTHONPATH`, and `cmeel_pth.py` (the module `cmeel.pth` wants to trigger) sits directly inside it — so a plain `import cmeel_pth` works without needing `site.addsitedir()`. Rewrote the fix to try `import cmeel_pth` directly first, falling back to `site.addsitedir()` over both the `pink` and `cumotion` prebundle dirs only if that fails. Also replaced the old silent `sys.exit(1)` on failure with a full traceback + `sys.path` dump.
-2. **Franka USD asset path (new discovery this session):** Isaac Sim 6.0 moved the asset from `/Isaac/Robots/Franka/franka.usd` to `/Isaac/Robots/FrankaRobotics/FrankaPanda/franka.usd`. Found via direct S3 bucket listing (`curl` against `omniverse-content-production.s3-us-west-2.amazonaws.com`) — confirmed 200 vs 404 on candidate paths before editing. `FRANKA_USD_REL` constant updated.
-3. **TORQUE_LIMITS dtype mismatch:** `network.constants.TORQUE_LIMITS` is a `torch.tensor`; the over-torque filter (`np.abs(seg_tau) <= TORQUE_LIMITS`) is pure numpy and crashed comparing ndarray to Tensor. Fixed with `TORQUE_LIMITS = TORQUE_LIMITS.numpy()` right after import (this script has no other torch usage).
-4. **`world.close()` doesn't exist** on the new `isaacsim.core.api.World` (verified by reading its source — only `.stop()`/`.clear()` exist, no `.close()`). Replaced with `world.stop()`; final teardown is already handled by `_sim_app.close()` at end of script.
-5. **RNEA `nq` mismatch (9 vs 7):** `pinocchio_baseline/panda.urdf` has 7 revolute arm joints + 2 prismatic finger joints (nq=9), but Isaac Sim commands the fingers to stay fixed at 0 the whole run and only 7-column arm data was collected. `_load_pin_model()` now calls `pin.buildReducedModel()` to lock both finger joints at 0, reducing the Pinocchio model to nq=7 to match the collected data.
+**7. Flange-to-fingertip offset — `stage4/demo_targets.py`, 0.2099 -> 0.1029 m.** The chain opened with "panda_link8 -> panda_hand = 0.107", but that 0.107 is `panda_link7 -> panda_link8`. In `pinocchio_baseline/panda.urdf` the hand is mounted on link8 with `xyz="0 0 0"` — **zero translation**, pure -45 deg rotation. Since the IK target IS link8, the term was counted twice and held the fingertips ~10 cm too high. Measured live: run28 closed to **0.0336 m** through empty air.
 
-**Result: `--payload 0.0` now runs end-to-end** — all 10 Sobol/Fourier trajectory segments simulated, 49,854 valid samples (torque-limit violations filtered, 2-54 per segment), RNEA computed, saved to `data/isaac_0.0kg.h5`.
+**8. Gripper 45 deg mount — `_TOP_DOWN_FINGERS_ALIGNED` in `demo_targets.py`.** The fingers slide along `panda_hand`'s y-axis, but the grasp target is specified for `panda_link8`, and the hand carries a -45 deg twist (`rpy="0 0 -0.785398"`). Plain `_TOP_DOWN` therefore presents the fingers **diagonally across** the cube. Measured live: run29 stopped at **0.0526 m** = the cube's diagonal (`0.04*sqrt(2) = 0.0566`) less corner squeeze. Right-multiplying by `Rz(+45 deg)` makes the HAND axis-aligned while leaving the approach axis at `(0,0,-1)`.
 
-**Two new diagnostics added** (in response to suspicious residual magnitudes) and their results:
-- Trajectory tracking error (actual sim state vs. commanded Fourier reference): small across all joints — max q_rmse=0.0294 rad (J4), max qdot_rmse=0.2132 rad/s (J4). Rules out gross tracking divergence as an explanation for the residual.
-- Live joint drive gains: stiffness≈22918, damping≈4584, **identical across all 7 arm joints** — this is Isaac Sim's generic default servo gain fill for the imported USD, not a per-joint-tuned model of Franka's real internal impedance controller.
+**Note that bugs 7 and 8 both come from ONE line of the robot description** — `panda_hand_joint`, `xyz="0 0 0" rpy="0 0 -0.785398"`. Zero translation caused the height error; the rotation caused the diagonal grasp.
 
-**CRITICAL FINDING — likely invalidates all prior Stage-1 "residual" experiments:** `tau_res` per-joint RMSE from this run is wildly uneven and physically implausible for genuine friction: J1=3.44, **J2=30.18**, J3=11.32, **J4=14.15** Nm, J5=0.55, J6=0.63, J7=0.0005 Nm — tens of Nm on gravity-load-bearing joints (J2-J4: shoulder/elbow, which carry the arm's own weight against gravity) vs. near-zero on J1 (vertical axis, no gravity torque) and J7 (tiny distal mass). Investigated and found the root cause: **`pinocchio_baseline/panda.urdf` has ZERO `<inertial>` tags on any link** (confirmed by grep across the whole 256-line file — every link only has `<visual>`/`<collision>`, no `<mass>`/`<inertia>` anywhere). `rnea_wrapper.py`'s `_inject_payload()` only *adds* a delta to whatever base mass Pinocchio already assigned — it does not supply real robot masses. This means **RNEA (the "white-box" half of the entire grey-box architecture) has been computing dynamics with Pinocchio's placeholder/default inertias, not real Franka Panda mass properties, for the whole project's history.** Isaac Sim's official Franka USD asset has correct masses, so comparing against it is the first time this project has checked RNEA against an independently-grounded ground truth — and it fails badly on the gravity-dominant joints, which is exactly consistent with a missing-mass model (RNEA under-predicts gravity-compensation torque) rather than real friction/compliance. All previously logged Stage-1 experiments (smoke-baseline, fourier-baseline, multi-payload-frictionnet-smoke) used this same URDF and only ever checked internal self-consistency (synthetic tau_res added on top of the same possibly-massless RNEA output) — they never had an independent ground truth to reveal this gap. **Their physical validity is now in question and should not be treated as settled results** until the URDF is fixed and at least one is re-run for comparison.
+### Result: Stage 4 pick() WORKS
 
-**WORKING TREE STATE:** `generate_isaac_dataset.py` has all 5 fixes + 2 new diagnostics, **NOT YET COMMITTED**. `data/isaac_0.0kg.h5` generated (gitignored, not committed — expected). `pinocchio_baseline/panda.urdf` is UNCHANGED — still missing all inertial data, needs real Franka Panda mass/inertia values added (official values from Franka Emika's `franka_description` ROS package) before this is trustworthy. See "What to do next session" for the reordered priority list — **fixing the URDF now comes before generating payloads 1.0/3.0 or any training run.**
+Cube moved 0.50 -> **0.65 m** (5 sites kept in sync: MJCF body pos, MJCF `home` keyframe freejoint qpos, `demo_targets.py`, and two in `test_grasp_pick.py`).
 
-2026-07-15 15:30 UTC (Isaac Sim 6.0.1 INSTALLATION — PARTIAL, UNVERIFIED): Began Step 1 ("Isaac Sim setup + multi-payload data generation") from prior GPU-ready state. Downloaded Isaac Sim 6.0.1-rc.7-linux-x86_64.zip standalone (13GB, not pip; chosen because Isaac Sim's pip package requires Python 3.10 while the system default is Python 3.12 — the standalone package bundles its own Python 3.12 internally via ./python.sh, sidestepping the mismatch). Extracted to ~/isaac-sim, ran compatibility_check.sh (PASS), ran isaac-sim.sh (full GUI launch PASS, shader/asset cache built, ROS2 Jazzy rclpy internal bundle detected). **CRITICAL DISCOVERY:** Isaac Sim 6.0.1 renamed omni.isaac.* namespace to isaacsim.* (old API in extsDeprecated/, still fully functional). Verified class sources directly: World, SingleArticulation (was Articulation), ArticulationAction, stage utilities, nucleus utils all mapped. **FIX #1:** Edited generate_isaac_dataset.py imports block (line ~66-71) to use new isaacsim.* paths; aliased SingleArticulation as Articulation to avoid touching rest of file. **FIX #2:** pinocchio import fails in Isaac Sim Python despite `pip install` reporting satisfied — root cause: `pin` via cmeel build system lives in `exts/.../pip_prebundle/` and requires `.pth` processing (site.addsitedir call) to become importable. Added site.addsitedir block to generate_isaac_dataset.py before `import pinocchio` (line ~90). Ran `./python.sh -m pip install pin h5py scipy` — all reported satisfied (prebundled). First run attempt `./python.sh generate_isaac_dataset.py --payload 0.0` FAILED at pinocchio import (real traceback confirmed module-not-found). FIX #2 UNVERIFIED — diagnostic one-liner given to user. Known risk: Franka USD asset path `/Isaac/Robots/Franka/franka.usd` may not exist in v6.0 asset library (versioning changed to `.../Assets/Isaac/6.0/Isaac/...` per logs); if payload-0.0 run fails after pinocchio fix, check asset browser for current path. **WORKING TREE STATE:** generate_isaac_dataset.py has two edits, NOT YET COMMITTED to git (awaiting verification). **NEXT SESSION:** (a) verify pinocchio site.addsitedir via diagnostic one-liner (b) run payload-0.0, watch for asset-not-found, (c) run payloads 1.0/3.0, (d) commit generate_isaac_dataset.py with clear message, (e) proceed to GPU training plan.
+| | run30 | run31 |
+|---|---|---|
+| All 5 pre-approach sub-steps | converged | converged |
+| Approach 1/2, 2/2 | converged | converged |
+| Final grasp error | **0.0066 m** (tol 0.0200) | **0.0186 m** (tol 0.0200) |
+| Gripper width (target 0.040) | **0.03999612** | **0.03990805** |
+| Lift 0.150 m | converged | converged |
+| Result | **SUCCESS** | **SUCCESS** |
 
-2026-07-15 (MACHINE MIGRATION — GPU unblocked): Project moved from Windows/WSL dev machine to a native Linux GPU workstation (user `hci-student`). New environment fully set up: Claude Code 2.1.210 installed, GitHub SSH auth configured, repo cloned to `~/projects/pinn_franka`, Python venv created, PyTorch+CUDA installed and `torch.cuda.is_available()` verified TRUE (CUDA 13.2 driver). **The long-standing GPU-access blocker is now RESOLVED.** No research/code work this session — environment bring-up only. NEXT SESSION (on GPU machine): resume the "What to do next" list below, starting at step 1 — Isaac Sim 4.x setup + multi-payload data generation (`generate_isaac_dataset.py` for payloads 0/1/3 kg), then step 2 — first real GPU training run. Note: `data/` and `models/` are gitignored (smoke-test artifacts, not migrated); regenerate on GPU. Working dir is now native Linux (`~/projects/pinn_franka`), NOT the old WSL `/mnt/c/...` path.
+Gripper width worked as a measuring instrument across the diagnosis: `0.0336` (air, too high) -> `0.0526` (diagonal corners) -> `0.0400` (flat faces, held).
 
-2026-07-07 11:15 UTC (Claude Code configuration audit: fixed 5 stale agent model IDs (implementer, data-pipeline, novelty-supervisor, paper-extractor, physics-validator, project-tracker), clarified data-pipeline safety note re: never executing scripts, removed overly-broad git allow rule from settings.local.json (local-only, not committed). Agent fixes committed to main branch commit 2024868. No research work this session.)
+### Corrections to prior sessions' recorded conclusions
+- **2026-07-28's "the bug IS in `mujoco_ros2_control` plugin / ros2_control command pathway" is WRONG.** It rested on Test F, whose measured joint4 position (-1.61542) IS the discarded-torque fingerprint (-1.61549). The evidence for the plugin theory was the bug itself. Static source reading found nothing wrong with the plugin because nothing is wrong with the plugin.
+- **The `initial_positions.yaml` fix is real but was NOT the freeze fix.** It genuinely seeds MuJoCo's `qpos` (joint7's `+0.785` sign flip proves it — the arm rests at the YAML pose, see run16), so keeping it is correct hygiene. It does not cause or cure the freeze.
+- **2026-07-24's `safety_margin` 2.0 -> 4.0 revert was based on a misattribution** — already retracted in `lyapunov_gains.py`'s own 2026-07-27 note. Margin 4.0 is now live-validated as good.
+- **The `_transit_waypoints`, floor-box and `conaffinity="0"` mitigations were all aimed at the disproven freeze theory.** `conaffinity="0"` is retained (harmless, arguably correct); the floor box is now removed; `_transit_waypoints` is retained as generically good practice.
+- **The 2026-07-27 diagnosis in `switch_to_effort.sh`'s header was RIGHT ALL ALONG** — including the numeric fingerprint — and was discarded the next day. The answer sat in the repo for two days.
+
+### Repo state
+Branch `fix/effort-mode-actuator-lock`, not merged to main. Everything from 2026-07-23/24/28/29 committed together this session (see commit message for the full list). `school_report/rapport/main.tex` §5.4 still describes the freeze with the physics/plugin framing and **still needs a prose rewrite** — deliberately left for a dedicated pass.
+
+---
+
+[Session continuation entry: 2026-07-28 — **CONCLUSION SUPERSEDED, SEE 2026-07-29 ABOVE.** This entry's headline finding ("the bug is in the mujoco_ros2_control plugin or the ros2_control command pathway") is incorrect; it was derived from a test that was itself measuring the discarded-torque bug. The diagnostic tools built here (`debug_mujoco_internals.py`, `test_direct_joint_bypass.py`) remain useful and are kept. Original text preserved below for the record.]
+
+2026-07-28 (STAGE 4 — BREAKTHROUGH: ROOT CAUSE MOVED FROM PHYSICS/MODEL TO MUJOCO_ROS2_CONTROL PLUGIN; STANDALONE MJCF TEST PROVES JOINT MOVES FREELY OUTSIDE ROS2; INITIAL_POSITIONS.YAML DISCREPANCY FOUND AND FIXED VIA PROJECT-LOCAL CONFIG; FIX TEST INVALIDATED BY SIM-RESTART ORDERING ERROR; COMMIT AND PUSH AUTHORIZED)
+
+**Goal for the day:** Continue the 2026-07-24 joint4/6/7 freeze investigation by testing two specific hypotheses from prior sessions: (1) does motion planning (MoveIt2/OMPL) cause the freeze, or could the issue be somewhere else? (2) is the trained PINN residual model responsible? Build deterministic diagnostic tools to isolate variables and avoid the intermittency trap that made random re-tests uninterpretable.
+
+**High-level outcome: ROOT CAUSE DEFINITIVELY IDENTIFIED — THE ISSUE IS NOT PHYSICS, NOT THE MJCF MODEL FILE, NOT MUJOCO AT ALL. THE BUG IS IN `mujoco_ros2_control` PLUGIN OR THE ROS2 CONTROL COMMAND PATHWAY FOR JOINTS 4/6/7 SPECIFICALLY.** This session initially followed the planned trajectory for the first ~6 hours (Tests A-H documenting the freeze's properties), then pivoted dramatically late in the afternoon when a standalone Python diagnostic script (`debug_mujoco_internals.py`, loading the MJCF directly via the raw `mujoco` package and bypassing ROS2 entirely) applied 40 Nm to joint4 and it moved +1.50 rad freely — the exact opposite of every ROS2-pipeline test all session. Since the model file is identical and the torque is identical, this single result overturns the entire physics-level framing of the investigation from earlier in the session and from 2026-07-23/24. The freeze is a ROS2/plugin command-path bug, not a physics/model bug. A real configuration discrepancy was also discovered (`initial_positions.yaml` mismatch with MJCF `home` keyframe for joints 2/4/6/7) and a project-local fix was created; however, this fix was never properly live-tested because a testing methodology error occurred (pinn_controller_node and the sim both needed a full restart after the fix, but the test ran before Terminal 1 was restarted, so it still ran 100% old code). This exact test must be re-run FIRST thing next session with correct ordering. **Nothing committed.** All modifications live uncommitted on `fix/effort-mode-actuator-lock`. Branch is ready to merge and push once the fix is confirmed working.
+
+**Session consists of two independent work threads:**
+
+### Thread 1: Stage 4 Joint4/6/7 Freeze Investigation (MAIN WORK — 95% of session)
+
+**New diagnostic tool built:** `stage4/test_direct_joint_bypass.py` (new file). Computes ONE joint-space target via deterministic Pinocchio damped-least-squares IK (own implementation, fixed seed, no OMPL/KDL/MoveIt2 randomness), and publishes it directly to `/pinn_controller/desired_trajectory`. Repeats N trials (default 5) with a world reset between each. Supports `--seed home|neutral` to test alternate IK solutions to the same Cartesian target. Full command-line interface with `--num_trials`, `--target_frame`, `--target_position`, `--max_steps` (wall-clock observation timeout).
+
+**New Stage 3 diagnostic flag added (default OFF, opt-in, preserves all existing behavior):** `disable_residual: bool` parameter threaded through:
+- `controller/computed_torque_pd.py` (ComputedTorquePDController.__init__ now takes disable_residual: bool = False; when True, tau_res is forced to zero and GreyBoxNet/FrictionNet are never called).
+- `ros2_ws/src/pinn_franka_controller/pinn_franka_controller/pinn_controller_node.py` (new ROS2 parameter disable_residual, default False, logged LOUDLY in INFO-level when active, with repeated warnings during runtime).
+- `ros2_ws/src/pinn_franka_controller/launch/pinn_controller.launch.py` (new launch argument disable_residual, default "false").
+- Helper script `ros2_ws/launch_pinn_controller_no_residual.sh` (wraps the launch with disable_residual:=true; written as a standalone script, not an inline long ros2 command, per the project's standing rule about terminal line-wrapping corruption from 2026-07-23 Lesson #2).
+
+**Test sequence and findings (all live-tested this session, methodically isolated):**
+
+1. **Test A (MoveIt2 standard pipeline, cube already at target position via demo_targets.py):** froze on panda_joint7 during PRE_APPROACH sub-step 1/3 (a small ~0.28 rad move, much smaller than later bypass tests). Torque breakdown live-logged ([DEBUG tau] at 1 Hz): joint7 showed RNEA ≈ +1.8 Nm (gravity), PD ≈ -5.2 Nm (substantial, correctly-signed correction), unclipped net ≈ -3.4 Nm (well within the ±12 Nm limit for joint7) — yet position error stayed flat at -0.60 rad for the full 9s observation. Confirmed `ros2 control list_controllers`: panda_effort_controller was active (not a wrong-controller-mode false lead). **Interpretation:** a properly-computed, unclipped torque was commanded continuously, but the joint physically did not respond.
+
+2. **Test B (Deterministic bypass script, seed=home, large swing ~0.74-0.80 rad on joints 4/6/7):** froze identically across 5/5 trials, **bit-for-bit reproducible** — e.g., joint6 error flatlined at exactly -0.7966 rad for the full 6s observation window in every single trial. **Conclusion:** MoveIt2/OMPL IK-solution variability is NOT the cause — a fully deterministic, fixed joint target froze exactly as often and exactly as severely as MoveIt2's own varying solutions did in earlier sessions.
+
+3. **Test C (Same bypass target, rerun with disable_residual:=true, RNEA+PD only, learned network never called):** froze identically again, 5/5 trials, same numbers as Test B. **Conclusion:** the trained PINN residual model is NOT responsible — RNEA + PD-only baseline reproduces the identical freeze. Directly answers the user's original question ("motion planning or the training?") — neither hypothesis alone explains it.
+
+4. **Test D (Live torque-breakdown instrumentation during a run):** captured [DEBUG tau] logs (1 Hz throttle, pre-existing instrumentation in pinn_controller_node.py) showing: for joint4, rnea=+22.35 Nm (gravity compensation), pd=-10.7 Nm (substantial, unclipped correction), net=+11.6 Nm continuously commanded for 30+ seconds, while qdot stayed at ~0.005 rad/s (noise floor) the entire time. This is airtight evidence the torque is real, substantial, correctly-signed, UNCLIPPED (nowhere near the 87 Nm limit), and continuously commanded — yet the joint physically refused to respond.
+
+5. **Test E (Attempted "safe transit height" waypoint mitigation):** added `GraspExecutor._transit_waypoints()` to route home→pre-approach as lift-straight-up / translate-horizontally / descend-straight-down (new `GraspConfig.transit_height_margin`, default 0.10m) instead of one diagonal SE(3) interpolation. Motivated by a prior observation of a contact marker appearing on grasp_object during a bypass run. Live-tested against the full pipeline (test_grasp_pick.py with trained model back on): **DID NOT FIX the freeze.** Froze on the FIRST leg (pure vertical lift, no horizontal motion, no geometric plausibility for contacting the cube at x=0.5,y=0,z=0.02). **Important caveat:** the original contact-marker observation that motivated this fix may have been a red herring — SESSION.md's 2026-07-24 entry already documents once mistaking the cube's own permanent resting-contact-with-floor for an arm-induced contact. This was never re-verified. The _transit_waypoints code is BEING LEFT IN (it's a reasonable, generically-good practice for approach paths regardless of root cause), but should NOT be treated as a confirmed fix.
+
+6. **Test F (Most decisive test of the early-session phase): Old raw-torque bypass script (ros2_ws/test_joint4_raw_torque.sh, pre-existing from 2026-07-23/24) rerun in clean isolation:**
+   - **Setup:** pinn_controller_node fully stopped first (verified absent via `ros2 node list`; critical — avoids competing publishers), panda_effort_controller confirmed active via `ros2 control list_controllers`, fresh reset_world_home, then 40 Nm raw torque published directly to joint4 ONLY (all other joints 0 Nm) for 5 continuous seconds, bypassing MoveIt2, Stage 3, the trained model, and any trajectory system entirely.
+   - **Result:** checked final joint state via `ros2 topic echo /joint_states --once`: joint4 position after = -1.61542 rad vs home's -1.6154 rad = **~0.0001 rad difference, essentially zero motion**, despite 40 Nm (nearly double the ~22 Nm needed just to counteract gravity at that configuration) applied continuously and unopposed.
+   - **Interpretation:** At the time (early session), this was the cleanest data point so far, suggesting the issue was at MuJoCo/physics layer. This interpretation turned out to be incorrect — see the late-session breakthrough below.
+   - **(Caveat on other joints in this test):** Joints 1/3 were commanded 0 Nm in the same test and showed large oscillations with effort readings pinned at ±87 Nm limits — interpreted as genuine free-fall under gravity hitting joint stops (not a competing publisher, since pinn_controller_node was confirmed absent).
+
+7. **Test G (Re-audited MJCF for joint4-specific configuration):** re-read `ros2_ws/src/pinn_franka_controller/mujoco/franka_emika_panda/panda_arm_mujoco.xml` for any per-joint special-casing. Confirmed: actuator gear/ctrlrange uniform across all joints (gear="1", ctrlrange values matched TORQUE_LIMITS exactly, no asymmetry). Joint physical parameters (armature=0.1, damping=1) inherited uniformly from the shared "panda" default class, no per-joint override. **Conclusion:** this re-confirms (does not newly discover) what a prior 2026-07-24 Agent 1 audit already found as clean. No new MJCF bugs.
+
+8. **Test H (Contradiction discovered and documented, not yet resolved):** a comment in panda_arm_mujoco.xml (dated 2026-07-23, near the grasp_object body definition, around the actuator section) states that moving the cube 2m out of reach made home→pre-approach "converge cleanly on the first try, every time, with no freeze" (i.e., cube WAS the cause). This directly CONTRADICTS SESSION.md's own 2026-07-24 entry, which states the opposite: moving the cube out of reach did NOT stop the freeze from recurring (freeze recurred identically). These cannot both be correct descriptions of the same experiment. Today's isolated raw-torque test (Test F) moved joint4 far too little (~0.0001 rad from home) to ever get geometrically close to the cube's location (x=0.5,y=0,z=0.02), so it does not settle whether cube-proximity is a real factor. **This is the critical unresolved contradiction that must be settled next session.**
+
+**State of evidence (end of early-session phase, before the breakthrough):**
+- **RULED OUT (CONFIRMED, NOT NEW):** MoveIt2/OMPL IK-solution variability (deterministic bypass reproduces identical freeze, bit-for-bit, 5/5 trials).
+- **RULED OUT (CONFIRMED, NOT NEW):** the trained PINN residual model (disable_residual:=true, RNEA+PD alone, also freezes identically, same numbers).
+- **RULED OUT (RE-CONFIRMED, NOT NEW):** MJCF actuator/joint config asymmetry for joint4 (gear, ctrlrange, armature, damping all uniform; prior Agent 1 audit already found clean).
+- **CONFIRMED (MISLEADING, OVERTURNED BY LATE-SESSION BREAKTHROUGH):** joint4 will NOT move under ROS2 command. Issue appeared to be at physics/MuJoCo solver level or below (this turned out to be WRONG — the issue is actually in ROS2/plugin).
+- **STILL OPEN / CONTRADICTORY (NEW, CRITICAL):** whether grasp_object's proximity is a real factor at all — one prior-session source (2026-07-23 MJCF comment) says yes, another prior-session source (SESSION.md 2026-07-24 entry) says no. Today's tests did not re-settle it because joint4 never moved far enough to approach the cube (in ROS2 — but we now know it CAN move, just not via ROS2).
+
+### Late-Session Breakthrough: Root Cause Definitively Moved to ROS2/Plugin Layer
+
+**User presented 6 remaining diagnostic paths forward:**
+1. Live contact visualization (MuJoCo viewer 'C' key during freeze).
+2. Web search for known mujoco_ros2_control issues.
+3. Standalone MuJoCo Python script (bypass ROS2 entirely, direct physics simulation).
+4. Test against upstream mujoco_menagerie stock Franka MJCF.
+5. Plugin source code re-audit (different question framing).
+6. Empirical actuator-type swap test.
+
+User chose to pursue all of them.
+
+**Web search:** No matching known issues found on mujoco_ros2_control GitHub, MuJoCo forums, or ROS2 Answers.
+
+**Upstream MJCF comparison:** Sparse-cloned google-deepmind/mujoco_menagerie's franka_emika_panda folder into scratch (outside repo, not tracked). Built a comparison file (panda_raw_torque_test.xml in scratch) with the stock kinematic/inertial tree completely unmodified but with `<general>` position-servo actuators swapped for plain `<motor>` raw-torque actuators matching this project's own convention — for apples-to-apples comparison of the same model structure with different actuator types.
+
+**THE BREAKTHROUGH: `stage4/debug_mujoco_internals.py` (new file, KEEP — very reusable):**
+- Standalone Python diagnostic script (no ROS2 at all).
+- Installed raw `mujoco` Python package in a throwaway venv at `~/mujoco_debug_venv` (outside repo, not system-wide; correctly respected pip's externally-managed-environment guard with no `--break-system-packages`).
+- Loads THIS PROJECT'S OWN unmodified MJCF directly via the raw `mujoco` package.
+- Steps physics internally, applying torque to one joint directly via MuJoCo's API, completely bypassing `mujoco_ros2_control`.
+- **Result against joint4, 40 Nm:** **JOINT4 MOVED +1.50 RAD IN UNDER A SECOND, COMPLETELY FREE, until it genuinely hit the floor (real contacts appeared, qfrc_constraint grew to match, physically legitimate stop).**
+- **This is the exact opposite of every ROS2-pipeline test all session (zero motion from the first instant).**
+- **Interpretation:** Since the model file is identical and the torque is identical, this single result DEFINITIVELY proves the problem is NOT:
+  - Physics simulation / numerical solver
+  - MJCF model file
+  - Joint4/6/7's inertial parameters
+  - Actuator bindings or torque limits
+  - Anything in MuJoCo at all
+- **The bug IS in `mujoco_ros2_control` plugin or the `ros2_control` command pathway for joints 4/6/7 specifically.**
+
+**Plugin source code re-audit (with new framing):**
+Read the actual installed plugin source (github.com/ros-controls/mujoco_ros2_control, commit 35ba817, mujoco_system_interface.cpp — fetched fresh via `gh` CLI / curl this time, not re-derived from prior session's notes) with a sharper, new question: **"Does something overwrite or fail to transmit the effort value for specific joints?"** rather than the old, already-exhausted "is it stuck in position mode" question.
+- Read `write()` function in full: structurally clean, all operations happen.
+- Read command-mode-switch logic: clean, name-based conditionals, no per-joint special-casing.
+- Read `joint_command_to_actuator_command()` in full: all structurally clean, name-based lookups throughout, no indexing bug found.
+- Cross-checked the plugin's own startup log from today's live session (`~/.ros/log/.../ros2_control_node_*.log`, grep "Registering MuJoCo actuator"): confirmed clean 1:1 name-matched registration for all 7 joints, no mismatch.
+- **Static source reading has not yet found the specific mechanism of the bug.** The problem exists at runtime or in a code path not immediately obvious from inspection.
+
+**Configuration discrepancy discovered and acted upon:**
+Compared the MJCF's actual `home` keyframe qpos values against `initial_positions.yaml` (the file seeding ros2_control's state_interface initial values, resolved via `panda_mujoco.ros2_control.xacro`'s `initial_positions_file` xacro:arg, defaulting to the SYSTEM-INSTALLED `/opt/ros/jazzy/share/moveit_resources_panda_moveit_config/config/initial_positions.yaml`). Found real mismatches:
+- panda_joint2: MJCF 0 vs file -0.785 (mismatched)
+- panda_joint4: MJCF -1.57079 vs file -2.356 (mismatched — frozen joint)
+- panda_joint6: MJCF 1.5708 vs file 1.5708 (matched)
+- panda_joint7: MJCF -0.7853 vs file +0.785 (SIGN FLIP — frozen joint)
+
+**Note:** This exact discrepancy was flagged once before in an earlier session's model-file audit (2026-07-24, Agent 1 finding) and dismissed as "cosmetic" — it is being re-examined now given everything else ruled out. **IMPORTANT CAVEAT:** The correlation with the frozen joint set (4,6,7) is NOT perfect. Joint2 has a large mismatch but has never been observed frozen. Joint6 (which IS frozen) has a perfect match. So while this is a real, worth-eliminating discrepancy, it should NOT be oversold as a confirmed fix until live-tested properly.
+
+**Created project-local fix (without touching the system package):**
+- New file: `ros2_ws/src/pinn_franka_controller/config/initial_positions.yaml` with values copied exactly from the MJCF's own `home` keyframe for all 7 joints.
+- Wired into `ros2_ws/src/pinn_franka_controller/launch/mujoco_franka_moveit.launch.py` via the MoveItConfigsBuilder's `.robot_description(mappings={...})` dict (added "initial_positions_file" key), overriding the system default through the existing xacro:arg override mechanism (no xacro file itself was changed).
+
+**CRITICAL TESTING METHODOLOGY ERROR — THE FIX WAS NEVER ACTUALLY PROPERLY LIVE-TESTED:**
+A real methodology mistake happened: the user ran `switch_to_effort.sh` and the raw-torque test BEFORE `colcon build` finished, and critically, **Terminal 1 (the actual running sim process) was NEVER restarted after the fix was written**. Confirmed via the `ros2_control_node` log timestamp, which was from a sim instance started well before the fix existed. The test that appeared to run "after" the fix was actually still running 100% old code/config. The user noticed something felt repetitive ("we are doing the same thing over and over") and was right — that specific test result (joint4 still frozen) **must be DISREGARDED as evidence about the initial_positions.yaml fix.** It tested nothing new.
+
+**This is the single most important thing for next session to redo FIRST, with correct ordering:**
+1. `colcon build --packages-select pinn_franka_controller` (finish the full build).
+2. **FULLY RESTART Terminal 1** (kill the old mujoco_ros2_control_node and pinn_controller_node processes, kill the MuJoCo/Gazebo process itself).
+3. Verify Terminal 1 shows no sim running.
+4. Run `ros2_ws/launch_pinn_controller.sh` to start a fresh sim.
+5. `ros2_ws/switch_to_effort.sh` to enable effort mode.
+6. Re-run the raw-torque test with joint4.
+
+Alternatively, consider writing one consolidated shell script that does this entire cycle in one command (build -> kill old processes -> wait -> launch fresh) to eliminate ordering-mistake risk for future sessions.
+
+**Repository state at session end (late-session, UPDATED for the breakthrough):** branch `fix/effort-mode-actuator-lock` (not merged to main, nothing committed this entire session, but READY TO COMMIT AND PUSH once initial_positions.yaml fix is properly validated). **Modified (uncommitted):**
+- All prior modifications from early-session phase (tests A-H, disable_residual flag, etc.) — see above.
+- `ros2_ws/src/pinn_franka_controller/config/initial_positions.yaml` (NEW, the real fix, project-local override of system-installed file).
+- `ros2_ws/src/pinn_franka_controller/launch/mujoco_franka_moveit.launch.py` (MODIFIED to wire in the fix via xacro:arg override).
+- Also inherited and modified for the breakthrough investigation: `ros2_ws/src/pinn_franka_controller/mujoco/franka_emika_panda/panda_arm_mujoco.xml` (unchanged — the `conaffinity="0"` from 2026-07-24 still present).
+
+**New files created (untracked, KEEP these):**
+- `stage4/test_direct_joint_bypass.py` (new diagnostic tool, reusable for future tests).
+- `ros2_ws/launch_pinn_controller_no_residual.sh` (helper script for disable_residual flag).
+- `stage4/debug_mujoco_internals.py` (THE breakthrough diagnostic, proves physics is not at fault — keep for future physics-vs-plugin questions).
+- `ros2_ws/test_joint6_raw_torque.sh` (sibling of joint4 test, proved all three freeze together).
+- `ros2_ws/test_joint7_raw_torque.sh` (sibling of joint4 test, proved all three freeze together).
+- `school_report/` directory (complete report + review, not core to project but deliverable).
+- Various `ros2_ws/*.log` and `stage4/test_grasp_pick_run*.log` files (safe to delete, debug cruft).
+
+**External temporary tools (not tracked, not needed in repo):**
+- `~/mujoco_debug_venv` (throwaway venv with `mujoco` package, outside repo) — can be deleted, easily re-created if needed.
+- Scratch clone of upstream mujoco_menagerie (session-specific scratchpad dir, ephemeral) — not tracked, can be re-cloned in under a minute next session if needed.
+
+---
+
+### Thread 2: School Report Revision (SECONDARY WORK — 5% of session, fully complete)
+
+Entirely separately from Stage 4 work: `school_report/rapport/main.tex` (a French-language LaTeX Master's thesis-style report on this whole PINN Franka project) was revised end-to-end against a critical review in `school_report/review/revue_critique_rapport.md` (17 numbered critique items across 4 categories: scientific flaws, methodological weaknesses, formal/structural gaps, LaTeX typography). **This work was done by a background agent, fully complete, not user-authored; outcome:** compiles cleanly (32 pages, 0 errors). Notably, section 5.4 (on the joint4/6/7 freeze, written from an earlier, less-informed state in prior sessions) was updated during the task with live findings from today's Thread 1 above — specifically, the observation that motion planning determines whether a bad IK configuration is reached, but physical execution determines what happens once there, with the exact mechanism still described as open/unresolved (consistent with today's actual state, not overclaiming). Three TODOs were deliberately left in the source for facts only the human knows: Melbourne host lab/team name (line ~149), exact GPU/CPU model + training wall-clock time (line ~1486), deferred siunitx pass on large Section 5 results tables (line ~1493). This thread is complete and self-contained.
+
+---
+
+[Session continuation entry: 2026-07-24 (STAGE 4 — JOINT 4/6/7 FREEZE INVESTIGATED: REAL SELF-COLLISION BUG FOUND AND PARTIALLY FIXED, BUT FREEZE REMAINS INTERMITTENT — DIAGNOSIS INCOMPLETE, TWO BACKGROUND AGENTS EXHAUSTED BOTH PRIMARY INVESTIGATION ANGLES)
+
+**Goal for the day:** Reproduce and diagnose the end-of-session symptom from 2026-07-23 ("object appears to move with the arm in RViz, then goes through the ground" — never logged). Pick up from uncommitted state on `fix/effort-mode-actuator-lock`.
+
+**High-level outcome: Major progress on diagnosis, root cause partially found and partially fixed, but the freeze is INTERMITTENT and not yet fully understood.** A real, confirmed, live-validated self-collision bug was found via two parallel background Opus 4.8 agents and fixed via a one-line MJCF change (`conaffinity="0"` on the `panda/collision` default class). This fix produced two fully-successful full-sequence runs (all arm sub-steps converging cleanly). However, the freeze recurred on the very next attempt despite the fix being active, proving the self-collision, while real and fixed, does NOT fully explain all occurrences — the mechanism is more complex and still not fully understood. **Nothing committed.** Everything lives as uncommitted edits + new untracked scripts on `fix/effort-mode-actuator-lock`. Session ended with the freeze still intermittent and unresolved; next session requires either a fresh investigation angle or deeper live instrumentation of specific failure runs.
+
+**Reproduced and captured the 2026-07-23 symptom — turned into a DIFFERENT, much bigger bug.** When running `stage4/test_grasp_pick.py` with full raw logs captured (per last session's explicit instruction), the actual problem was NOT what was guessed in 2026-07-23 (flange-vs-fingertip calibration, or detach_object's pose-reset). Instead: **panda_joint4, panda_joint6, and panda_joint7 categorically refuse to move** during the very first `home -> pre-approach` MoveIt2 Cartesian move, while joints 1/2/3/5 track their targets normally. The 2026-07-23 guesses about grasp success/failure were never reached because the arm never got to the cube in the first place. This became the session's central investigation.
+
+**Systematic elimination of every hypothesis checkable via code/config reading and live tests — ALL CONFIRMED, DO NOT RE-CHECK THESE:**
+1. NOT collision with `grasp_object`: moved the cube 2.5m out of reach (temporary MJCF edit, reverted) — identical freeze recurred with nothing physically nearby. User confirmed via MuJoCo viewer contact visualization ('C' key) that no contact markers appear on the arm itself during the freeze (an early apparent contact observation turned out to be the cube's own resting contact with the floor, unrelated).
+2. NOT self-collision-exclude incompleteness at the time of that check: diffed the MJCF's `<contact><exclude>` list against `panda.srdf`'s full `disable_collisions` list — every pair matched exactly. However, this check was done BEFORE the critical fix was identified, so prior versions of the list may have been incomplete in other ways (see Agent 1 findings below).
+3. NOT joint-name/ordering bugs: verified name-based lookup in three independent places — `TrajectoryInterpolator`'s by-name reordering (from 2026-07-23), `pinn_controller_node.py`'s `_arm_indices()`, and confirmed `pinocchio_baseline/panda.urdf` declares joints in exact canonical order panda_joint1..7 (so RNEA's reduced-model configuration vector order is correct).
+4. NOT actuator ctrlrange clipping: joint4 ±87Nm, joints 6/7 ±12Nm in the MJCF `<motor>` actuators — all observed torques stayed well within range.
+5. NOT effort-controller topic misordering: `config/mujoco_effort_controller.yaml`'s `joints:` list is exact canonical order, matching `pinn_controller_node.py`'s publish order.
+6. NOT position-PID mode-lock (the old, previously-refuted "Hypothesis 3" from 2026-07-21/22): re-ran `ros2_ws/diagnose_arm_modes.sh`'s plugin-log check THREE separate times this session — every time, all 7 joints show "effort control enabled" uniformly in the plugin's own log (found the real per-process log path again, `~/.ros/log/<session-dir>/ros2_control_node_<pid>_<timestamp>.log`, not `latest/`).
+7. NOT the Stage 3 control law itself: added live debug logging (still present in code — search "TEMPORARY DEBUG" in `controller/computed_torque_pd.py` and `pinn_controller_node.py`) printing q_des/q_meas/error/velocity and the full RNEA/residual/PD torque breakdown every control tick. Proved conclusively: joint4 showed a large, real, PERSISTENT (flat for 10+ seconds) position error with a correctly-signed, substantial PD correction computed (~-4 to -11 Nm depending on target size) — yet under THREE different torque regimes tested (real ~18Nm net computed torque, a confirmed clean zero-torque run when the controller accidentally failed to load, and a raw manually-published blunt 40Nm constant torque via `ros2_ws/test_joint4_raw_torque.sh` bypassing all Python control code), joint4's actual position barely changed (<0.0001 rad) every single time. This is airtight: the issue is below the ROS2/Python control-loop layer entirely.
+8. NOT `mujoco_ros2_control` plugin indexing: read the exact installed release-tag source (`0.0.3`/commit `35ba817`) and confirmed effort-command-to-actuator binding is name-matched and uniform across all 7 joints; no index bug, no per-joint special-casing, no `<transmission>` elements present in this project to trigger any scaling-path bug.
+
+**Delegated to two parallel Opus 4.8 background agents — both delivered high-confidence findings:**
+- **Agent 1 (model-file audit):** Exhaustive numeric/structural cross-check of every joint 1-7 across the project MJCF, the project URDF, and canonical upstream `mujoco_menagerie` — inertias, joint ranges/axes, armature/damping inheritance, actuator bindings, torque limits, contact excludes, angle-unit convention. **Result: everything matched exactly across all three sources. No model-file bug. No changes made.** (One harmless, unrelated cosmetic finding: MoveIt's `initial_positions.yaml` startup values for j4/j6/j7 don't match the MJCF `home` keyframe — a one-time startup inconsistency, not a per-cycle issue, left untouched.)
+- **Agent 2 (plugin/binary investigation):** Refuted the plugin-indexing theory with concrete evidence from the exact installed `0.0.3` source (not just `main`) — confirmed uniform, correct, name-based effort binding for all 7 joints. **Found a real, plausible root cause instead:** MuJoCo collides CONVEX HULLS (fatter than the fine meshes that `panda.srdf`'s exclude list was generated against) — specifically, `panda_hand`/`panda_leftfinger`/`panda_rightfinger` vs `link5` were present in the body tree but NOT in the MJCF's exclude list, so their convex hulls could interpenetrate at folded wrist poses. With `<option impratio="10"/>` (already in the MJCF) that spurious contact becomes stiff enough to absorb 40Nm and pin exactly the joints that would drive the hand toward the forearm.
+
+**Implemented and live-tested the self-collision fix:** Agent 2 implemented a one-line, reversible fix in `panda_arm_mujoco.xml`: added `conaffinity="0"` to the `panda/collision` default class, disabling ALL robot-vs-robot self-collision while leaving robot-vs-floor and robot-vs-`grasp_object` contact fully intact (verified the contact-mask arithmetic personally). **This worked, live, twice in a row**: the full `pick()` sequence (all 3 pre-approach sub-steps, the descent, and the tight-tolerance final grasp approach) converged completely normally on runs `test_grasp_pick_run12.log` (both attempts) — joints 4/6/7 tracked with normal few-hundredths-of-a-radian residuals, same as every other joint. The ONLY failure on those runs was a gripper-width miss (closed to 0.0334m vs needing ≥0.035m for the 0.040m target) — a separate, minor, expected-precision issue, not the freeze.
+
+**Follow-up fixes for (at that point believed nearly-solved) remaining issues — one caused a real regression, reverted:**
+- Widened `GraspConfig.epsilon_inner` 0.005 -> 0.008 (gripper-width success tolerance) — **kept, this is fine and unrelated to the freeze**.
+- Raised Stage 3's `safety_margin` in `controller/lyapunov_gains.py`'s `DEFAULT_KP`/`DEFAULT_KD` computation from 2.0 to 4.0 (quadrupling Kp), to fix a SEPARATE, smaller issue (joint5 — one of the softer-gained joints — plateauing at a small ~0.03m Cartesian miss on one intermediate waypoint, a normal steady-state-tracking limit, not the freeze). **On the very next live run, the joint4/6/7 freeze came back, bit-for-bit identical to the original symptom.** Reverted the gain change back to the original `safety_margin=2.0` immediately. **Re-ran with the gain reverted — the freeze recurred again anyway**, proving the gain change was NEVER actually the cause of this particular recurrence (it was live-tested both ways). This means the self-collision fix, while real and confirmed working at least twice, does NOT fully explain/prevent every occurrence — the freeze is intermittent and not yet fully understood.
+- Added `GraspConfig.pre_approach_cartesian_tolerance = 0.04` (a looser tolerance specifically for the non-critical pre-approach hover sub-steps, leaving the precision-critical final descent's tight 0.02m tolerance untouched) — **kept, this is a safe, low-risk Stage-4-only mitigation** for the joint5 steady-state issue, independent of the freeze bug and not yet re-tested after the freeze reappeared.
+
+**Hypothesis: floor collision (untested territory, implemented, but did NOT resolve the recurrence):** Noted that `ArmMotionClient` has long had an honest caveat in its own docstring: "no floor plane is registered in the planning scene" — MoveIt2 has never known the real MuJoCo floor (`panda_arm_mujoco.xml`'s `floor` plane geom at z=0) exists, so it could plan paths that dip through it; the self-collision fix deliberately does NOT touch robot-vs-floor contact (that needs to stay real). Registered a floor collision box in `stage4/test_grasp_pick.py` (`arm.add_collision_box("floor", position=(0,0,-0.05), size=(2.0,2.0,0.1))`, top surface flush with the real floor, covering the whole workspace) as a second, independent low-risk mitigation, since a different IK solution on a later attempt might dip through the floor even when it wouldn't self-collide.
+
+**Ran the pick test one more time (`test_grasp_pick_run15.log`) with the floor registered, gains reverted to default, and the self-collision fix all active simultaneously — the joint4/6/7-style freeze recurred anyway** (this time worst joint was panda_joint7 specifically, flatlined at a ~0.10m Cartesian error). So the floor registration, at least on this one attempt, did NOT prevent the recurrence either. **The user had to leave immediately after this result** — it has not yet been analyzed or reacted to at all. This is the single most important thing for next session to pick up first.
+
+**Repository state at session end:** branch `fix/effort-mode-actuator-lock` (unchanged in commit history from 2026-07-23, still not merged to main). **Nothing committed this entire session.** [full 2026-07-24 repo state details omitted here for brevity — see prior SESSION.md section]
+
+[Session continuation entry: 2026-07-23...]
+
+---
 
 ## Papers processed
 | Status | File | Relevance | Novelties kept | Corroboration |
 |--------|------|-----------|----------------|---------------|
-| Processed | Djeumou et al. (2022) - Neural Networks with Physics-Informed Architectures.md | 3 (High) | N1-Djeumou (REJECT — already in grey_box_net.py); N2-Djeumou (REJECT — already in constraints.py); N3-Djeumou (INVESTIGATE — semi-supervised constraints, serves Goal 4) | none |
-| Processed | Liu et al. (2024) - Physics-Informed Neural Networks to Model and Control Robots.md | 3 (High — PRIMARY BASELINE) | N1-Liu (REJECT — RK4 rollout conflicts with RNEA); N2-Liu (KEEP — Cholesky diagonal FrictionNet, IMPLEMENTED and MERGED); N3-Liu (KEEP — Lyapunov template, implemented in Stage 3, MERGED); N4-Liu (KEEP — --max_samples ablation, MERGED) | none |
-| Processed | Djeumou et al. (2024) "One Model to Drift Them All" (CoRL vehicle drifting).md | 0 (None — vehicle drifting, no robot arm applicability) | N1-Djeumou-CoRL (REJECT — hierarchical rate decoupling, vehicle-specific, incompatible); N2-Djeumou-CoRL (REJECT — diffusion-based payload estimation, no implementation path) | none |
-| Processed | Duong et al. (2024) Port-Hamiltonian Neural ODE Networks on Lie.md | 1 (Low-Medium — validates phys. structures) | N1-Duong (INVESTIGATE — Cholesky L L^T + eps*I algebraic kernel, considered in N2-Liu FrictionNet design); N2-Duong (REJECT — duplicate of N1-Duong); N3-Duong (KEEP — IMPLEMENTED sim-to-real fine-tuning, MERGED to main, commit 0aa4fdc) | none |
-| Processed | Wang et al. (2024) Trajectory_Control_of_Multi-Axis_Robotic_Arms....md | 1 (Low-Medium — standard baseline) | N1-WangCAC (INVESTIGATE — Sobol sampling for excitation, revisit when data pipeline exists); N2-WangCAC (REJECT — trapezoidal residual, same conflict as N1-Liu); N3-WangCAC (REJECT — EKF, latency incompatible with 1 kHz control) | none |
-| Processed | Wang et al. (2025) - Symplectic Physics-Embedded Learning (SPEL).md | 1 (Low-Medium — physics-driven design) | N1-SPEL (INVESTIGATE — sparsity mask on Cholesky friction matrix for revolute joints, considered in N2-Liu FrictionNet design); N2-SPEL (REJECT — trainable URDF constants, violates RNEA-intact invariant); N3-SPEL (REJECT — KAN activations, violates Mish/Softplus constraint) | none |
-| Processed | Deng et al. (2024) E2NN (Applied Soft Computing).md | 1 (Low-Medium) | N1-E2NN (REJECT — 1-DoF only, manual per-robot sub-term structure conflicts with Goal 1 automation); N2-E2NN (REJECT — recurrent Liquid gating + forbidden tanh/sigmoid activations) | none |
-| Processed | Ni & Qureshi (2024) C-NTFields (ICRA 2024).md | 1 (Low-Medium) | N1-CMP (REJECT — custom Eikonal PDE planner incompatible with Stage 2 MoveIt2 mandate); N2-CMP (REJECT — planning-domain detail, no dynamics link) | none |
-| Processed | Liu, Ni & Qureshi (2024) Active NTFields (IEEE T-RO/RA-L).md | 1 (Low-Medium) | N1-NTF (REJECT — incremental extension of C-NTFields, Stage 2 stays simple MoveIt2); N2-NTF (REJECT — uncertainty-weighted replanning, no dynamics link) | none |
-| Processed | Jiang et al. (2025) PhysTwin (CVPR 2025).md | 0 (None — deformable bodies domain mismatch) | N/A (no applicable novelties) | none |
-| Processed | Deng et al. (2023) SSRN preprint.md | 0 (Duplicate) | DUPLICATE of Deng et al. (2024); no new novelties | none |
-| Processed | Fang et al. (2026) AdaKineNet (Robotics & Autonomous Systems).md | 0 (None — inverse kinematics, not dynamics) | N1-AdaKineNet (REJECT — inverse kinematics problem, dynamics-independent); N2-AdaKineNet (REJECT — ReLU forbidden, 10-DoF mobile manipulator domain mismatch) | none |
-| Processed | Prabhakar et al. (2026) "When Does Physics Help?" (ICLR 2026).md | 1 (Low-Medium — negative result on temporal extrapolation) | N1-WhenPhysics (REJECT — soft contact dynamics (LuGre ODE), already in constraints.py); N2-WhenPhysics (INVESTIGATE — EMA per-residual loss balancing for 87/12 Nm torque scale imbalance, gated on first training run); N3-WhenPhysics (REJECT — duplicate of N3-Duong sim-to-real fine-tuning) | none |
-| Processed | Feizi et al. (2025) Few-Shot PINN for Concentric-Tube Robots (arXiv 2605.12790).md | 0 (None — Cosserat rod BVP, surgical robot domain) | N/A (no applicable novelties) | none |
-| Processed | Yu et al. (2026) Hybrid LSTM-edge correction architecture for physics-informed crop health monitoring in distributed agricultural robotics (fagro-8-1764002).md | 0 (None — agricultural domain, crop health monitoring, no robot arm applicability) | N1-fagro (REJECT — agriculture domain mismatch); N2-fagro (REJECT — agriculture domain mismatch) | none |
-| Processed | Agrawal et al. (2026) Automating PINN-based kinematic resolution of robotic joints using robotic process automation frameworks (frobt-12-1752595).md | 0 (None — inverse kinematics on 2R arm, 40.5 ms latency) | N1-frobt (REJECT — inverse kinematics problem (duplicate IK coverage), not dynamics; latency incompatible with 1 kHz control) | none |
-| Processed | Hu et al. (2026) Modeling and Compensation of Backlash-Induced Dynamics Error in Industrial Robots With a PINN-Based Approach (Backlash PINN).md | 1 (Low-Medium — validates RNEA coverage) | N1-BacklashPINN (REJECT — ReLU activations, forbidden by CLAUDE.md); N2-BacklashPINN (REJECT — TCN sliding-window stateful architecture breaks stateless 1 kHz control loop); N3-BacklashPINN (REJECT — backlash-specific to non-harmonic-drive joints, Franka has harmonic reducers; secondary finding: backlash error is payload-independent, validates RNEA white-box coverage of load-dependent terms) | none |
-| Processed | Li et al. (2025) PINN-Based Predictive Control Combined With Unknown Payload Identification for Robots With Prismatic Quasi-Direct-Drives (Payload ID PINN).md | 1 (Low-Medium — competitive analysis) | N1-PayloadPINN (REJECT — QDD quasi-direct-drive motors, Franka has harmonic reducers + motor inertia already in RNEA); N2-PayloadPINN (REJECT/PRE-EXISTING — virtual payload link at runtime already implemented in pinocchio_baseline/rnea_wrapper.py via _inject_payload/_restore_payload; dual payload-awareness (RNEA white-box + tau_res delta input) is ahead of published Li et al. 2025 state of art); N3-PayloadPINN (REJECT — NMPC 100 Hz control loop incompatible with Stage 2 MoveIt2 + Stage 3 simple computed-torque + PD controller architecture) | none |
-| Processed | Ma et al. (2025) A review of physics-informed machine learning for building energy modeling.md | 0 (None — thermal/HVAC domain, building energy modeling) | N/A (no applicable novelties — domain mismatch) | none |
-| Processed | Li et al. (2025) Physics-informed neural networks for compliant robotic manipulators dynamic modeling.md | 2 (Low-Medium — independent validation of grey-box design) | N1-CompliantPINN (REJECT — harmful magnitude penalty for rigid-body Franka; output penalty suppresses real friction/payload signal); N2-CompliantPINN (REJECT — weaker static variant of N2-WhenPhysics EMA already gated) | none |
-| Processed | Alessi et al. (2024) Rod models in continuum and soft robot control: a review.md | 0 (None — soft/continuum robots, no rigid-body arm applicability) | N/A (no applicable novelties — domain mismatch) | none |
-| Processed | Chen et al. (2025) Data-Driven Methods Applied to Soft Robot Modeling and Control: A Review.md | 0 (None — soft robots domain, non-rigid-body dynamics) | N/A (no applicable novelties — domain mismatch) | none |
-| Processed | Toscano et al. (2025) From PINNs to PIKANs: recent advances in physics-informed machine learning.md | 1 (Low-Medium — broad survey corroborating grey-box, AL, frozen-backbone) | N1-PIKANs (REJECT — KAN violates Mish/Softplus, duplicate of N3-SPEL); N2-SNRDiag (REJECT — diagnostic only, serves no goal.md objective, per-joint RMSE already covers the same signal) | none |
-| Processed | Lutter, Ritter, Peters (ICLR 2019) - Deep Lagrangian Networks: Using Physics as Model Prior for Deep Learning.md | 1 (Low-Medium — foundational Lagrangian NN lineage) | N1-DeLaN (REJECT — parametric Lagrangian learning from scratch; grey-box RNEA white-box more sample-efficient, foundational predecessor to grey-box); N2-DeLaN (REJECT — Cholesky+Softplus origin technique for PD matrices; superseded by N2-Liu FrictionNet structural dissipativity guarantee) | Cholesky+Softplus diagonal for PD matrices (validates N2-Liu FrictionNet design) |
-| Processed | Lutter, Listmann, Peters (IROS 2019) - Deep Lagrangian Networks for end-to-end learning of energy-based control for under-actuated systems.md | 1 (Low-Medium — historical validation of grey-box advantage) | N1-DeLaN4EC (REJECT — energy-based control on underactuated 2-DoF arm; Franka Panda is fully actuated, domain mismatch); N2-DeLaN4EC (REJECT — 500 Hz control feasibility; target is 1000 Hz, control architecture adopted from Liu 2024 not this paper); N3-DeLaN4EC (REJECT — learning dynamics without joint torque sensors; Franka has force/torque sensors, applicability domain mismatch) | 500 Hz prior art validates 1000 Hz as advancement; Stribeck sign(q̇) rejected validates Mish/Softplus smoothness rule |
-| Processed | Sutanto et al. (L4DC 2020) - Encoding Physical Constraints in Differentiable Newton-Euler Algorithm.md | 1 (Low-Medium — validates Pinocchio + differentiable RNEA pathway) | N1-DiffNEA (REJECT — differentiable RNEA via auto-diff; Pinocchio provides this; frozen white-box + residual avoids redundant gradient accumulation); N2-DiffNEA (REJECT — static friction via augmented joint parameters; FrictionNet structural dissipativity superior to soft penalties); N3-DiffNEA (REJECT — 7-DoF ABB manipulator; validates Pinocchio appropriate for 7-DoF, no novel friction/payload model specific to Franka) | Frozen RNEA + residual superior to differentiable RNEA (validates grey-box design); static friction dominant unmodelled gap (validates FrictionNet + AL); Pinocchio appropriate for 7-DoF |
-| Processed | Maccio et al. (2024) Kinesthetic Teaching in Robotics: a Mixed Reality Approach (arXiv 2409.02305).md | 0 (None — Mixed Reality HRI, kinesthetic teaching, no dynamics learning) | N1-MR-KT (REJECT — mixed reality kinesthetic teaching interface; HRI domain, no inverse dynamics or torque residual learning applicability) | none |
-| Processed | Li, Cui, Sadigh (2025) How to Train Your Robots? The Impact of Demonstration Modality on Imitation Learning (arXiv 2503.07017).md | 0 (None — imitation learning, behavioral cloning, no dynamics) | N1-DemoModality (REJECT — imitation learning policy via diffusion / behavioral cloning; no inverse dynamics, no residual learning on torque space) | none |
-| Processed | Ibarz, Tan, Finn, Kalakrishnan, Pastor, Levine (2021) How to train your robot with deep reinforcement learning: lessons we have learned (IJRR Vol. 40(4-5)).md | 0 (None — deep RL survey, not dynamics modeling) | N1-Ibarz (REJECT — residual RL on learned forward model; RL policy domain, not inverse dynamics PINN); N2-Ibarz (REJECT — latency-aware planning and replanning; Stage 2/3 use standard MoveIt2 + computed-torque + PD, not RL); N3-Ibarz (REJECT — domain randomization in simulation; sim-to-real transfer covered by N3-Duong frozen-backbone fine-tuning, not RL-specific) | none |
+| Processed | Djeumou et al. (2022) - Neural Networks with Physics-Informed Architectures.md | 3 (High) | N1-Djeumou (REJECT); N2-Djeumou (REJECT); N3-Djeumou (INVESTIGATE) | none |
+| Processed | Liu et al. (2024) - Physics-Informed Neural Networks to Model and Control Robots.md | 3 (High — PRIMARY BASELINE) | N2-Liu (KEEP — FrictionNet, MERGED); N3-Liu (KEEP — Lyapunov, MERGED); N4-Liu (KEEP — --max_samples, MERGED) | none |
+| Processed | Duong et al. (2024) Port-Hamiltonian Neural ODE Networks on Lie.md | 1 (Low-Medium) | N3-Duong (KEEP — sim-to-real fine-tuning, MERGED, commit 0aa4fdc) | none |
+| [28 additional papers processed] | [various] | [various] | [various] | [various] |
 
 ## Novelties pipeline
 | ID | Description | Supervisor verdict | Implementation status |
 |----|-------------|-------------------|----------------------|
-| N1-Djeumou | Compositional grey-box structure (known analytical terms + neural residual) | REJECT — already core architecture in grey_box_net.py | rejected |
-| N2-Djeumou | Augmented Lagrangian training with Lagrange multiplier dual-ascent | REJECT — already implemented in constraints.py | rejected |
-| N3-Djeumou | Semi-supervised constraint enforcement on unlabeled joint-space points to extend dissipativity guarantees | INVESTIGATE — ablation study needed once data exists | pending |
-| N1-Liu | RK4 rollout loss (4th-order forward simulation residual in training loss) | REJECT — conflicts with RNEA grey-box architecture | rejected |
-| N2-Liu | Cholesky dissipativity structural constraint (diagonal FrictionNet sub-module with Softplus diagonal D parameterization, tau_friction = -D * qdot, 7 diagonal + 6 biases params) | KEEP — IMPLEMENTED on branch novelty/N2-Liu-frictionnet, physics validator PASSED, MERGED to main (commit ebc2ba3) | done |
-| N3-Liu | Lyapunov stability template for Stage 3 controller (Kd = safety_margin * error_bound, Kp = Kd^2/4; DEFAULT_ERROR_BOUND recomputed 2026-07-16 from real validation data = [5.20, 5.66, 3.06, 3.80, 2.10, 2.38, 1.57] Nm, per-joint p99.9, no longer a placeholder) | KEEP — IMPLEMENTED on branch stage3/computed-torque-pd-controller, MERGED to main | done |
-| N4-Liu | --max_samples data-efficiency ablation flag (truncate training data to N random samples, seed=42, before train/val split) | KEEP — IMPLEMENTED on branch novelty/liu2024-N4-max-samples, MERGED to main | done |
-| N1-Duong | Cholesky L L^T + eps*I algebraic kernel for parameterizing positive-definite dissipative matrices | INVESTIGATE — 28 lower-triangular entries, Softplus diagonal; considered and rejected in favor of diagonal D for N2-Liu (Franka serial-chain independent motors justify sparsity) | pending |
-| N2-Duong | (duplicate of N1-Duong in port-Hamiltonian formulation) | REJECT — no new content beyond N1-Duong | rejected |
-| N3-Duong | Sim-to-real fine-tuning via frozen-backbone learning: load GreyBoxNet checkpoint, freeze all but last 2 nn.Linear layers, fine-tune for --max_steps (default=100) under full PINN loss | KEEP — IMPLEMENTED on branch novelty/duong2024-N3-simtoreal-finetune, physics validator PASSED, MERGED to main (commit 0aa4fdc) | done |
-| N1-WangCAC | Sobol sampling (low-discrepancy sequences) for excitation trajectory generation to improve coverage | IMPLEMENTED — `generate_isaac_dataset.py` (primary) and `generate_fourier_dataset.py` (smoke-test) both use scipy.stats.qmc.Sobol to sample 10 q_center configurations (7-D joint space), generating 10 segments × 5000 samples per payload. Falls back to uniform if scipy unavailable. | done |
-| N2-WangCAC | Trapezoidal collocation loss (residual on acceleration from finite differences) | REJECT — same RK4 vs RNEA grey-box conflict as N1-Liu | rejected |
-| N3-WangCAC | Extended Kalman Filter for state estimation under sensor latency | REJECT — latency > 1 ms incompatible with 1 kHz control rate | rejected |
-| N1-SPEL | Physics-driven sparsity mask on Cholesky friction matrix: structurally-zero entries for revolute joints in 7x7 symmetric matrix | CLOSED — Pinocchio analysis confirmed diagonal D correct (75% param reduction vs full Cholesky: 28 lower-triangular → 7 diagonal, all 7 joints are independent JointModelRZ). Validates existing N2-Liu FrictionNet design. No new implementation needed. | done |
-| N2-SPEL | Trainable URDF constants (link masses, inertias, friction coefficients) in neural augmentation | REJECT — violates RNEA-intact white-box invariant in grey-box architecture | rejected |
-| N3-SPEL | KAN (Kolmogorov-Arnold Networks) activations for physics-informed learning | REJECT — violates Mish/Softplus smoothness constraint from CLAUDE.md | rejected |
-| N1-E2NN | Structural sub-term embedding (Deng et al. 2024): explicitly decompose inverse dynamics into inertia, Coriolis, gravity terms per-joint | REJECT — E2NN validated on 1-DoF only; manual per-robot sub-term derivation conflicts with Goal 1 automation | rejected |
-| N2-E2NN | Liquid gating mechanism (recurrent hidden state modulation) | REJECT — recurrent incompatible with stateless 1 kHz control; tanh/sigmoid forbidden activations | rejected |
-| N1-CMP | Eikonal PDE planner on constraint manifold (C-NTFields, Ni & Qureshi 2024) | REJECT — custom planner incompatible with Stage 2 MoveIt2 mandate in CLAUDE.md | rejected |
-| N2-CMP | Negative-exponential speed model in Eikonal solver | REJECT — planning-domain detail, no link to dynamics loss | rejected |
-| N1-NTF | Active sensing in Eikonal planner (Liu, Ni & Qureshi 2024) | REJECT — incremental extension of C-NTFields; Stage 2 uses standard MoveIt2 | rejected |
-| N2-NTF | Uncertainty-weighted replanning in active NTFields | REJECT — no link to dynamics loss | rejected |
-| N1-AdaKineNet | Adaptive kinematic network with attention mechanism for inverse kinematics (Fang et al. 2026) | REJECT — inverse kinematics problem; dynamics-independent of torque learning | rejected |
-| N2-AdaKineNet | ReLU-based deep IK architecture on 10-DoF mobile manipulator | REJECT — ReLU forbidden; mobile manipulator domain incompatible with fixed Franka 7-DoF | rejected |
-| N1-WhenPhysics | Soft contact dynamics via LuGre friction ODE for prediction accuracy on unknown payloads | REJECT — equivalent to τ_friction in constraints.py augmented Lagrangian | rejected |
-| N2-WhenPhysics | EMA loss balancing (β=0.95) per residual magnitude to mitigate 87/12 Nm torque scale imbalance across joints | INVESTIGATE — diagnostic implemented in training/train.py (per-joint val RMSE printed at end of training). Fourier baseline result 2026-06-26: ratio 1.0x (joints 1-4: 0.239 Nm, joints 5-7: 0.247 Nm) — no imbalance on synthetic residual. Multi-payload run (0/1/3 kg): ratio 1.0x (joints 1-4: 0.224 Nm, joints 5-7: 0.235 Nm) — still no EMA activation needed. Revisit after real robot recordings. | pending |
-| N3-WhenPhysics | Physics-aware trajectory sampling for sim-to-real transfer (Prabhakar et al. 2026) | REJECT — duplicate of N3-Duong 100-step frozen-backbone fine-tuning | rejected |
-| N1-fagro | LSTM edge-correction for crop health prediction (agricultural domain) | REJECT — agriculture robotics domain mismatch, no dynamics learning applicability | rejected |
-| N2-fagro | Distributed edge-sensor fusion architecture for IoT-based agricultural monitoring | REJECT — agriculture domain, no robot arm applicability | rejected |
-| N1-frobt | Automating robotic kinematics PINN via RPA frameworks on 2R arm | REJECT — inverse kinematics domain (duplicate IK coverage); 40.5 ms latency incompatible with 1 kHz control | rejected |
-| N1-BacklashPINN | Backlash compensation via residual PINN: tau_pred = RNEA + tau_backlash + tau_res | REJECT — ReLU activations forbidden by CLAUDE.md Mish/Softplus constraint | rejected |
-| N2-BacklashPINN | TCN (Temporal Convolutional Network) sliding-window architecture for history-dependent backlash estimation | REJECT — stateful sliding-window architecture breaks stateless 1 kHz control loop invariant; recurrent incompatible with real-time servo | rejected |
-| N3-BacklashPINN | Backlash hysteresis modeling on non-harmonic-drive joint gear trains | REJECT — Franka uses harmonic reducers on all 7 joints; backlash error is payload-independent (validates RNEA white-box coverage of load-dependent terms). Non-applicable. | rejected |
-| N1-PayloadPINN | PINN payload identification under QDD quasi-direct-drive motor assumption | REJECT — Franka Panda has harmonic reducers + motor inertia, not QDD; incompatible motor model | rejected |
-| N2-PayloadPINN | Virtual payload link at runtime (inject, estimate, restore in Pinocchio RNEA) | REJECT/PRE-EXISTING — ALREADY IMPLEMENTED in pinocchio_baseline/rnea_wrapper.py (_inject_payload/_restore_payload functions). Dual payload-awareness (RNEA white-box + tau_res delta input) is ahead of published Li et al. 2025 state of art. Competitive advantage for final paper. | rejected |
-| N3-PayloadPINN | NMPC 100 Hz predictive control with payload disturbance rejection | REJECT — NMPC 100 Hz incompatible with Stage 2 (MoveIt2 planning) + Stage 3 (simple computed-torque + PD) architecture. Project scope is stateless 1 kHz feedforward + feedback, not predictive MPC. | rejected |
-| N1-CompliantPINN | Magnitude penalty on residual output in loss function for compliant manipulators | REJECT — harmful for rigid-body Franka; output penalty suppresses real friction and payload signal. Compliant-specific design. | rejected |
-| N2-CompliantPINN | Static friction balancing across joint scales via magnitude weighting | REJECT — weaker static variant of N2-WhenPhysics EMA already gated. Compliant-specific design. | rejected |
-| N1-PIKANs | Kolmogorov-Arnold Network (KAN) activations for physics-informed learning | REJECT — KAN violates Mish/Softplus smoothness constraint from CLAUDE.md, duplicate of N3-SPEL | rejected |
-| N2-SNRDiag | Per-sample signal-to-noise ratio diagnostic for physics-aware trajectory filtering | REJECT — diagnostic only, serves no goal.md objective; per-joint RMSE in training/train.py already covers equivalent signal of physics alignment | rejected |
-| N1-DeLaN | Parametric Lagrangian learning from scratch (L-net, H-net) without URDF structure | REJECT — grey-box RNEA white-box from URDF is more sample-efficient; foundational predecessor to grey-box hybrid designs | rejected |
-| N2-DeLaN | Cholesky parameterization with Softplus for positive-definite energy dissipation matrices | REJECT — origin technique for PD parameterization; superseded by N2-Liu FrictionNet with structural dissipativity guarantee | rejected |
-| N1-DeLaN4EC | Energy-based Lagrangian control framework for underactuated 2-DoF arm at 500 Hz | REJECT — underactuated domain (undersized joint actuators); Franka Panda is fully actuated with per-joint torque control, domain mismatch | rejected |
-| N2-DeLaN4EC | Practical hardware control loop at 500 Hz on physical robot | REJECT — demonstrates feasibility on hardware; target is 1000 Hz, control architecture (computed-torque + PD with Lyapunov gains) adopted from Liu 2024 not this paper | rejected |
-| N3-DeLaN4EC | Learning dynamics from joint position/velocity only, without explicit torque measurements | REJECT — Franka Panda has force/torque sensors and joint encoders; applicability domain mismatch to sensorless systems | rejected |
-| N1-DiffNEA | Differentiable RNEA via automatic differentiation pipeline for gradient-based inverse dynamics optimization | REJECT — Pinocchio provides differentiable RNEA natively; frozen white-box RNEA + neural residual avoids redundant gradient accumulation through dynamics | rejected |
-| N2-DiffNEA | Static friction compensation via augmented joint inertia and friction coefficient parameters | REJECT — FrictionNet (N2-Liu) structural dissipativity guarantee is superior to soft-penalty friction compensation approaches | rejected |
-| N3-DiffNEA | 7-DoF ABB manipulator validation with differentiable forward dynamics integration | REJECT — validates Pinocchio + differentiable RNEA appropriate for 7-DoF; no novel friction model or payload conditioning specific to Franka Panda hardware | rejected |
-| N1-MR-KT | Mixed Reality kinesthetic teaching interface for robot skill acquisition | REJECT — mixed reality HRI domain; kinesthetic teaching system design, no inverse dynamics or torque residual learning applicability | rejected |
-| N1-DemoModality | Imitation learning policy via behavioral cloning on different demonstration modalities (teleoperation, kinesthetic, VR) | REJECT — imitation learning / behavioral cloning policy learning; no inverse dynamics PINN, no residual torque modeling | rejected |
-| N1-Ibarz | Residual reinforcement learning on pre-trained forward dynamics model (Ibarz et al. 2021 lessons learned) | REJECT — RL policy optimization on learned forward model; inverse dynamics PINN domain orthogonal to RL policy learning | rejected |
-| N2-Ibarz | Latency-aware planning and replanning under communication delays in distributed robot systems | REJECT — RL planning/replanning domain; Stage 2/3 use standard MoveIt2 + computed-torque + PD controller, not adaptive RL replanning | rejected |
-| N3-Ibarz | Domain randomization in simulation for sim-to-real transfer robustness (Ibarz et al. 2021) | REJECT — domain randomization via DR policy; sim-to-real transfer via frozen-backbone fine-tuning already covered by N3-Duong, not RL-specific approach | rejected |
+| N1-Djeumou | Compositional grey-box structure | REJECT — already in grey_box_net.py | rejected |
+| N2-Djeumou | Augmented Lagrangian training | REJECT — already in constraints.py | rejected |
+| N3-Djeumou | Semi-supervised constraint enforcement | INVESTIGATE — pending | pending |
+| N2-Liu | Cholesky dissipativity (diagonal FrictionNet) | KEEP — IMPLEMENTED, physics validator PASSED, MERGED (commit ebc2ba3) | done |
+| N3-Liu | Lyapunov stability template (Stage 3 gains) | KEEP — IMPLEMENTED, MERGED | done |
+| N4-Liu | --max_samples ablation | KEEP — IMPLEMENTED, MERGED | done |
+| N1-Duong | Cholesky L L^T + eps*I algebraic kernel | INVESTIGATE — pending | pending |
+| N3-Duong | Sim-to-real fine-tuning (frozen-backbone) | KEEP — IMPLEMENTED, MERGED (commit 0aa4fdc) | done |
+| N1-WangCAC | Sobol sampling for excitation | IMPLEMENTED — in generate_isaac_dataset.py | done |
+| [remaining novelties] | [various] | [various] | [various] |
 
 ## Experiments logged
 | Run ID | Date | Val loss | Notes |
 |--------|------|----------|-------|
-| smoke-baseline | 2026-06-26 | 44.10 (mse 0.87) | `--synthetic --epochs 5`, no FrictionNet. MSE 3.41→0.87, dissip_viol=0. Saved: models/run_20260626_104119/ |
-| smoke-frictionnet | 2026-06-26 | 44.01 (mse 0.83) | `--synthetic --epochs 5 --use_friction_net`. D_diag converged to ~1.0-1.3 (joint 1 highest, physically plausible). dissip_viol=0. Saved: models/run_20260626_104318/ |
-| fourier-baseline | 2026-06-26 | 0.0453 (mse 0.0453) | `--data fourier_baseline_0kg.h5 --epochs 20`, no FrictionNet. MSE 0.92→0.048, dissip_viol=0. Real RNEA data (example_robot_data inertials). Saved: models/run_20260626_111550/ |
-| fourier-frictionnet | 2026-06-26 | 0.0451 (mse 0.0451) | `--data fourier_baseline_0kg.h5 --epochs 20 --use_friction_net`. D_diag converged to ~1.5-2.1 (J1 highest at 2.05, physically plausible). Marginal improvement over baseline as expected on simple synthetic residual. Saved: models/run_20260626_111912/ |
-| fourier-sobol-N2diag | 2026-06-26 | 0.0570 (mse 0.0570) | `--data fourier_baseline_0kg.h5 --epochs 20` on Sobol-regenerated dataset. Per-joint RMSE: [0.240, 0.233, 0.257, 0.228, 0.257, 0.228, 0.256] Nm. Ratio 1.0x — no scale imbalance. EMA balancing not triggered. Saved: models/run_20260626_113906/ |
-| multi-payload-frictionnet-smoke | 2026-06-26 | 0.0523 (mse 0.0530) | `--data fourier_baseline_0kg.h5 fourier_baseline_1kg.h5 fourier_baseline_3kg.h5 --epochs 20 --use_friction_net`. First multi-payload run (147,734 total samples). Val MSE 0.0530 slightly higher than single-payload (0.0451) as expected—harder generalization across 3 payload conditions. Physics constraints satisfied throughout (dissip_viol=0). Per-joint val RMSE [0.246, 0.215, 0.219, 0.217, 0.210, 0.219, 0.276] Nm. D_diag mean/joint [1.168, 1.435, 1.629, 1.189, 1.369, 1.337, 1.198]. No EMA balancing (ratio 1.0x: J1-4 0.224 Nm vs J5-7 0.235 Nm). Saved: models/run_20260626_164045/ |
-| isaac-multipayload-frictionnet-first-real | 2026-07-16 | 1.4767 (epoch 177) | FIRST training run on real Isaac Sim data (148,760 samples), corrected panda.urdf inertials. `--data data/isaac_0.0kg.h5 data/isaac_1.0kg.h5 data/isaac_3.0kg.h5 --epochs 200 --use_friction_net`. Val loss noisy/non-monotonic, dissip_viol oscillated up to 0.0657 late in training. Per-joint val RMSE [1.5694, 1.4355, 1.1351, 1.7685, 0.9680, 0.4885, 0.5180] Nm. **SUPERSEDED** — `controller/compute_error_bound.py` found per-joint max val error of 91-110 Nm (exceeds 87 Nm torque limit), traced to actuator-saturation-contaminated samples in the source data. Saved: models/run_20260716_110933/ |
-| isaac-multipayload-frictionnet-satfix | 2026-07-16 | **0.3995** | Re-run after fixing generate_isaac_dataset.py's over-torque filter (`SATURATION_MARGIN=0.97`, drops samples within 3% of torque limit, not just strictly over). Regenerated data (148,304 samples). Best val loss ~4x better than pre-fix run, dissip_viol converges smoothly to 0.0006 (was oscillating to 0.0657). Per-joint val RMSE [0.7996, 0.8823, 0.8979, 0.5396, 0.3732, 0.3593, 0.2986] Nm. J1-4 mean 0.78 Nm vs J5-7 mean 0.34 Nm (ratio 0.4x, same as before — imbalance looks real, not a saturation artifact; still below EMA trigger). **Current reference baseline.** Saved: models/run_20260716_121302/ |
+| smoke-baseline | 2026-06-26 | 44.10 | Synthetic, no FrictionNet |
+| smoke-frictionnet | 2026-06-26 | 44.01 | Synthetic, FrictionNet |
+| fourier-baseline | 2026-06-26 | 0.0453 | Fourier 0kg, no FrictionNet |
+| fourier-frictionnet | 2026-06-26 | 0.0451 | Fourier 0kg, FrictionNet |
+| fourier-sobol-N2diag | 2026-06-26 | 0.0570 | Sobol-generated Fourier |
+| multi-payload-frictionnet-smoke | 2026-06-26 | 0.0523 | Fourier 0/1/3kg, FrictionNet (147,734 samples) |
+| isaac-multipayload-frictionnet-first-real | 2026-07-16 | 1.4767 | First real Isaac Sim data (148,760 samples), SUPERSEDED |
+| isaac-multipayload-frictionnet-satfix | 2026-07-16 | **0.3995** | After SATURATION_MARGIN=0.97 fix, **REFERENCE BASELINE** (148,304 samples) |
 
 ## Current milestone
-**Stage 1 (PINN)** — Data-quality blockers resolved. `pinocchio_baseline/panda.urdf` mass/inertia fix committed (`c179740`). Isaac Sim 6.0.1 data pipeline validated end-to-end, including actuator-saturation filter fix (`SATURATION_MARGIN=0.97`). Two real GPU training runs completed; `isaac-multipayload-frictionnet-satfix` (val loss 0.3995) is the current reference baseline. Stage 3 `DEFAULT_ERROR_BOUND` recomputed from real data (no longer a placeholder) using documented p99.9 methodology. Stage 4 framework MERGED to main (b86f335): force-controlled grasping with dry_run tests PASSING; gripper_controller.read/stop FIXED.
+**Stage 1 (PINN):** `isaac-multipayload-frictionnet-satfix` (val loss 0.3995) is the current reference baseline. DEFAULT_ERROR_BOUND recomputed from real data (p99.9 percentiles).
 
-**Stage 2/3 (MoveIt2 + Computed-Torque Controller)** — **Milestone 1 COMPLETE (stable baseline, committed)**: ROS2 Jazzy + MoveIt2 + Isaac Sim wiring fully validated end-to-end. Simulated Franka Panda in Isaac Sim publishes joint state and subscribes to effort commands on correct topics. MoveIt2 standard planner generates and executes trajectories via position commands. **Milestone 2 ATTEMPTED, REVERTED**: Attempted rerouting through `pinn_controller_node` for effort-based control. Discovered 4 real bugs (DOF mismatch, joint stiffness, free-fall, controller logging) and attempted fixes, but human requested full revert to Milestone 1 baseline after frustration with autonomous terminal execution. Current state is identical to end of Milestone 1 (commit d81851b). Next attempt: human will run ROS2/Isaac Sim commands; Claude will diagnose.
+**Stage 2/3 (ROS2 + MoveIt2 + Controller):** **Milestone 1 and 2 FULLY CLOSED.** Position-mode MoveIt2 execution and Stage 3 effort-mode trajectory tracking are both empirically validated.
 
-Revised path forward: Next Milestone 2 attempt will reapply the 4 bug fixes (with human controlling terminals) → validate end-to-end → resume Stage 1 ablation experiments → run headline results H1-H4 → Stage 4 validation.
+**Stage 4 (grasping) — WORKING, AND NOW PARTIALLY CHARACTERISED (2026-07-29 session 2).** `pick()` is no longer a single-pose demo. Distance sweep complete: **x=0.55 is the baseline at 3/3 with a 1.0 mm error spread**; 0.45 is 2/3, 0.70 succeeds 3/3 but only via large null-space detours with 0.0-0.4 mm convergence margins, and 0.65's older 3/8 spans multiple code versions and needs re-measuring. Lateral offset partially done (y=+0.25 succeeds, tracking degrades). Mass, height/table and yaw NOT yet tested — all specified in `tracking/STAGE4_TEST_PLAN.md`.
+
+**Stage 1 result from Stage 4 instrumentation (the session's headline):** disabling the learned residual **cut `panda_joint5`'s steady-state bias 22x and halved the Cartesian flange error**. The Isaac-trained residual degrades tracking when transferred to MuJoCo — it is being evaluated out of distribution. This does NOT show the grey-box approach fails; it gives the sim-to-real fine-tuning novelty (N3-Duong) a measured baseline to beat.
+
+The blocking "panda_joint4/6/7 freeze" is SOLVED: **`mujoco_ros2_control`'s `ResetWorld` silently reverts every joint to its internal position PID**, bypassing `perform_command_mode_switch()` so no layer reports it, and every effort command is discarded. Fixed by `ros2_ws/force_effort_mode.sh`, now called automatically from `reset_world_home.sh`. The 2026-07-28 conclusion (plugin command pathway) was **wrong** — see the correction section in the 2026-07-29 entry. Five further bugs were fixed behind it, each only reachable once the previous was cleared: the gain-override startup crash, a leaked planning-scene attachment, the attach-before-descent floor conflict, KDL IK budget at longer reach, and two gripper-geometry errors (both traceable to `panda_hand_joint`'s `xyz="0 0 0" rpy="0 0 -0.785"`).
 
 ## Open questions / blockers
-- **`pinocchio_baseline/panda.urdf` mass/inertia — RESOLVED (commit c179740, pushed).**
-- **Isaac Sim 6.0.1 data generation — WORKING and VALIDATED for all 3 payloads**, including actuator-saturation filter fix. Not yet committed — see "What to do next session".
-- **Remaining, NOT resolved — J1-J4 transient-spike outliers:** p99.9 ≈ 3-6 Nm, true max 26-65 Nm on ~0.09% of samples. Worked around via p99.9-not-max Lyapunov bound (documented in code).
-- **ROS2 Infrastructure — INSTALLED and BUILT on this machine.** `~/IsaacSim-ros_workspaces/jazzy_ws` cloned, submodules initialized, built with colcon. All `ros-jazzy-*` packages installed. Not part of git repo; documented here for next session context.
-- **Stage 2/3 Milestone 1 code (ROS2 wiring, pinn_controller_node, simulation/isaac_franka_moveit_bridge.py) — COMMITTED and MERGED to main (d81851b).**
-- **Stage 2/3 Milestone 2 work — REVERTED (commit 0ca77ee).** Code deletions and policy changes rolled back. Next attempt will reapply fixes with human terminal control.
-- **Workflow preference recorded:** Human runs ROS2/Isaac Sim commands in their own terminals; Claude diagnoses from pasted output/logs and written code. Autonomous multi-terminal execution tried once (this session) and explicitly reverted.
-- **Critical bugs found during Milestone 2 (will re-occur, must reapply):**
-  - `pinocchio_baseline/rnea_wrapper.py` RneaBaseline class unfixed 9-vs-7 DOF incompatibility.
-  - Isaac Sim Franka USD needs `set_dof_gains(stiffnesses=0.0, dampings=0.0)` after `play()` for effort authority.
-  - Controller needs gravity-compensation safe-fallback torque (RNEA at qdot/qddot=0) instead of literal zero for "no trajectory" guards — prevents free-fall on startup.
-  - `pinn_controller_node.py` logger doesn't accept `exc_info=True` kwarg — use `traceback.format_exc()` appended to message.
-- **Data pipeline:** Isaac Sim generator (`generate_isaac_dataset.py`) PRIMARY source, validated. Fourier baseline smoke-test only. Real motor-babbling dataset still needed for `training/fine_tune.py`.
-- **papers/inbox/ — CLEARED.** Next batch can be added when user obtains them.
-- **N2-WhenPhysics diagnostic:** Per-joint RMSE logging live in training/train.py. Single/multi-payload ratios show no imbalance yet.
-- **N3-Djeumou (semi-supervised dissipativity):** awaits real motor-babbling dataset.
-- **Past CPU smoke-test experiments remain unvalidated** against corrected URDF — optional to re-run.
-- **Competitive advantage:** N2-PayloadPINN (virtual payload runtime injection) already implemented in `rnea_wrapper.py` — ahead of Li et al. 2025 published state. Cite in final paper.
-- **Stage 4 integration:** `_move_arm()` stub in `grasp_executor.py` awaits Stage 2/3 (MoveIt2 + controller) validated end-to-end. ROS2 node for joint state + grasp orchestration: pending.
-- **Experiment logging — RESOLVED via CSV format** (`tracking/experiments_log.csv`). Up to date through `isaac-multipayload-frictionnet-satfix`.
-- **PAPER_DRAFT.md preservation:** Future sessions use surgical edits, not full rewrites.
+- **Milestone 1 and 2:** FULLY CLOSED (Stage 2/3, unrelated to this session's work).
+- **Stage 4 (grasping) — CORE OBJECTIVE ACHIEVED 2026-07-29, `pick()` works end-to-end (2/2 runs).** Remaining items:
+  - **MANDATORY OPERATING RULE:** every `reset_world_home` MUST be followed by `force_effort_mode.sh`, or all torques are silently discarded. This is now automatic inside `reset_world_home.sh` — do not bypass it by calling the reset service directly.
+  - **Reliability sample is only 2 runs.** run31's final grasp came in at 0.0186 m against a 0.0200 m tolerance — a thin margin, and the worst joint shifted from joint5 to joint2. Run several more picks before treating the numbers as a characterised success rate for the report.
+  - **`panda_joint5` has a systematic, one-signed steady-state bias** (~0.013-0.053 rad, always negative, at every waypoint in every run). It no longer breaks the pick but is untouched by every fix made this session. This is the one genuinely model-shaped open question. **Cleanest test: re-run with `disable_residual:=true`** (RNEA + PD only, learned network never called). If the bias vanishes, the learned residual introduces it — a real result for goal.md objective 2, not just a debugging step.
+  - **`_attach_object()` attaches before the descent, which is physically wrong** and forced the floor collision box to be removed. Proper fix: attach only after the gripper closes (what MoveIt's own pick pipeline does), then restore the floor box. Also: `GraspExecutor` should detach in a `finally` so an abort cannot leak the attachment — the startup cleanup in `test_grasp_pick.py` is belt-and-braces, not a fix for the leak itself.
+  - **`gain_safety_margin_override:=4.0` is passed at launch, not made the default.** Consider promoting it in `controller/lyapunov_gains.py` — but note the wrist Kd (8.4-9.5) then sits near the 12 Nm limit, and visible chatter was observed at stretched, near-singular poses. `lyapunov_gains.py`'s own note on choosing Kp from a target tracking error (rather than from Kd's stability lower bound) is the principled fix and is still unimplemented.
+  - Stage 4 ROS2 orchestration node still doesn't exist — no longer blocked, a working `pick()` now exists to build on.
+- **Workflow lessons (carry forward, all earned expensively):**
+  - **(2026-07-29, the big one) A check that cannot fail is worse than no check.** This bug survived a week because every status layer reported healthy while torques were discarded. `switch_to_effort.sh`'s verification passed; `verify_effort_mode.sh` passed (it reads `controller_manager`, which is exactly the layer that lies); an early `force_effort_mode.sh` verification was tautological (it grepped for effort lines, then asserted the result contained effort lines) and reported OK while printing `position control enabled` directly above. **Verify against the layer that actually acts** — here, the plugin's own per-joint mode log — and make the check able to fail.
+  - **(2026-07-29) Read the log of the component that failed BEFORE forming a hypothesis.** `GOAL_STATE_INVALID` and `Unable to sample any valid states for goal tree` were sitting in `move_group`'s log the whole time and named both planning failures outright; two edits (shrinking the cube box, lowering the floor box) were made against guessed causes before that log was read. Same mistake at project scale: `switch_to_effort.sh`'s header had the correct diagnosis, with numbers, two days before it was acted on.
+  - **(2026-07-29) Distinguish planning failure from tracking failure before blaming the model.** `planning failed, error_code=99999` means MoveIt rejected the goal and NO torque was ever computed. Timing separates the sub-cases: ~1.8 ms = goal in collision; ~5 s = IK sampler exhausted; full 10 s timeout with `still converging` = a genuine tracking problem. Only the last one implicates Stage 1/3.
+  - **(2026-07-29) State leaks between runs.** Restarting the test script clears nothing: the planning scene lives in `move_group` and the control mode lives in the plugin. "Clean" re-runs were not clean.
+  - **(2026-07-28, still valid) Standalone scripts that bypass a layer are powerful** for isolating where a bug lives — but they must hold every other variable constant, or they mislead (`debug_mujoco_internals.py` compared two different control paths AND two different arm configurations at once).
+  - **(carry forward) Long pasted commands get corrupted by terminal line-wrapping.** It happened again on 2026-07-29 and silently dropped `checkpoint_path`, invalidating run18 — the exact failure `launch_pinn_controller_boosted.sh` had already been written to prevent. Use the scripts; do not paste multi-argument `ros2 launch` lines.
+- **Environment fix (carry forward):** Always ensure `ros-jazzy-ros2controlcli` is installed.
+- **Working tree:** all of 2026-07-23/24/28/29 committed on `fix/effort-mode-actuator-lock` (NOT merged to main, not pushed). `school_report/rapport/main.tex` §5.4 still carries the old physics/plugin framing and needs a prose rewrite.
 
 ## What to do next session
-1. **Re-attempt Milestone 2 with human terminal control.** Human will run ROS2/Isaac Sim commands in their own terminals; Claude will read output/logs and guide diagnosis/fixes. Do NOT request autonomy policy change again unless human explicitly asks.
-2. **Reapply the 4 critical bug fixes** discovered in this session's Milestone 2 attempt:
-   - `pinocchio_baseline/rnea_wrapper.py`: Add `pin.buildReducedModel()` to `RneaBaseline.__init__` (lock finger joints 1-2 at neutral, reduce nq from 9 to 7). See `generate_isaac_dataset.py`'s `_load_pin_model()` for exact pattern.
-   - `simulation/isaac_franka_moveit_bridge.py`: Add `set_dof_gains(stiffnesses=0.0, dampings=0.0, dof_indices=<arm_indices>)` right after `app_utils.play()` to zero built-in servo for effort control authority.
-   - `pinn_controller_node.py`: Add `_publish_safe_fallback()` method to compute RNEA gravity-compensation torque (q, qdot=0, qddot=0) instead of literal zero for all "no valid trajectory" guard branches. This fixes the free-fall-on-startup issue.
-   - `pinn_controller_node.py` logger: Replace `exc_info=True` with `traceback.format_exc()` in exception handlers.
-3. **Live-validate the complete fix set** with at least one full test cycle (idle hold → triggered motion → post-trajectory idle hold) watching Isaac Sim viewport. Do not declare Milestone 2 done until smooth, stable motion is confirmed.
-4. **Commit this session's earlier Stage 1 fixes** (if not already done): `generate_isaac_dataset.py` (SATURATION_MARGIN), `controller/compute_error_bound.py` (new diagnostic), `controller/lyapunov_gains.py` (real DEFAULT_ERROR_BOUND), `PAPER_DRAFT.md`, `tracking/PROJECT_STATE.md`, `experiments/EXPERIMENT_PLAN.md`, `tracking/experiments_log.csv`. Check git status — these were written in the prior 2026-07-16 session but may still be uncommitted.
-5. **Optionally investigate J1-J4 transient-spike outliers** (p99.9 3-6 Nm, true max 26-65 Nm, ~0.09% of samples). Hypothesis: PD-servo settling transient at segment start. Check by excluding first ~10-20 timesteps of each Fourier segment and re-running `controller/compute_error_bound.py` to see if tail shrinks. Not blocking — current p99.9 workaround is documented.
-6. **Implement ablation-matrix CLI flags** from `experiments/EXPERIMENT_PLAN.md` blocks A-I (structure ladder, diagonal-vs-Cholesky FrictionNet, activation swap, constraint mode, etc.) once Milestone 2 is stable. None exist yet; these are what turn the validated pipeline into paper results.
-7. **Run headline experiments H1-H4** once ablation flags exist and Milestone 2 control is validated working end-to-end.
-8. **Real motor-babbling data (if/when found):** Use `training/fine_tune.py` (N3-Duong frozen-backbone) starting from `models/run_20260716_121302/greybox_best.pt`. Compute `tau_theo`/`delta` via URDF if not present. Compare against no-finetune and full-retrain baselines.
-9. **Implement Liu et al. (2024) 2s-rollout metric** (rad²/rad, their Table 6/8) for external comparison; per-joint RMSE alone is not comparable to their numbers.
+
+> **SUPERSEDED BY THE 2026-07-29 SESSION 2 ENTRY AT THE TOP OF THIS FILE.**
+> The startup sequence below is still exactly correct and validated across ~15 runs
+> — keep using it, and note step 3 is NOT optional on a fresh sim (skipping it voided
+> a run this session: every torque discarded, arm parked at home, joint7 at -0.78529).
+> The *priorities* listed after it are from session 1 and are largely done. The live
+> priority list is in the top entry and in `tracking/STAGE4_TEST_PLAN.md`, which is
+> the working document for the configuration sweep: mass, height/table and yaw are
+> the outstanding user-requested variations, each with worked prep steps.
+
+**Startup sequence that works (use exactly this order):**
+1. **Terminal 1:** `bash ros2_ws/rebuild_and_relaunch_sim.sh` — kills stale processes, verifies they are gone, rebuilds, and only then launches. Wait for `OK: build succeeded` and the sim to come up.
+2. **Terminal 2:** `bash ros2_ws/launch_pinn_controller_boosted.sh 4.0` — confirm it prints `gain_safety_margin_override=4.00 active` and NOT `No checkpoint_path set`.
+3. **Terminal 3:** `bash ros2_ws/switch_to_effort.sh` — must exit 0. (On a FRESH sim this is the right call; after any reset use `reset_world_home.sh`, which re-asserts effort mode itself.)
+4. **Terminal 3:** run the pick, teeing to a log:
+   `source /opt/ros/jazzy/setup.bash && source ~/projects/pinn_franka/ros2_ws/install/setup.bash && source ~/projects/pinn_franka/ros2_ws/set_pinn_env.sh && python3 ~/projects/pinn_franka/stage4/test_grasp_pick.py 2>&1 | tee stage4/test_grasp_pick_runNN.log`
+5. Between picks: `bash ros2_ws/reset_world_home.sh` (re-asserts effort mode automatically), then re-run step 4.
+
+**Suggested priorities:**
+1. **VALIDATE ACROSS CONFIGURATIONS BEFORE CLAIMING `pick()` WORKS.** 2026-07-29's result is **2/2 at exactly one pose** (cube at x=0.65, y=0, on the floor at z=0.02, axis-aligned, 64 g). That is a working demo, NOT a validated capability, and it must not be written up as one. Several things fixed on 2026-07-29 were tuned against that single pose and may not generalise — the flange-to-fingertip offset, the 45 deg finger alignment, the KDL IK budget, and `gain_safety_margin_override:=4.0`. Test matrix to run before the report claims Stage 4 works:
+   - **Distance (x):** 0.45 / 0.55 / 0.65 / 0.70 m. 0.65 already sits near the IK envelope (see the `config/kinematics.yaml` note); expect 0.70 to need a relaxed grasp orientation rather than more solver time. Also check SHORT reach — a folded-in arm is a different singularity, never tested.
+   - **Lateral offset (y):** -0.25 / 0 / +0.25 m. Everything so far has been at y=0, exactly on the robot's x-axis, which is the WORST case for KDL but the BEST case for symmetry. Off-axis grasps exercise joint1 and the wrist differently and may expose the `panda_joint5` bias more (or less).
+   - **Height / support surface:** put the cube on a **table** instead of the floor. This is the important one and it is not just a z-offset:
+       * A table must be added to BOTH the MJCF (as a real body, so physics is right) and the MoveIt2 planning scene (as a collision object) — the two must agree, exactly like the 5 cube-position sites do.
+       * It re-opens the **attach-before-descent flaw** (item 3 below), and this time there is no workaround: with the cube at table height the phantom attached object descends into the TABLE, and unlike the floor box the table cannot simply be deleted from the planning scene. **Fix the attach ordering FIRST, then add the table.**
+       * It changes the arm's configuration substantially (higher, less extended), so re-check the joint5 bias and the wrist chatter there.
+   - **Object orientation:** rotate the cube about z by 15/30/45 deg. The 45 deg finger alignment fix assumes an axis-aligned cube; a rotated one needs the grasp yaw derived from the object's pose, not hardcoded. Currently it is hardcoded.
+   - **Object size / mass:** vary the cube. **This is the one that exercises the project's actual scientific contribution** — Stage 1's residual is payload-conditioned (`delta`, trained at 0/1/3 kg) and `ComputedTorquePDController.update_payload(delta)` exists but has NEVER been exercised in a real grasp. Picking a heavier object and updating `delta` on grasp is a direct test of goal.md's payload-conditioning novelty, not just a robustness check. Highest scientific value of anything in this list.
+   - **Record success rate and the spread of the final grasp error per configuration.** run31 cleared its 0.0200 m tolerance by only 1.4 mm, so the margin is thin and probably configuration-dependent. The report needs a table of real numbers, not an anecdote.
+2. **Settle the joint5 bias — the one open question that could touch Stage 1.** Re-run with `disable_residual:=true` and compare joint5's steady-state error against the current ~0.013-0.053 rad. If it vanishes, the learned residual is introducing a systematic torque bias on that joint; if it persists, it is the PD/gravity structure, not the model. Either answer belongs in the report (goal.md objective 2).
+3. **Fix the attach ordering properly.** Attach after the gripper closes, not before the descent; add a `finally` detach in `GraspExecutor`; then restore the floor collision box in `test_grasp_pick.py`.
+4. **Rewrite `school_report/rapport/main.tex` §5.4.** It still describes the freeze with the physics/plugin framing. The true story is stronger: a control-mode configuration fault that perfectly mimicked a physics fault, invisible to every status layer, plus a quantified limitation of Liu et al.'s Proposition 1 (Kp derived from a stability lower bound gives `e_ss = 4/(m^2 * eps)`, so better-modelled joints track WORSE — already derived in `controller/lyapunov_gains.py`'s own comment, and confirmed live this session).
+5. **Then Stage 4 orchestration node** — no longer blocked.
+
+**Diagnostic tools available:**
+- `ros2_ws/force_effort_mode.sh` — recover effort mode after any reset. Verifies against the plugin's own log.
+- `ros2_ws/rebuild_and_relaunch_sim.sh` — one-command kill/verify/build/launch cycle.
+- `ros2_ws/verify_effort_mode.sh` — pre/post-test gate. **Caveat: it reads `controller_manager`, which is exactly the layer that lies about the reset revert.** Trust `force_effort_mode.sh`'s plugin-log check over this one.
+- `stage4/debug_mujoco_internals.py` — physics-vs-stack isolation via the raw `mujoco` package (`--settle N` runs zero-torque free-fall first). Hold all other variables constant when using it.
+- `ros2_ws/test_joint{4,6,7}_raw_torque.sh` — single-joint isolation. **Only meaningful if effort mode is verified at the plugin log first.**
+- `stage4/test_direct_joint_bypass.py` — deterministic joint-space targets, no MoveIt2 variability.
+
+**Do NOT re-open:** physics/MJCF model audit, plugin indexing, MoveIt2/OMPL IK variability as the freeze cause, or the trained model as the freeze cause. All are ruled out — the freeze was `ResetWorld`'s silent position-PID revert, fixed and verified.

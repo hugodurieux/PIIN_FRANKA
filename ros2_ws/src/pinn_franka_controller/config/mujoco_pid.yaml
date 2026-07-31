@@ -1,0 +1,90 @@
+# Stage 2/3 -- mujoco_ros2_control's internal PID, converting the 'position'
+# command_interface into torque on the single motor actuator per joint (see
+# mujoco/franka_emika_panda/panda_arm_mujoco.xml's <actuator> comment).
+# Loaded via the pids_config_file hardware param in
+# urdf/panda_mujoco.ros2_control.xacro. Only used by panda_arm_controller
+# (MoveIt2's default position-mode execution, the Milestone-1-equivalent
+# path); the Stage 3 effort path (panda_effort_controller) writes torque
+# directly and never goes through this PID.
+#
+# UNTUNED starting values, not derived from any real tuning pass.
+#
+# History (all live-diagnosed, no rebuild needed to re-test since this is a
+# plain param file): p=3000/d=150 and p=500/d=80 both produced a small, fast,
+# constant buzz. Confirmed NOT caused by RViz (persisted with RViz closed)
+# and NOT by self-collision (added adjacent-link excludes in
+# panda_arm_mujoco.xml's <contact> block, buzz persisted). Confirmed to BE
+# the position PID itself: deactivating panda_arm_controller entirely (no
+# torque commanded at all) stopped the buzz immediately.
+#
+# Tested the theory that D was amplifying velocity noise ("derivative kick")
+# by zeroing d entirely -- this made it DRAMATICALLY worse (large-amplitude
+# oscillation, not a small buzz), disproving that theory: D was providing
+# necessary damping, not causing noise amplification. With d=0, only P (a
+# stiff, nearly-undamped spring) plus each joint's own passive damping
+# (damping="1" in panda_arm_mujoco.xml's <default class="panda"> block,
+# evidently far too weak on its own) were left, so the system rang at its
+# natural frequency. Conclusion: this system is UNDERDAMPED, needs MORE d
+# than the d=80/25 that still buzzed, not less. u_clamp stays at the joint's
+# real torque limit (network/constants.TORQUE_LIMITS) so this PID's own
+# output clamp is physically meaningful.
+/**:
+  ros__parameters:
+    pid_gains:
+      position:
+        panda_joint1:
+          p: 500.0
+          i: 0.0
+          d: 250.0
+          u_clamp_max: 87.0
+          u_clamp_min: -87.0
+          i_clamp_max: 0.0
+          i_clamp_min: 0.0
+        panda_joint2:
+          p: 500.0
+          i: 0.0
+          d: 250.0
+          u_clamp_max: 87.0
+          u_clamp_min: -87.0
+          i_clamp_max: 0.0
+          i_clamp_min: 0.0
+        panda_joint3:
+          p: 500.0
+          i: 0.0
+          d: 250.0
+          u_clamp_max: 87.0
+          u_clamp_min: -87.0
+          i_clamp_max: 0.0
+          i_clamp_min: 0.0
+        panda_joint4:
+          p: 500.0
+          i: 0.0
+          d: 250.0
+          u_clamp_max: 87.0
+          u_clamp_min: -87.0
+          i_clamp_max: 0.0
+          i_clamp_min: 0.0
+        panda_joint5:
+          p: 150.0
+          i: 0.0
+          d: 70.0
+          u_clamp_max: 12.0
+          u_clamp_min: -12.0
+          i_clamp_max: 0.0
+          i_clamp_min: 0.0
+        panda_joint6:
+          p: 150.0
+          i: 0.0
+          d: 70.0
+          u_clamp_max: 12.0
+          u_clamp_min: -12.0
+          i_clamp_max: 0.0
+          i_clamp_min: 0.0
+        panda_joint7:
+          p: 150.0
+          i: 0.0
+          d: 70.0
+          u_clamp_max: 12.0
+          u_clamp_min: -12.0
+          i_clamp_max: 0.0
+          i_clamp_min: 0.0

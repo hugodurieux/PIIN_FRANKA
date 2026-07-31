@@ -77,11 +77,15 @@ import isaacsim.core.experimental.utils.app as app_utils
 import isaacsim.core.experimental.utils.stage as stage_utils
 import omni.graph.core as og
 import usdrt.Sdf
+from isaacsim.core.experimental.prims import Articulation
 from isaacsim.core.experimental.utils.prim import get_prim_at_path
 from isaacsim.core.rendering_manager import ViewportManager
 from isaacsim.core.simulation_manager import SimulationManager
 from isaacsim.storage.native import get_assets_root_path
 from pxr import Gf, UsdGeom
+
+# Same 7 arm joint names as generate_isaac_dataset.py / pinn_controller_node.py.
+ARM_JOINT_NAMES = [f"panda_joint{i}" for i in range(1, 8)]
 
 # Enable the ROS2 bridge extension.
 app_utils.enable_extension("isaacsim.ros2.bridge")
@@ -171,6 +175,19 @@ simulation_app.update()
 SimulationManager.setup_simulation(dt=1.0 / 60.0, device="cpu")
 
 app_utils.play()
+simulation_app.update()
+
+# Isaac's Franka USD ships with a stiff built-in position-hold servo
+# (stiffness ~22918, damping ~4584) that is NOT disabled by effort commands
+# arriving on isaac_joint_commands -- both the servo and pinn_controller_node's
+# torque commands act simultaneously in PhysX, and the servo dwarfs the
+# controller's ~30-90 Nm torques. Per Isaac's own docs: "For effort control,
+# set zero stiffness and damping, or remove DOF's drive." Zero only the 7 arm
+# joints (not the gripper fingers, which should keep their position hold).
+franka_articulation = Articulation(FRANKA_STAGE_PATH)
+dof_names = list(franka_articulation.dof_names)
+arm_dof_indices = [dof_names.index(n) for n in ARM_JOINT_NAMES]
+franka_articulation.set_dof_gains(stiffnesses=0.0, dampings=0.0, dof_indices=arm_dof_indices)
 simulation_app.update()
 
 frame_count = 0

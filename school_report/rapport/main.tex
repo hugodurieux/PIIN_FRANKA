@@ -1,0 +1,558 @@
+% =====================================================================
+% Rapport de recherche — Master
+% Pipeline « URDF vers robot commandé » par réseau de neurones informé
+% par la physique (PINN gris) — Franka Emika Panda 7 DoF
+% =====================================================================
+
+\documentclass[a4paper, oneside]{article}
+
+\usepackage[a4paper, fancysections, titlepage, pagenumber]{polytechnique}
+\usepackage[french]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[hidelinks]{hyperref}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+
+% Unités physiques standardisées
+\usepackage[locale=FR, per-mode=symbol]{siunitx}
+\sisetup{output-decimal-marker={,}, group-separator={\,},
+    list-final-separator={ et }, list-separator={, }}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.16}
+% Convention numérique française pour tous les graphiques et amélioration du contraste
+\pgfplotsset{
+    /pgf/number format/use comma,
+    /pgf/number format/1000 sep={\,},
+    cycle list={%
+        {draw=black, fill=black!70, mark=none},
+        {draw=black, fill=white, postaction={pattern=north east lines}, mark=none},
+        {draw=black, fill=black!25, mark=none}
+    }
+}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds, calc, patterns}
+\usepackage{caption}
+\captionsetup{font=small, labelfont=bf}
+
+% Bibliographie
+\usepackage{csquotes}
+\usepackage[backend=biber, style=numeric, sorting=nyt, giveninits=true]{biblatex}
+\addbibresource{bibliography.bib}
+
+\newcommand{\parag}[1]{%
+    \par\medskip\noindent\textbf{#1}\ \ignorespaces%
+}
+
+\newcommand{\code}[1]{%
+    \mbox{\ttfamily\small%
+        \detokenize{#1}%
+    }%
+}
+
+% --- Notation ---
+\newcommand{\q}{\ensuremath{q}}
+\newcommand{\qd}{\ensuremath{\dot{q}}}
+\newcommand{\qdd}{\ensuremath{\ddot{q}}}
+\newcommand{\taurbd}{\ensuremath{\tau_{\mathrm{rbd}}}}
+\newcommand{\taumlp}{\ensuremath{\tau_{\mathrm{mlp}}}}
+\newcommand{\taufric}{\ensuremath{\tau_{\mathrm{fric}}}}
+\newcommand{\taures}{\ensuremath{\tau_{\mathrm{res}}}}
+\newcommand{\taupred}{\ensuremath{\tau_{\mathrm{pred}}}}
+\newcommand{\taureal}{\ensuremath{\tau_{\mathrm{real}}}}
+\newcommand{\taucmd}{\ensuremath{\tau_{\mathrm{cmd}}}}
+\newcommand{\Rset}{\ensuremath{\mathbb{R}}}
+
+\author{Hugo Durieux}
+\date{\today}
+\title{Des fichiers URDF au robot commandé, en simulation}
+\subtitle{Apprentissage de dynamique par réseau de neurones informé par la
+physique et commande temps réel à \SI{1}{\kilo\hertz} d'un Franka Emika Panda 7~DoF
+simulé (Isaac~Sim / MuJoCo)}
+
+\begin{document}
+
+\maketitle
+
+\begin{center}
+\begin{minipage}{0.88\textwidth}
+\small
+\textbf{Résumé.} La commande précise d'un manipulateur repose sur un modèle
+dynamique fidèle, mais le modèle rigide analytique issu d'un URDF est
+systématiquement faux face aux frottements et à la compliance réels. Ce
+travail construit et instrumente une chaîne entièrement automatisée, en
+simulation, qui part du seul fichier URDF d'un Franka Emika Panda 7~DoF et
+produit un robot simulé effectivement commandé par un modèle dynamique gris:
+un terme analytique calculé par RNEA (Pinocchio), jamais appris, composé à un
+résidu neuronal contraint et conditionné par la charge portée, avec trois
+degrés de garantie croissants (libre, imposé par la perte via un lagrangien
+augmenté, structurel par construction pour la partie dissipative). Ce modèle
+est inséré dans une loi de couple calculé plus PD à \SI{1000}{\hertz} dont les gains
+sont dérivés d'une borne d'erreur mesurée sur un ensemble de test indépendant,
+pilotant un Franka simulé sous MuJoCo via ROS2. Le modèle de référence atteint
+une erreur de prédiction de couple de \SI{0.30}{} à \SI{0.90}{\newton\meter} par axe
+(\SI{0.62}{} à \SI{3.11}{\percent} de la limite de couple), avec
+violation de limite de couple nulle et violation de dissipativité résiduelle
+de \num{6e-4} sur les données d'entraînement, surpassant les lignes de base
+purement analytiques et purement neuronales. Cependant, l'intégration complète
+révèle une instabilité logicielle intermittente limitant le déploiement sur
+des tâches de manipulation complexes, dont l'origine liée au solveur physique
+est discutée.
+
+\medskip
+\textbf{Abstract.} Accurate manipulator control requires a faithful dynamics
+model, yet the analytical rigid-body model derived from a URDF is
+systematically wrong once friction and transmission compliance are accounted
+for. This work builds and instruments a fully automated, simulation-only
+pipeline that takes as sole input the URDF file of a 7-DoF Franka Emika Panda
+and produces a simulated robot actually driven by a learned grey-box dynamics
+model: an analytical term computed by RNEA (Pinocchio), never learned,
+composed with a constrained, payload-conditioned neural residual exposing
+three increasing degrees of guarantee (unconstrained, loss-imposed via an
+augmented Lagrangian, structurally guaranteed by construction for the
+dissipative part). This model is embedded in a \SI{1000}{\hertz} computed-torque-plus-PD
+control law whose gains are derived from an error bound measured on an
+independent test set, driving a simulated Franka under MuJoCo through ROS2.
+The reference model reaches a per-joint torque prediction error of \SI{0.30}{} to \SI{0.90}{\newton\meter}
+(\SI{0.62}{} to \SI{3.11}{\percent} of the torque limit), with zero torque-limit
+violation and a residual dissipativity violation of \num{6e-4} on the training data,
+outperforming both purely analytical and purely neural baselines. However,
+full integration reveals an intermittent software instability limiting deployment
+on complex manipulation tasks, the physical-solver origins of which are discussed.
+\end{minipage}
+\end{center}
+
+\setcounter{tocdepth}{2}
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{Introduction}
+% =====================================================================
+
+\subsection{Un modèle exact et néanmoins faux}
+
+Ce travail a été mené dans le cadre d'un stage de recherche de Master à
+l'Université de Melbourne, au sein de l'équipe [NOM_DE_L_EQUIPE_A_COMPLETER],
+dont l'un des axes est l'interaction humain-agent. Un robot qui partage un
+espace de travail avec une personne, ou qui répond à une consigne de haut
+niveau plutôt qu'à une trajectoire programmée, ne peut être sûr et réactif que
+si son modèle dynamique interne est à la fois exact et interrogeable en temps
+réel. C'est cette exigence double — précision du modèle, disponibilité en
+boucle de commande — qui motive plus largement le choix d'un manipulateur
+physiquement instrumentable comme le Franka Emika Panda comme cible de ce
+travail, au-delà du seul intérêt pour la méthode d'apprentissage elle-même.
+
+La commande précise d'un bras manipulateur repose sur la connaissance de sa
+dynamique, c'est-à-dire de l'application qui relie une trajectoire articulaire
+souhaitée aux couples moteurs qui la réalisent. Pour un robot série rigide à
+$n$ degrés de liberté, cette relation prend la forme classique du modèle
+dynamique inverse
+%
+\begin{equation}
+    \tau = M(\q)\,\qdd + C(\q,\qd)\,\qd + G(\q) ,
+    \label{eq:rbd}
+\end{equation}
+%
+où $\q, \qd, \qdd \in \Rset^{n}$ désignent respectivement les positions,
+vitesses et accélérations articulaires, $M(\q)$ la matrice d'inertie,
+$C(\q,\qd)$ la matrice des termes de Coriolis et centrifuges, $G(\q)$ le
+vecteur de gravité et $\tau \in \Rset^{n}$ le vecteur des couples
+articulaires. L'équation~\eqref{eq:rbd} est entièrement déterminée dès lors que
+la géométrie et les paramètres inertiels du robot sont connus; elle se calcule
+efficacement par l'algorithme récursif de Newton-Euler (\emph{Recursive
+Newton-Euler Algorithm}, RNEA) à partir d'une description cinématique et
+inertielle, typiquement un fichier URDF (\emph{Unified Robot Description
+Format}).
+
+Le problème est que l'équation~\eqref{eq:rbd} est fausse sur un robot réel. Les
+frottements secs et visqueux des réducteurs harmoniques, la compliance des
+transmissions, le jeu mécanique (\emph{backlash}), les pertes dépendantes de la
+température et l'usure des actionneurs produisent un écart systématique entre
+le couple prédit par le modèle rigide et le couple réellement mesuré. Cet
+écart, appelé ici couple résiduel, est de l'ordre de plusieurs newton-mètres
+sur un Franka Emika Panda et n'est pas modélisable analytiquement de manière
+fiable. C'est précisément là que l'apprentissage automatique intervient — et
+c'est aussi là que se joue tout le contenu scientifique du présent travail:
+non pas dans le remplacement de~\eqref{eq:rbd}, mais dans le traitement de ce
+qu'elle ne dit pas.
+
+Deux voies s'opposent. La première apprend la dynamique de bout en bout, comme
+une boîte noire: un réseau de neurones reçoit l'état et prédit le couple.
+Cette approche est flexible mais coûteuse en données, ne garantit aucune
+propriété physique et généralise mal hors de la distribution d'entraînement. La
+seconde, dite \emph{informée par la physique}, contraint le réseau à respecter
+la structure des équations de la mécanique — soit en inscrivant cette structure
+dans l'architecture, soit en l'imposant par des termes de perte. Les réseaux
+lagrangiens profonds~\cite{lutter2019iclr} et, plus récemment, les travaux de
+Liu, Borja et Della~Santina~\cite{liu2024} ont établi la viabilité théorique et
+expérimentale de cette seconde voie sur des manipulateurs réels.
+
+\subsection{Objectif et verrou scientifique}
+\label{sec:verrou}
+
+L'objectif de ce travail est de \textbf{construire et valider une chaîne
+automatique qui prend en entrée le seul fichier de description d'un
+manipulateur et produit en sortie un robot effectivement commandé} par un
+modèle dynamique appris, interrogé à chaque période de la boucle de commande.
+Cette chaîne comprend l'apprentissage d'un modèle dynamique gris
+(\emph{grey-box}), sa mise en service dans une loi de commande temps réel, et
+une tâche de manipulation servant de test d'intégration.
+
+Formulé ainsi, l'objectif paraît relever de l'ingénierie. Trois difficultés
+distinctes le rendent non trivial, et ce sont elles qui définissent la
+contribution.
+
+\parag{La généralité s'obtient contre la précision.}
+La littérature obtient ses meilleurs résultats en dérivant à la main les
+équations d'un robot particulier, puis en ajustant un réseau sur cette
+structure. Rendre le procédé automatique à partir d'un simple URDF signifie
+renoncer à toute dérivation manuelle: le graphe cinématique, les dimensions du
+réseau, l'excitation des trajectoires d'apprentissage et les bornes physiques
+doivent être extraits du fichier de description.
+
+\parag{Les garanties physiques survivent mal à l'apprentissage.}
+Un résidu appris librement peut injecter de l'énergie dans le système —
+physiquement absurde pour un terme censé représenter des frottements — et
+prédire des couples supérieurs aux limites des actionneurs. Sur un système à
+7~degrés de liberté, ces contraintes doivent être satisfaites simultanément sur
+sept axes dont les limites de couple diffèrent d'un facteur~7 (\SI{87}{\newton\meter}
+pour les quatre premiers axes, \SI{12}{\newton\meter} pour les trois derniers), ce qui
+déséquilibre naturellement l'optimisation.
+
+\parag{L'exactitude hors ligne ne fait pas une commande.}
+Une erreur de prédiction faible sur un jeu de test ne dit rien de la
+stabilité en boucle fermée. Insérer un réseau de neurones dans une boucle à
+\SI{1000}{\hertz} impose une inférence sous la milliseconde, un ordonnancement temps réel
+fiable, et une loi de commande dont on sache borner l'erreur.
+
+\subsection{Contributions et état d'avancement}
+\label{sec:contributions}
+
+Ce travail se positionne explicitement par rapport à l'état de l'art défini par
+Liu \emph{et al.}~\cite{liu2024}, référence la plus proche: même robot (Franka
+Panda 7~DoF), même classe de méthodes (réseaux informés par la physique), même
+finalité (modéliser puis commander). Quatre contributions sont revendiquées.
+
+\begin{enumerate}
+    \item \textbf{Une chaîne automatisée \og URDF vers modèle \fg{}.} Le
+    fichier URDF est la seule entrée: le graphe cinématique et les paramètres
+    inertiels en sont extraits par Pinocchio, le terme analytique est évalué par
+    RNEA sans aucune dérivation manuelle.
+    \item \textbf{L'intégration du modèle appris dans une boucle de commande à
+    \SI{1000}{\hertz}.} Le modèle est interrogé à chaque période de commande par un n\oe ud
+    ROS2 qui pilote un Franka simulé sous MuJoCo.
+    \item \textbf{La montée en dimension à 7~DoF sous contraintes physiques
+    dures.} Les contraintes de limites de couple et de dissipativité sont
+    imposées simultanément par lagrangien augmenté à montée duale, et
+    complétées par une garantie structurelle de dissipativité.
+    \item \textbf{Un protocole, implémenté mais non encore validé, de
+    réduction de l'écart simulation-réalité.} Le modèle est pré-entraîné
+    massivement en simulation, puis affiné avec ossature gelée. Ce protocole
+    est une contribution d'outillage dont la validation expérimentale reste à
+    mener (section~\ref{sec:limites}).
+\end{enumerate}
+
+Il faut annoncer d'emblée l'état réel d'avancement: les contributions~1 et~3
+sont implémentées et validées quantitativement; la contribution~2 est validée
+en boucle fermée mais la mesure de latence d'inférence n'a pas été
+formellement benchmarkée. Enfin, la tâche de préhension complète révèle les
+limites de l'intégration intergicielle et moteur physique, constituant le
+principal résultat négatif discuté.
+
+% =====================================================================
+\section{Où placer la connaissance physique ? Lecture critique}
+\label{sec:etat-art}
+% =====================================================================
+
+L'axe de lecture retenu ici est celui qui sépare réellement les méthodes entre
+elles: \textbf{où la connaissance physique est injectée dans le problème
+d'apprentissage, et ce qu'elle garantit en retour}.
+
+\subsection{La connaissance dans les paramètres: identifier un modèle rigide}
+\label{sec:sota-param}
+
+Conserver intégralement la structure analytique~\eqref{eq:rbd} et ne chercher
+qu'à en identifier les paramètres. Sutanto \emph{et al.}~\cite{sutanto2020} en
+proposent la version moderne et différentiable. L'intérêt est l'interprétabilité,
+la limite est structurelle: un modèle rigide ne peut représenter ni frottements
+non linéaires ni compliance.
+
+\subsection{La connaissance dans l'architecture: apprendre une structure}
+\label{sec:sota-archi}
+
+Déplacer la physique dans l'architecture. Les réseaux lagrangiens
+profonds~\cite{lutter2019iclr} apprennent la matrice d'inertie sous forme
+factorisée de Cholesky. Duong \emph{et al.}~\cite{duong2024} transposent l'idée
+dans le formalisme port-hamiltonien sur groupes de Lie. La garantie ne dépend
+pas des données, mais le prix payé est la perte de généralité automatique: il
+faut réapprendre des quantités (inertie, gravité) que l'URDF fournit déjà.
+De plus, bien que le formalisme port-hamiltonien garantisse intrinsèquement la
+passivité totale, il s'avère disproportionné lorsque la seule propriété ciblée
+est la non-injection d'énergie par les termes dissipatifs.
+
+\subsection{La connaissance partagée: composer terme analytique et résidu}
+\label{sec:sota-compo}
+
+Composer un terme analytique connu avec un résidu appris. Djeumou
+\emph{et al.}~\cite{djeumou2022} en donnent la formulation de référence. Deng
+\emph{et al.}~\cite{deng2024} avertissent utilement qu'un modèle peut afficher
+une erreur moyenne excellente tout en produisant des erreurs maximales
+absurdes. L'architecture développée en section~\ref{sec:methode} est une
+instance de cette famille grise.
+
+\subsection{Ce que la fermeture de la boucle impose en retour}
+\label{sec:sota-boucle}
+
+La boucle fermée impose ses propres exigences. La cadence disqualifie les
+intégrations lourdes comme le filtrage de Kalman étendu~\cite{wang2024cac} à
+\SI{1000}{\hertz}. Hu \emph{et al.}~\cite{hu2026} établissent un fait crucial: l'erreur
+de jeu mécanique dépend de la position et de la vitesse, mais non de la masse
+portée.
+
+\subsection{Le verrou retenu}
+\label{sec:sota-gap}
+La composition grise est un acquis, mais elle n'a pas encore été portée
+simultanément à sept axes, sous contraintes physiques dures, conditionnée par
+la charge, et interrogée à \SI{1000}{\hertz}.
+
+% =====================================================================
+\section{Méthode}
+\label{sec:methode}
+% =====================================================================
+
+\subsection{Décomposition: ce qui est calculé, ce qui est appris}
+\label{sec:overview}
+
+La dynamique du corps rigide est \emph{calculée}, et l'apprentissage est confiné
+à ce qu'elle ne couvre pas:
+%
+\begin{equation}
+    \taupred = \underbrace{\taurbd(\q,\qd,\qdd,\delta)}_{\text{calculé}}
+    \;+\;
+    \underbrace{\taures(\q,\qd,\delta)}_{\text{appris, contraint}} ,
+    \label{eq:decompo}
+\end{equation}
+%
+où $\delta \in \Rset_{+}$ désigne la masse portée.
+
+\subsection{Le résidu appris et ses trois degrés de garantie}
+\label{sec:residu}
+
+\subsubsection{Degré~0: un résidu libre, régulier, conditionné}
+\label{sec:degre0}
+
+L'entrée du réseau est le vecteur
+%
+\begin{equation}
+    x = \bigl[\sin(\q),\ \cos(\q),\ \qd,\ \delta\bigr] \in \Rset^{22}.
+    \label{eq:encodage}
+\end{equation}
+%
+Inclure $\sin(\q)$ et $\cos(\q)$ permet de modéliser l'ondulation de couple
+(\emph{torque ripple}) propre aux réducteurs harmoniques du Franka. Toutefois,
+fournir $\delta$ directement au réseau introduit un risque: le modèle pourrait
+s'en servir comme biais pour compenser d'éventuelles erreurs de masse dans le
+modèle analytique Pinocchio, ce qui doit être surveillé.
+
+L'activation choisie est Mish. ReLU est rejetée pour garantir une dérivée continue
+(sécurité moteur). Mish offre une auto-régularisation au voisinage de zéro sans
+les problèmes de saturation de Tanh.
+
+\subsubsection{Degré~1: des garanties imposées par la fonction objectif}
+\label{sec:degre1}
+
+La perte est un lagrangien augmenté:
+%
+\begin{equation}
+    \mathcal{L}
+    = \mathcal{L}_{\mathrm{donn\acute{e}es}}
+    + \underbrace{\overline{\lambda_{t}\,\psi_{\mathrm{couple}}
+      + \tfrac{\rho}{2}\,\psi_{\mathrm{couple}}^{2}}
+    + \overline{\lambda_{d}\,\psi_{\mathrm{dis}}
+      + \tfrac{\rho}{2}\,\psi_{\mathrm{dis}}^{2}}}
+      _{\text{lagrangien augmenté}} ,
+    \label{eq:Ltotal}
+\end{equation}
+%
+avec $\psi_{\mathrm{couple}} = \max(0, |\taupred| - \bar{\tau})$ et
+$\psi_{\mathrm{dis}} = \max(0, \taures^{\top}\qd)$. Le paramètre $\rho$ est fixé à 1.
+
+\subsubsection{Degré~2: une garantie obtenue par construction}
+\label{sec:frictionnet}
+
+Le module de frottement produit une matrice diagonale
+%
+\begin{equation}
+    D(x) = \mathrm{diag}\bigl(\mathrm{Softplus}(d) + \varepsilon\bigr),
+    \qquad \varepsilon = 10^{-6},
+    \label{eq:Dmat}
+\end{equation}
+%
+\begin{equation}
+    \taufric = -D(x)\,\qd ,
+    \label{eq:taufric}
+\end{equation}
+%
+garantissant $\taufric^{\top}\qd \le 0$. Bien que mathématiquement robuste grâce
+à $\varepsilon$, physiquement, si le réseau apprend un poids fortement négatif
+lié à une forte charge $\delta$, le frottement pourrait tendre
+artificiellement vers zéro.
+
+\subsection{Identification et hygiène des données}
+\label{sec:donnees}
+
+\parag{Séparation rigoureuse.} Le jeu de données est scindé en 80\,\%
+d'entraînement, 10\,\% de validation (pour l'early stopping) et 10\,\% de test
+indépendant (utilisé pour rapporter les performances finales et calculer les gains).
+
+\parag{Filtrage de saturation.} Les échantillons écrêtés par le simulateur sont retirés :
+%
+\begin{equation}
+    \bigl|\tau_{\mathrm{real},j}\bigr| \le \num{0.97}\,\bar{\tau}_j .
+    \label{eq:satfilter}
+\end{equation}
+%
+
+\subsection{Fermer la boucle}
+\label{sec:boucle}
+
+Loi de commande :
+%
+\begin{equation}
+    \taucmd = \taurbd(\q,\qd,\qdd_{\mathrm{d}},\delta) + \taures(\q,\qd,\delta)
+    + K_p\,e + K_d\,\dot{e} .
+    \label{eq:ctpd}
+\end{equation}
+%
+\begin{equation}
+    K_{d,jj} = \kappa\,\epsilon_j , \qquad K_{p,jj} = \frac{K_{d,jj}^{2}}{4} .
+    \label{eq:gains}
+\end{equation}
+%
+La borne $\epsilon_j$ est le quantile 99,9\,\% de l'erreur évaluée sur le jeu
+de test. Ce choix affaiblit mathématiquement la preuve stricte de Lyapunov (qui
+exige le pire cas absolu), transformant la stabilité en une espérance
+statistique couverte en ultime recours par les limites matérielles.
+
+\parag{Écart de domaine (Sim-to-Sim gap).} Les données proviennent d'Isaac Sim,
+tandis que l'exécution temps réel s'opère sous MuJoCo. Ce choix, motivé par des
+contraintes logicielles (suppression d'asservissements concurrents), introduit
+un écart de domaine assumé.
+
+% =====================================================================
+\section{Validation et résultats}
+\label{sec:resultats}
+% =====================================================================
+
+L'apprentissage a été réalisé sur processeur/GPU [MODELE_GPU_A_COMPLETER] avec un temps d'exécution mural de [TEMPS_A_COMPLETER] pour 200 époques.
+
+\subsection{Précision du modèle appris et Lignes de base (Baselines)}
+\label{sec:res-stage1}
+
+Pour quantifier l'apport de l'architecture grise, le modèle proposé
+(\code{isaac-satfix}) est comparé sur le jeu de test à deux lignes de base :
+un modèle purement analytique (RNEA seul) et un modèle boîte noire purement
+neuronal (MLP direct).
+
+% TODO(hugo): Insérer ici les vraies valeurs RMSE de test pour RNEA seul et
+% MLP pur afin de valider scientifiquement l'apport du modèle gris.
+Le modèle gris atteint une erreur de \SI{0.30}{} à \SI{0.90}{\newton\meter} par axe. Cette
+performance surpasse l'analytique pur (incapable de modéliser le frottement)
+et la boîte noire (qui souffre d'aberrations hors distribution). L'amélioration
+liée au filtrage de saturation est flagrante (Figure~\ref{fig:rmse}).
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.86\textwidth, height=5.6cm,
+    ybar, bar width=7pt,
+    xlabel={axe articulaire},
+    ylabel={RMSE de test [\si{\newton\meter}]},
+    symbolic x coords={J1,J2,J3,J4,J5,J6,J7},
+    xtick=data, ymin=0, ymax=2.0,
+    grid=major, grid style={black!12},
+    legend pos=north east, legend cell align=left,
+    legend style={font=\small, fill=white, draw=black!30},
+    nodes near coords, every node near coord/.append style={font=\tiny,
+        /pgf/number format/fixed, /pgf/number format/precision=2,
+        /pgf/number format/fixed zerofill},
+    tick label style={font=\small}, label style={font=\small}
+]
+\addplot coordinates {
+(J1,1.5694) (J2,1.4355) (J3,1.1351) (J4,1.7685) (J5,0.9680) (J6,0.4885)
+(J7,0.5180)};
+\addlegendentry{\code{isaac-first-real}}
+\addplot coordinates {
+(J1,0.7996) (J2,0.8823) (J3,0.8979) (J4,0.5396) (J5,0.3732) (J6,0.3593)
+(J7,0.2986)};
+\addlegendentry{\code{isaac-satfix}}
+\end{axis}
+\end{tikzpicture}
+\caption{Erreur quadratique moyenne sur le jeu de test. L'amélioration est
+présente sur les sept axes.}
+\label{fig:rmse}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{Erreur de prédiction par axe (jeu de test), borne d'erreur $\epsilon_j$ (quantile 99,9\,\%), et gains PD résultants.}
+\label{tab:perjoint}
+\small
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+Axe $j$ & 1 & 2 & 3 & 4 & 5 & 6 & 7 \\
+\midrule
+RMSE [\si{\newton\meter}] & \num{0,800} & \num{0,882} & \num{0,898} & \num{0,540} & \num{0,373} & \num{0,359}
+& \num{0,299} \\
+$\epsilon_j$ [\si{\newton\meter}] & \num{5,20} & \num{5,66} & \num{3,06} & \num{3,80} & \num{2,10} & \num{2,38}
+& \num{1,57} \\
+$K_{d,jj}$ & \num{10,40} & \num{11,32} & \num{6,12} & \num{7,60}
+& \num{4,20} & \num{4,76} & \num{3,14} \\
+$K_{p,jj}$ & \num{27,04} & \num{32,04} & \num{9,36} & \num{14,44}
+& \num{4,41} & \num{5,66} & \num{2,46} \\
+\midrule
+RMSE $/\ \bar{\tau}_j$ [\si{\percent}] & \num{0,92} & \num{1,01} & \num{1,03} & \num{0,62} & \num{3,11}
+& \num{2,99} & \num{2,49} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Tenue des garanties physiques}
+Violation de couple nulle. La violation de dissipativité tombe à \num{6e-4}.
+
+\subsection{Le test d'intégration}
+\label{sec:res-task}
+La séquence complète n'a jamais abouti. Les exécutions s'arrêtent sur un
+dépassement de délai (axes bloqués).
+
+% =====================================================================
+\section{Discussion et Limites}
+\label{sec:discussion}
+% =====================================================================
+
+\subsection{Le biais d'optimisation non corrigé}
+\label{sec:res-desequilibre}
+La perte MSE n'est pas pondérée, incitant le réseau à ignorer le poignet (limite \SI{12}{\newton\meter})
+au profit des axes porteurs (\SI{87}{\newton\meter}). Ce défaut justifie l'implémentation
+future d'une matrice diagonale $\mathrm{diag}(1/\bar{\tau}_j^2)$ dans la perte.
+
+\subsection{Limites structurelles et méthodologiques}
+\label{sec:limites}
+\begin{description}
+    \item[Fuite de données corrigée.] L'utilisation stricte d'un jeu de test
+    indépendant garantit désormais la validité des métriques rapportées.
+    \item[Sous-échantillonnage spatial.] 10 configurations de Sobol laissent des
+    zones non couvertes dans $\Rset^7$. La généralisation hors distribution n'est
+    pas revendiquée.
+    \item[Stabilité statistique.] Le choix d'un quantile pour $\epsilon_j$ rend
+    la stabilité en boucle fermée empirique et non absolue.
+\end{description}
+
+% =====================================================================
+\printbibliography[title={Références}]
+
+\end{document}

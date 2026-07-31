@@ -36,7 +36,16 @@ class RneaBaseline:
             raise ImportError(
                 "pinocchio is required. Install with: pip install pin"
             )
-        self.model = pin.buildModelFromUrdf(urdf_path)
+        full_model = pin.buildModelFromUrdf(urdf_path)
+
+        # panda.urdf has 7 revolute arm joints + 2 prismatic finger joints
+        # (nq=9). Live control only ever commands/reports the 7 arm joints,
+        # so lock both finger joints at neutral to reduce nq -> 7 and match
+        # the 7-vector q/qdot/qddot the controller passes in.
+        finger_joints = ["panda_finger_joint1", "panda_finger_joint2"]
+        joints_to_lock = [full_model.getJointId(j) for j in finger_joints]
+        reference_q = pin.neutral(full_model)
+        self.model = pin.buildReducedModel(full_model, joints_to_lock, reference_q)
         self.data = self.model.createData()
         self.ee_frame = ee_frame
         self._base_ee_mass = None  # cache for payload injection

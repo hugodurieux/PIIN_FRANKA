@@ -127,6 +127,46 @@ def compute_lyapunov_gains(
 # ---------------------------------------------------------------------------
 # Pre-computed defaults (available as module-level constants)
 # ---------------------------------------------------------------------------
+# 2026-07-24: briefly tried safety_margin=4.0 (quadrupling Kp) here to fix
+# joint5 occasionally plateauing on a larger-than-typical Stage 4 waypoint
+# swing. REVERTED after a live retest: with margin=4.0, panda_joint4 froze
+# bit-for-bit at its home value on the very next attempt -- indistinguishable
+# from the self-collision symptom already fixed in panda_arm_mujoco.xml
+# (confirmed that fix is still intact; collision should be structurally
+# impossible now via conaffinity=0), so the mechanism isn't fully understood,
+# but the correlation with the gain change was immediate and reproducible
+# enough not to keep it. Back to the formula's own default (2.0). The
+# original joint5 plateau is instead addressed at the Stage 4 orchestration
+# level (see GraspConfig.pre_approach_cartesian_tolerance in grasp_config.py)
+# rather than by touching these project-wide gains again.
+#
+# 2026-07-27 CORRECTION to the paragraph above: the "panda_joint4 froze right
+# after I raised safety_margin" correlation was a RED HERRING. That freeze has
+# since been traced (from stage4/test_grasp_pick_run13-15.log plus this file's
+# own gain values) to the arm being held by mujoco_ros2_control's INTERNAL
+# position PID -- i.e. panda_effort_controller was not active, so no torque
+# computed here reached the actuators at all. Changing these gains could not
+# have caused it and reverting them could not have fixed it, which is exactly
+# what was observed. See ros2_ws/switch_to_effort.sh's verification block for
+# the numeric fingerprint. Nothing here needs to change on account of it.
+#
+# A SEPARATE, REAL limitation of this formula, worth stating for the paper
+# (goal.md objective 2) rather than silently working around: Liu et al.'s
+# Proposition 1 gives a LOWER BOUND on Kd for stability, not a prescription for
+# Kp. Taking the bound as the gain gives Kd = m*eps and Kp = (m*eps)^2/4, so
+# under a persistent (non-vanishing) model-error torque of magnitude eps the
+# steady-state position error is
+#       e_ss = eps / Kp = 4 / (m^2 * eps)
+# i.e. INVERSELY proportional to the error bound: the better the model on a
+# joint, the softer that joint's gain and the WORSE its steady-state tracking.
+# At m=2.0 that is e_ss = [0.19, 0.18, 0.33, 0.26, 0.48, 0.42, 0.64] rad for
+# joints 1..7 -- worst on the wrist, whose eps are smallest. Asymptotic
+# stability still holds (the error is bounded, and the bound is what the
+# proposition promises), but "bounded" here is decimetres at the flange, so Kp
+# should be chosen from a TARGET tracking error (Kp_j >= eps_j / e_target) with
+# Kd from the Lyapunov bound, not derived from Kd. Deliberately NOT changed
+# here: it needs live retuning data on a stack confirmed to be in effort mode,
+# which no run so far has been.
 DEFAULT_KP, DEFAULT_KD = compute_lyapunov_gains(DEFAULT_ERROR_BOUND)
 
 

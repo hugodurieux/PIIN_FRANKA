@@ -1,0 +1,45 @@
+# Stage 2/3/4 -- project-local override of moveit_resources_panda_moveit_config's
+# own config/kinematics.yaml, added 2026-07-29.
+#
+# WHY. The stock file gives KDL a 0.05 s budget per IK call:
+#     kinematics_solver_timeout: 0.05
+# and MoveIt's goal sampler calls it repeatedly to build the goal tree. KDL is an
+# iterative, randomly-seeded solver, so near a singularity it converges only some
+# of the time within 50 ms. Combined with num_planning_attempts, the observable
+# result is a goal pose that plans fine on one run and fails on the next with
+#     RRTConnect.cpp:265 - Unable to sample any valid states for goal tree
+#     Planner 'OMPL' failed with error code FAILURE / GOAL_STATE_INVALID
+# after burning the whole planning budget. That is IK giving up, NOT a collision:
+# a goal in collision is rejected in ~1.8 ms (measured), whereas exhausting the
+# sampler spends the full ~5 s first.
+#
+# TRIGGERED BY. Moving grasp_object from x=0.50 to x=0.65 (2026-07-29) to test the
+# pick at a longer reach. The grasp is strictly top-down (fingers vertical) at
+# y=0, i.e. exactly on the robot's own x-axis, which is a near-singular region for
+# the Panda; the approach waypoint sits at ~0.708 m from the base. At x=0.50 the
+# 50 ms budget had enough margin to be reliable. At x=0.65 it became a coin flip:
+# test_grasp_pick_run25.log planned approach sub-step 1/2 successfully and failed
+# 2/2, while run27 -- same poses, same scene -- failed 1/2 instead. Raising
+# num_planning_attempts 1 -> 10 in arm_motion_client.py was not enough on its own,
+# because every attempt re-samples through the same under-budgeted solver.
+#
+# WHAT CHANGED. Timeout 0.05 -> 0.25 s, plus an explicit per-call attempt count.
+# This costs planning latency ONLY on poses that are actually hard (an easy pose
+# still converges in a millisecond or two and returns immediately) -- so the
+# normal case is unaffected and the marginal case stops being a lottery.
+#
+# NOT a substitute for good targets: if a pose needs a quarter-second of KDL to
+# find, it is close to the edge of the arm's comfortable envelope, and the arm's
+# tracking there is measurably worse (joint5 hit 0.173 rad error on the stretched
+# approach in run25, vs ~0.01-0.03 rad at ordinary poses). A better long-term fix
+# for reach-limited grasps is to allow a small tilt instead of demanding a
+# perfectly vertical wrist, or to use a gradient-based solver (pick_ik / TRAC-IK)
+# rather than KDL. This override just removes solver budget as a confound.
+#
+# Wired in via mujoco_franka_moveit.launch.py's MoveItConfigsBuilder
+# .robot_description_kinematics(), so the shared system package is untouched.
+panda_arm:
+  kinematics_solver: kdl_kinematics_plugin/KDLKinematicsPlugin
+  kinematics_solver_search_resolution: 0.005
+  kinematics_solver_timeout: 0.25
+  kinematics_solver_attempts: 5
