@@ -1,43 +1,56 @@
 \babel@toc {french}{}\relax 
-\contentsline {section}{\numberline {1}Introduction}{4}{section.1}%
-\contentsline {subsection}{\numberline {1.1}Un modèle exact et néanmoins faux}{4}{subsection.1.1}%
-\contentsline {subsection}{\numberline {1.2}Objectif et verrou scientifique}{4}{subsection.1.2}%
-\contentsline {subsection}{\numberline {1.3}Contributions et état d'avancement}{5}{subsection.1.3}%
-\contentsline {section}{\numberline {2}Où placer la connaissance physique~? Lecture critique des travaux existants}{6}{section.2}%
-\contentsline {subsection}{\numberline {2.1}La connaissance dans les paramètres: identifier un modèle rigide}{6}{subsection.2.1}%
-\contentsline {subsection}{\numberline {2.2}La connaissance dans l'architecture: apprendre une structure énergétique}{7}{subsection.2.2}%
-\contentsline {subsection}{\numberline {2.3}La connaissance partagée: composer un terme analytique et un résidu contraint}{8}{subsection.2.3}%
-\contentsline {subsection}{\numberline {2.4}Ce que la fermeture de la boucle impose en retour}{9}{subsection.2.4}%
-\contentsline {subsection}{\numberline {2.5}Le verrou retenu, et le positionnement de ce travail}{9}{subsection.2.5}%
-\contentsline {section}{\numberline {3}Méthode}{10}{section.3}%
-\contentsline {subsection}{\numberline {3.1}Décomposition: ce qui est calculé, ce qui est appris}{10}{subsection.3.1}%
-\contentsline {subsection}{\numberline {3.2}Le terme analytique, tenu pour invariant}{11}{subsection.3.2}%
-\contentsline {subsection}{\numberline {3.3}Le résidu appris et ses trois degrés de garantie}{12}{subsection.3.3}%
-\contentsline {subsubsection}{\numberline {3.3.1}Degré~0: un résidu libre, régulier, conditionné par la charge}{12}{subsubsection.3.3.1}%
-\contentsline {subsubsection}{\numberline {3.3.2}Degré~1: des garanties imposées par la fonction objectif}{13}{subsubsection.3.3.2}%
-\contentsline {subsubsection}{\numberline {3.3.3}Degré~2: une garantie obtenue par construction}{14}{subsubsection.3.3.3}%
-\contentsline {subsection}{\numberline {3.4}Rendre le résidu identifiable: excitation et hygiène des données}{15}{subsection.3.4}%
-\contentsline {subsection}{\numberline {3.5}Fermer la boucle sur le modèle appris}{16}{subsection.3.5}%
-\contentsline {subsubsection}{\numberline {3.5.1}Loi de commande}{16}{subsubsection.3.5.1}%
-\contentsline {subsubsection}{\numberline {3.5.2}Des gains dérivés d'une borne mesurée}{16}{subsubsection.3.5.2}%
-\contentsline {subsubsection}{\numberline {3.5.3}Environnement d'exécution et contraintes de réalisation}{17}{subsubsection.3.5.3}%
-\contentsline {subsection}{\numberline {3.6}Transférer sous contrainte: affinage à ossature gelée}{18}{subsection.3.6}%
-\contentsline {subsection}{\numberline {3.7}Une tâche de préhension comme test d'intégration}{18}{subsection.3.7}%
-\contentsline {section}{\numberline {4}Validation et résultats}{19}{section.4}%
-\contentsline {subsection}{\numberline {4.1}Ce qui doit être démontré, et par quelle grandeur}{19}{subsection.4.1}%
-\contentsline {subsection}{\numberline {4.2}Précision du modèle appris}{20}{subsection.4.2}%
-\contentsline {subsection}{\numberline {4.3}Les garanties physiques survivent-elles à l'entraînement~?}{22}{subsection.4.3}%
-\contentsline {subsection}{\numberline {4.4}Une hypothèse testée de façon contrôlée: la contamination par saturation}{23}{subsection.4.4}%
-\contentsline {subsection}{\numberline {4.5}De l'erreur de modèle aux gains: quelle borne, quel certificat~?}{23}{subsection.4.5}%
-\contentsline {subsection}{\numberline {4.6}Le modèle appris pilote-t-il effectivement le robot~?}{24}{subsection.4.6}%
-\contentsline {subsection}{\numberline {4.7}Le test d'intégration: la tâche de préhension}{25}{subsection.4.7}%
-\contentsline {section}{\numberline {5}Discussion}{25}{section.5}%
-\contentsline {subsection}{\numberline {5.1}Ce qui se comporte comme prévu}{26}{subsection.5.1}%
-\contentsline {subsection}{\numberline {5.2}Deux défauts de données ont pesé plus que tout réglage}{26}{subsection.5.2}%
-\contentsline {subsection}{\numberline {5.3}Un déséquilibre par axe réel mais laissé sans correction}{26}{subsection.5.3}%
-\contentsline {subsection}{\numberline {5.4}Le résultat négatif principal: l'immobilisation intermittente d'un axe}{27}{subsection.5.4}%
-\contentsline {subsection}{\numberline {5.5}Une leçon sur l'endroit où se trouvent les défauts}{28}{subsection.5.5}%
-\contentsline {subsection}{\numberline {5.6}Limites}{28}{subsection.5.6}%
-\contentsline {section}{\numberline {6}Conclusion et perspectives}{29}{section.6}%
-\contentsline {subsection}{\numberline {6.1}Synthèse}{30}{subsection.6.1}%
-\contentsline {subsection}{\numberline {6.2}Travaux futurs}{30}{subsection.6.2}%
+\babel@toc {english}{}\relax 
+\babel@toc {french}{}\relax 
+\contentsline {section}{\numberline {1}Introduction}{5}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Un modèle exact et néanmoins faux}{5}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Objectif et verrou scientifique}{5}{subsection.1.2}%
+\contentsline {paragraph}{La généralité s'obtient contre la précision.}{5}{paragraph*.1}%
+\contentsline {paragraph}{Les garanties physiques survivent mal à l'apprentissage.}{6}{paragraph*.2}%
+\contentsline {paragraph}{L'exactitude hors ligne ne fait pas une commande.}{6}{paragraph*.3}%
+\contentsline {subsection}{\numberline {1.3}Contributions et état d'avancement}{6}{subsection.1.3}%
+\contentsline {section}{\numberline {2}Travaux connexes}{6}{section.2}%
+\contentsline {paragraph}{Identification de paramètres.}{6}{paragraph*.4}%
+\contentsline {paragraph}{Physique inscrite dans l'architecture.}{7}{paragraph*.5}%
+\contentsline {paragraph}{Modèles gris: composer analytique et résidu.}{7}{paragraph*.6}%
+\contentsline {paragraph}{Contraintes propres à la boucle fermée.}{7}{paragraph*.7}%
+\contentsline {paragraph}{Le verrou retenu.}{7}{paragraph*.8}%
+\contentsline {section}{\numberline {3}Préliminaires}{7}{section.3}%
+\contentsline {paragraph}{Notations.}{7}{paragraph*.9}%
+\contentsline {paragraph}{Modèle dynamique du corps rigide.}{7}{paragraph*.10}%
+\contentsline {paragraph}{Constantes du Franka Emika Panda.}{7}{paragraph*.11}%
+\contentsline {section}{\numberline {4}Formulation du problème}{8}{section.4}%
+\contentsline {paragraph}{Données.}{8}{paragraph*.12}%
+\contentsline {paragraph}{Modèle recherché.}{8}{paragraph*.13}%
+\contentsline {paragraph}{Objectif.}{8}{paragraph*.14}%
+\contentsline {section}{\numberline {5}Méthode}{8}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Décomposition: ce qui est calculé, ce qui est appris}{8}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Le résidu appris et ses trois degrés de garantie}{9}{subsection.5.2}%
+\contentsline {subsubsection}{\numberline {5.2.1}Degré~0: un résidu libre, régulier, conditionné}{9}{subsubsection.5.2.1}%
+\contentsline {subsubsection}{\numberline {5.2.2}Degré~1: des garanties imposées par la fonction objectif}{9}{subsubsection.5.2.2}%
+\contentsline {subsubsection}{\numberline {5.2.3}Degré~2: une garantie obtenue par construction}{10}{subsubsection.5.2.3}%
+\contentsline {subsection}{\numberline {5.3}Identification et hygiène des données}{10}{subsection.5.3}%
+\contentsline {paragraph}{Séparation rigoureuse.}{10}{paragraph*.16}%
+\contentsline {paragraph}{Filtrage de saturation.}{10}{paragraph*.17}%
+\contentsline {subsection}{\numberline {5.4}Fermer la boucle}{10}{subsection.5.4}%
+\contentsline {paragraph}{Une conséquence contre-intuitive du gabarit.}{10}{paragraph*.18}%
+\contentsline {paragraph}{Écart de domaine (\emph {sim-to-sim gap}).}{10}{paragraph*.19}%
+\contentsline {section}{\numberline {6}Validation et résultats}{11}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Lignes de base et protocole de comparaison}{11}{subsection.6.1}%
+\contentsline {paragraph}{Ligne de base analytique (RNEA seul).}{11}{paragraph*.20}%
+\contentsline {paragraph}{Ligne de base boîte noire (MLP direct).}{11}{paragraph*.21}%
+\contentsline {paragraph}{Modèle proposé (\mbox {\ttfamilyFB \small isaac-satfix}).}{11}{paragraph*.22}%
+\contentsline {subsection}{\numberline {6.2}Précision du modèle appris}{11}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}Tenue des garanties physiques}{11}{subsection.6.3}%
+\contentsline {subsection}{\numberline {6.4}Suivi de trajectoire en boucle fermée}{12}{subsection.6.4}%
+\contentsline {subsection}{\numberline {6.5}Ablation du résidu appris sous transfert inter-simulateurs}{12}{subsection.6.5}%
+\contentsline {paragraph}{Ce que ce résultat établit, et ce qu'il n'établit pas.}{12}{paragraph*.27}%
+\contentsline {section}{\numberline {7}Discussion et limites}{13}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Le biais d'optimisation non corrigé}{13}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}Limites de l'intégration au moteur physique}{13}{subsection.7.2}%
+\contentsline {paragraph}{Un défaut de configuration qui imitait un défaut de physique.}{13}{paragraph*.28}%
+\contentsline {paragraph}{Une leçon méthodologique transposable.}{13}{paragraph*.29}%
+\contentsline {paragraph}{État après correction.}{14}{paragraph*.30}%
+\contentsline {paragraph}{Ce que cette tâche ne valide pas.}{14}{paragraph*.31}%
+\contentsline {subsection}{\numberline {7.3}Limites structurelles et méthodologiques}{14}{subsection.7.3}%
+\contentsline {section}{\numberline {8}Conclusion}{14}{section.8}%
+\contentsline {paragraph}{Travaux futurs.}{15}{paragraph*.32}%
