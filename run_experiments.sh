@@ -28,6 +28,22 @@ set -u -o pipefail
 
 cd "$(dirname "$0")" || exit 1
 
+# --- interpreter -----------------------------------------------------
+# Bare `python3` is the SYSTEM python and has no torch: the project's
+# dependencies (torch, h5py, pinocchio via cmeel) live in ./.venv. Resolve in
+# this order so an explicit PYTHON=... always wins:
+#     PYTHON env var  ->  ./.venv/bin/python  ->  python3
+# Note ./.venv/bin/python is a symlink to /usr/bin/python3; it is the venv's
+# pyvenv.cfg and site-packages that matter, so it must be invoked BY THAT PATH
+# and not resolved to /usr/bin/python3 by hand.
+if [ -n "${PYTHON:-}" ]; then
+    PY="${PYTHON}"
+elif [ -x "./.venv/bin/python" ]; then
+    PY="./.venv/bin/python"
+else
+    PY="python3"
+fi
+
 DATA="data/isaac_0.0kg.h5 data/isaac_1.0kg.h5 data/isaac_3.0kg.h5"
 EPOCHS="${EPOCHS:-200}"
 # Held fixed across every run so the comparisons are attributable to the
@@ -81,6 +97,32 @@ if [ "$#" -eq 0 ]; then usage; exit 0; fi
 PHASES=("$@")
 if [ "${1}" = "all" ]; then PHASES=(1 2 3 4 5 6 7 8); fi
 
+# --- preflight -------------------------------------------------------
+# Fail here, loudly and in one second, rather than after a phase has already
+# created a results directory and burned time.
+echo "Interpreter: ${PY}"
+if ! "${PY}" -c "import torch, h5py" 2>/dev/null; then
+    echo
+    echo "ERROR: '${PY}' cannot import torch and h5py."
+    "${PY}" -c "import torch" 2>&1 | tail -2
+    echo
+    echo "The project's dependencies are in ./.venv, not in the system python."
+    echo "Either let this script find it (it looks for ./.venv/bin/python), or:"
+    echo "    PYTHON=/path/to/python bash run_experiments.sh $*"
+    echo "Checked: PYTHON env var, ./.venv/bin/python, python3"
+    exit 1
+fi
+echo "Preflight OK: torch and h5py import."
+
+for f in ${DATA}; do
+    if [ ! -f "${f}" ]; then
+        echo "ERROR: missing dataset ${f}"
+        echo "Datasets are gitignored; regenerate with generate_isaac_dataset.py"
+        exit 1
+    fi
+done
+echo "Preflight OK: every dataset path exists."
+
 mkdir -p "${RESULTS}" || exit 1
 echo "Results -> ${RESULTS}"
 
@@ -102,7 +144,7 @@ echo "Results -> ${RESULTS}"
         || echo "no NVIDIA GPU visible (training will run on CPU)"
     echo
     echo "--- torch ---"
-    python3 -c "import torch; print('torch', torch.__version__, 'cuda', torch.cuda.is_available())" 2>/dev/null \
+    "${PY}" -c "import torch; print('torch', torch.__version__, 'cuda', torch.cuda.is_available())" 2>/dev/null \
         || echo "torch import failed"
 } > "${RESULTS}/env.txt"
 echo "Wrote ${RESULTS}/env.txt  (GPU/CPU model for the report)"
@@ -149,7 +191,7 @@ latest_run_with_tag() {
 # ---------------------------------------------------------------- phase 1
 if has_phase 1; then
     run "p1_greybox_reference" \
-        python3 -m training.train --data ${DATA} ${ARCH} \
+        "${PY}" -m training.train --data ${DATA} ${ARCH} \
             --epochs "${EPOCHS}" --use_friction_net \
             --tag greybox-reference
 fi
@@ -157,7 +199,7 @@ fi
 # ---------------------------------------------------------------- phase 2
 if has_phase 2; then
     run "p2_baseline_rnea" \
-        python3 -m evaluation.eval_baselines --kind rnea --data ${DATA} \
+        "${PY}" -m evaluation.eval_baselines --kind rnea --data ${DATA} \
             --json_out "${RESULTS}/p2_baseline_rnea.json"
 fi
 
@@ -166,7 +208,7 @@ if has_phase 3; then
     # No --use_friction_net: FrictionNet is a dissipative RESIDUAL module and
     # has no meaning when the network output is the whole torque.
     run "p3_baseline_mlp_direct" \
-        python3 -m training.train --data ${DATA} ${ARCH} \
+        "${PY}" -m training.train --data ${DATA} ${ARCH} \
             --epochs "${EPOCHS}" --no_rnea \
             --tag baseline-mlp-direct
 fi
@@ -174,7 +216,7 @@ fi
 # ---------------------------------------------------------------- phase 4
 if has_phase 4; then
     run "p4_ablation_raw_encoding" \
-        python3 -m training.train --data ${DATA} ${ARCH} \
+        "${PY}" -m training.train --data ${DATA} ${ARCH} \
             --epochs "${EPOCHS}" --use_friction_net --encoding raw \
             --tag ablation-raw-encoding
 fi
@@ -193,7 +235,7 @@ if has_phase 5; then
         ARGS=("rnea=" "greybox=${GREY}" "mlp=${MLP}")
         [ -n "${RAW}" ] && ARGS+=("greybox=${RAW}")
         run "p5_comparison_table" \
-            python3 -m evaluation.eval_baselines --data ${DATA} --latex \
+            "${PY}" -m evaluation.eval_baselines --data ${DATA} --latex \
                 --json_out "${RESULTS}/p5_comparison.json" \
                 --compare "${ARGS[@]}"
     fi
@@ -206,7 +248,7 @@ if has_phase 6; then
         echo "!!! phase 6 needs phase 1. Skipping."
     else
         run "p6_error_bound" \
-            python3 -m controller.compute_error_bound \
+            "${PY}" -m controller.compute_error_bound \
                 --run_dir "${GREY}" --data ${DATA}
         echo
         echo "ACTION REQUIRED: copy the p99.9 row from the log above into"
@@ -220,7 +262,7 @@ fi
 # ---------------------------------------------------------------- phase 7
 if has_phase 7; then
     run "p7_ablation_no_frictionnet" \
-        python3 -m training.train --data ${DATA} ${ARCH} \
+        "${PY}" -m training.train --data ${DATA} ${ARCH} \
             --epochs "${EPOCHS}" \
             --tag ablation-no-frictionnet
 fi
@@ -229,7 +271,7 @@ fi
 if has_phase 8; then
     for N in 5000 25000 50000; do
         run "p8_max_samples_${N}" \
-            python3 -m training.train --data ${DATA} ${ARCH} \
+            "${PY}" -m training.train --data ${DATA} ${ARCH} \
                 --epochs "${EPOCHS}" --use_friction_net --max_samples "${N}" \
                 --tag "data-efficiency-${N}"
     done
