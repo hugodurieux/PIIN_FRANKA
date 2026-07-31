@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.7.27)  31 JUL 2026 15:51
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.7.27)  31 JUL 2026 17:16
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1417,7 +1417,7 @@ Package biblatex Info: ... file 'main.bbl' found.
  (./main.bbl)
 Package biblatex Info: Reference section=0 on input line 109.
 Package biblatex Info: Reference segment=0 on input line 109.
-<polytechnique-armes.pdf, id=99, 195.20929pt x 257.65259pt>
+<polytechnique-armes.pdf, id=103, 195.20929pt x 257.65259pt>
 File: polytechnique-armes.pdf Graphic file (type pdf)
 <use polytechnique-armes.pdf>
 Package pdftex.def Info: polytechnique-armes.pdf  used on input line 112.
@@ -1470,12 +1470,12 @@ LaTeX Font Info:    Trying to load font information for U+msb on input line 112
 (/usr/share/texlive/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 )
-<polytechnique-filetcourt.pdf, id=100, 28.40613pt x 2.1681pt>
+<polytechnique-filetcourt.pdf, id=104, 28.40613pt x 2.1681pt>
 File: polytechnique-filetcourt.pdf Graphic file (type pdf)
 <use polytechnique-filetcourt.pdf>
 Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 112.
 (pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
-<polytechnique-logohori.pdf, id=101, 625.50987pt x 227.64648pt>
+<polytechnique-logohori.pdf, id=105, 625.50987pt x 227.64648pt>
 File: polytechnique-logohori.pdf Graphic file (type pdf)
 <use polytechnique-logohori.pdf>
 Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 112.
@@ -1489,7 +1489,7 @@ LaTeX Font Info:    External font `lmex10' loaded for size
 (Font)              <14.4> on input line 112.
 LaTeX Font Info:    External font `lmex10' loaded for size
 (Font)              <7> on input line 112.
-<polytechnique-logovert.pdf, id=130, 322.46072pt x 560.54622pt>
+<polytechnique-logovert.pdf, id=134, 322.46072pt x 560.54622pt>
 File: polytechnique-logovert.pdf Graphic file (type pdf)
 <use polytechnique-logovert.pdf>
 Package pdftex.def Info: polytechnique-logovert.pdf  used on input line 112.
@@ -1501,83 +1501,83 @@ LaTeX Font Info:    External font `lmex10' loaded for size
 (Font)              <6> on input line 121.
 LaTeX Font Info:    External font `lmex10' loaded for size
 (Font)              <5> on input line 121.
-Package cleveref Info: loaded `french' language definitions on input line 160.
-LaTeX Info: Redefining \\ on input line 165.
-<polytechnique-filetlongrouge.pdf, id=161, 124.21407pt x 2.1681pt>
+Package cleveref Info: loaded `french' language definitions on input line 170.
+LaTeX Info: Redefining \\ on input line 175.
+<polytechnique-filetlongrouge.pdf, id=165, 124.21407pt x 2.1681pt>
 File: polytechnique-filetlongrouge.pdf Graphic file (type pdf)
 <use polytechnique-filetlongrouge.pdf>
 Package pdftex.def Info: polytechnique-filetlongrouge.pdf  used on input line 1
-65.
+75.
 (pdftex.def)             Requested size: 124.21375pt x 2.16808pt.
  (./main.toc
 Package cleveref Info: loaded `french' language definitions on input line 1.
 Package cleveref Info: loaded `french' language definitions on input line 3.
-Package cleveref Info: loaded `french' language definitions on input line 48.
+Package cleveref Info: loaded `french' language definitions on input line 39.
 File: polytechnique-logohori.pdf Graphic file (type pdf)
 <use polytechnique-logohori.pdf>
-Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 48.
+Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 39.
 (pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
-Package cleveref Info: loaded `french' language definitions on input line 48.
+Package cleveref Info: loaded `french' language definitions on input line 39.
  [3
 
-{/usr/share/texmf/fonts/enc/dvips/lm/lm-mathit.enc}{/usr/share/texmf/fonts/enc/
-dvips/lm/lm-mathsy.enc} <./polytechnique-filetlongrouge.pdf>])
+{/usr/share/texmf/fonts/enc/dvips/lm/lm-mathit.enc} <./polytechnique-filetlongr
+ouge.pdf>])
 \tf@toc=\write6
 \openout6 = `main.toc'.
 
-Package cleveref Info: loaded `french' language definitions on input line 166.
+Package cleveref Info: loaded `french' language definitions on input line 176.
 File: polytechnique-logohori.pdf Graphic file (type pdf)
 <use polytechnique-logohori.pdf>
-Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 166.
+Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 176.
 (pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
-Package cleveref Info: loaded `french' language definitions on input line 166.
+Package cleveref Info: loaded `french' language definitions on input line 176.
  [4]
-LaTeX Info: Redefining \\ on input line 169.
+LaTeX Info: Redefining \\ on input line 179.
 File: polytechnique-filetlongrouge.pdf Graphic file (type pdf)
 <use polytechnique-filetlongrouge.pdf>
 Package pdftex.def Info: polytechnique-filetlongrouge.pdf  used on input line 1
-69.
+79.
 (pdftex.def)             Requested size: 124.21375pt x 2.16808pt.
 File: polytechnique-filetcourt.pdf Graphic file (type pdf)
 <use polytechnique-filetcourt.pdf>
-Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 173.
+Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 183.
 (pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
 File: polytechnique-filetcourt.pdf Graphic file (type pdf)
 <use polytechnique-filetcourt.pdf>
-Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 219.
+Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 229.
 (pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
-Package cleveref Info: loaded `french' language definitions on input line 250.
+Package cleveref Info: loaded `french' language definitions on input line 260.
 File: polytechnique-logohori.pdf Graphic file (type pdf)
 <use polytechnique-logohori.pdf>
-Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 250.
+Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 260.
 (pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
-Package cleveref Info: loaded `french' language definitions on input line 250.
+Package cleveref Info: loaded `french' language definitions on input line 260.
  [5]
 File: polytechnique-filetcourt.pdf Graphic file (type pdf)
 <use polytechnique-filetcourt.pdf>
-Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 257.
+Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 267.
 (pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
-LaTeX Info: Redefining \\ on input line 292.
-File: polytechnique-filetlongrouge.pdf Graphic file (type pdf)
-<use polytechnique-filetlongrouge.pdf>
-Package pdftex.def Info: polytechnique-filetlongrouge.pdf  used on input line 2
-92.
-(pdftex.def)             Requested size: 124.21375pt x 2.16808pt.
-Package cleveref Info: loaded `french' language definitions on input line 321.
-File: polytechnique-logohori.pdf Graphic file (type pdf)
-<use polytechnique-logohori.pdf>
-Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 321.
-(pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
-Package cleveref Info: loaded `french' language definitions on input line 321.
- [6]
-LaTeX Info: Redefining \\ on input line 348.
+LaTeX Info: Redefining \\ on input line 302.
 File: polytechnique-filetlongrouge.pdf Graphic file (type pdf)
 <use polytechnique-filetlongrouge.pdf>
 Package pdftex.def Info: polytechnique-filetlongrouge.pdf  used on input line 3
-48.
+02.
+(pdftex.def)             Requested size: 124.21375pt x 2.16808pt.
+Package cleveref Info: loaded `french' language definitions on input line 331.
+File: polytechnique-logohori.pdf Graphic file (type pdf)
+<use polytechnique-logohori.pdf>
+Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 331.
+(pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
+Package cleveref Info: loaded `french' language definitions on input line 331.
+ [6]
+LaTeX Info: Redefining \\ on input line 358.
+File: polytechnique-filetlongrouge.pdf Graphic file (type pdf)
+<use polytechnique-filetlongrouge.pdf>
+Package pdftex.def Info: polytechnique-filetlongrouge.pdf  used on input line 3
+58.
 (pdftex.def)             Requested size: 124.21375pt x 2.16808pt.
 
-Overfull \hbox (31.40915pt too wide) in paragraph at lines 384--392
+Overfull \hbox (31.40915pt too wide) in paragraph at lines 394--402
 \T1/lmr/m/n/10 valent $[] \OT1/lmr/m/n/10 = (87\OML/lmm/m/it/10 ; \OT1/lmr/m/n/
 10 87\OML/lmm/m/it/10 ; \OT1/lmr/m/n/10 87\OML/lmm/m/it/10 ; \OT1/lmr/m/n/10 87
 \OML/lmm/m/it/10 ; \OT1/lmr/m/n/10 12\OML/lmm/m/it/10 ; \OT1/lmr/m/n/10 12\OML/
@@ -1589,201 +1589,210 @@ lmm/m/it/10 ;  \OT1/lmr/m/n/10 2[]610\OML/lmm/m/it/10 ;  \OT1/lmr/m/n/10 2[]610
  s$\T1/lmr/m/n/10 .
  []
 
-Package cleveref Info: loaded `french' language definitions on input line 394.
+Package cleveref Info: loaded `french' language definitions on input line 404.
 File: polytechnique-logohori.pdf Graphic file (type pdf)
 <use polytechnique-logohori.pdf>
-Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 394.
+Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 404.
 (pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
-Package cleveref Info: loaded `french' language definitions on input line 394.
-[7]
-LaTeX Info: Redefining \\ on input line 394.
-File: polytechnique-filetlongrouge.pdf Graphic file (type pdf)
-<use polytechnique-filetlongrouge.pdf>
-Package pdftex.def Info: polytechnique-filetlongrouge.pdf  used on input line 3
-94.
-(pdftex.def)             Requested size: 124.21375pt x 2.16808pt.
-LaTeX Info: Redefining \\ on input line 457.
+Package cleveref Info: loaded `french' language definitions on input line 404.
+[7{/usr/share/texmf/fonts/enc/dvips/lm/lm-mathsy.enc}]
+LaTeX Info: Redefining \\ on input line 404.
 File: polytechnique-filetlongrouge.pdf Graphic file (type pdf)
 <use polytechnique-filetlongrouge.pdf>
 Package pdftex.def Info: polytechnique-filetlongrouge.pdf  used on input line 4
-57.
+04.
+(pdftex.def)             Requested size: 124.21375pt x 2.16808pt.
+LaTeX Info: Redefining \\ on input line 467.
+File: polytechnique-filetlongrouge.pdf Graphic file (type pdf)
+<use polytechnique-filetlongrouge.pdf>
+Package pdftex.def Info: polytechnique-filetlongrouge.pdf  used on input line 4
+67.
 (pdftex.def)             Requested size: 124.21375pt x 2.16808pt.
 File: polytechnique-filetcourt.pdf Graphic file (type pdf)
 <use polytechnique-filetcourt.pdf>
-Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 461.
+Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 471.
 (pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
 
 
 LaTeX Font Warning: Font shape `T1/lmr/bx/sc' undefined
-(Font)              using `T1/lmr/bx/n' instead on input line 556.
+(Font)              using `T1/lmr/bx/n' instead on input line 566.
 
 File: polytechnique-filetcourt.pdf Graphic file (type pdf)
 <use polytechnique-filetcourt.pdf>
-Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 560.
+Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 570.
 (pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
 LaTeX Font Info:    Trying to load font information for TS1+lmr on input line 5
-63.
+73.
 (/usr/share/texmf/tex/latex/lm/ts1lmr.fd
 File: ts1lmr.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
-Package cleveref Info: loaded `french' language definitions on input line 571.
+Package cleveref Info: loaded `french' language definitions on input line 581.
 File: polytechnique-logohori.pdf Graphic file (type pdf)
 <use polytechnique-logohori.pdf>
-Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 571.
+Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 581.
 (pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
-Package cleveref Info: loaded `french' language definitions on input line 571.
+Package cleveref Info: loaded `french' language definitions on input line 581.
  [8{/usr/share/texmf/fonts/enc/dvips/lm/lm-mathex.enc}]
-Package cleveref Info: loaded `french' language definitions on input line 619.
+Package cleveref Info: loaded `french' language definitions on input line 629.
 File: polytechnique-logohori.pdf Graphic file (type pdf)
 <use polytechnique-logohori.pdf>
-Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 619.
+Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 629.
 (pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
-Package cleveref Info: loaded `french' language definitions on input line 619.
+Package cleveref Info: loaded `french' language definitions on input line 629.
  [9{/usr/share/texmf/fonts/enc/dvips/lm/lm-ts1.enc}]
 File: polytechnique-filetcourt.pdf Graphic file (type pdf)
 <use polytechnique-filetcourt.pdf>
-Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 634.
+Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 644.
 (pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
 File: polytechnique-filetcourt.pdf Graphic file (type pdf)
 <use polytechnique-filetcourt.pdf>
-Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 655.
+Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 665.
 (pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
-LaTeX Info: Redefining \\ on input line 694.
+LaTeX Info: Redefining \\ on input line 704.
 File: polytechnique-filetlongrouge.pdf Graphic file (type pdf)
 <use polytechnique-filetlongrouge.pdf>
-Package pdftex.def Info: polytechnique-filetlongrouge.pdf  used on input line 6
-94.
+Package pdftex.def Info: polytechnique-filetlongrouge.pdf  used on input line 7
+04.
 (pdftex.def)             Requested size: 124.21375pt x 2.16808pt.
+Package cleveref Info: loaded `french' language definitions on input line 717.
+File: polytechnique-logohori.pdf Graphic file (type pdf)
+<use polytechnique-logohori.pdf>
+Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 717.
+(pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
+Package cleveref Info: loaded `french' language definitions on input line 717.
+ [10]
+File: polytechnique-filetcourt.pdf Graphic file (type pdf)
+<use polytechnique-filetcourt.pdf>
+Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 729.
+(pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
 LaTeX Font Info:    Trying to load font information for T1+lmtt on input line 7
-00.
+50.
 
 (/usr/share/texmf/tex/latex/lm/t1lmtt.fd
 File: t1lmtt.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
-Package cleveref Info: loaded `french' language definitions on input line 711.
-File: polytechnique-logohori.pdf Graphic file (type pdf)
-<use polytechnique-logohori.pdf>
-Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 711.
-(pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
-Package cleveref Info: loaded `french' language definitions on input line 711.
- [10]
-File: polytechnique-filetcourt.pdf Graphic file (type pdf)
-<use polytechnique-filetcourt.pdf>
-Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 715.
-(pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
 LaTeX Font Info:    Font shape `T1/lmtt/bx/n' in size <10> not available
-(Font)              Font shape `T1/lmtt/b/n' tried instead on input line 736.
+(Font)              Font shape `T1/lmtt/b/n' tried instead on input line 750.
 LaTeX Font Info:    Font shape `T1/lmtt/bx/n' in size <9> not available
-(Font)              Font shape `T1/lmtt/b/n' tried instead on input line 736.
-File: polytechnique-filetcourt.pdf Graphic file (type pdf)
-<use polytechnique-filetcourt.pdf>
-Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 780.
-(pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
-Package pgfplots info on input line 807: Using 'lua backend=false' for axis: x 
-coord trafo unsupported.
-File: polytechnique-filetcourt.pdf Graphic file (type pdf)
-<use polytechnique-filetcourt.pdf>
-Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 848.
-(pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
-Package cleveref Info: loaded `french' language definitions on input line 857.
+(Font)              Font shape `T1/lmtt/b/n' tried instead on input line 750.
+Package cleveref Info: loaded `french' language definitions on input line 817.
 File: polytechnique-logohori.pdf Graphic file (type pdf)
 <use polytechnique-logohori.pdf>
-Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 857.
+Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 817.
 (pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
-Package cleveref Info: loaded `french' language definitions on input line 857.
+Package cleveref Info: loaded `french' language definitions on input line 817.
  [11]
 File: polytechnique-filetcourt.pdf Graphic file (type pdf)
 <use polytechnique-filetcourt.pdf>
-Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 858.
+Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 839.
 (pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
+Package pgfplots info on input line 866: Using 'lua backend=false' for axis: x 
+coord trafo unsupported.
 File: polytechnique-filetcourt.pdf Graphic file (type pdf)
 <use polytechnique-filetcourt.pdf>
-Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 874.
+Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 912.
 (pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
-Package cleveref Info: loaded `french' language definitions on input line 915.
+Package cleveref Info: loaded `french' language definitions on input line 933.
 File: polytechnique-logohori.pdf Graphic file (type pdf)
 <use polytechnique-logohori.pdf>
-Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 915.
+Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 933.
 (pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
-Package cleveref Info: loaded `french' language definitions on input line 915.
+Package cleveref Info: loaded `french' language definitions on input line 933.
  [12]
-LaTeX Info: Redefining \\ on input line 935.
-File: polytechnique-filetlongrouge.pdf Graphic file (type pdf)
-<use polytechnique-filetlongrouge.pdf>
-Package pdftex.def Info: polytechnique-filetlongrouge.pdf  used on input line 9
-35.
-(pdftex.def)             Requested size: 124.21375pt x 2.16808pt.
 File: polytechnique-filetcourt.pdf Graphic file (type pdf)
 <use polytechnique-filetcourt.pdf>
-Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 939.
+Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 951.
 (pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
 File: polytechnique-filetcourt.pdf Graphic file (type pdf)
 <use polytechnique-filetcourt.pdf>
-Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 949.
+Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 961.
 (pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
-Package cleveref Info: loaded `french' language definitions on input line 970.
+Package cleveref Info: loaded `french' language definitions on input line 976.
 File: polytechnique-logohori.pdf Graphic file (type pdf)
 <use polytechnique-logohori.pdf>
-Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 970.
+Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 976.
 (pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
-Package cleveref Info: loaded `french' language definitions on input line 970.
+Package cleveref Info: loaded `french' language definitions on input line 976.
  [13]
 File: polytechnique-filetcourt.pdf Graphic file (type pdf)
 <use polytechnique-filetcourt.pdf>
-Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 997.
+Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 977.
 (pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
+LaTeX Info: Redefining \\ on input line 1038.
+File: polytechnique-filetlongrouge.pdf Graphic file (type pdf)
+<use polytechnique-filetlongrouge.pdf>
+Package pdftex.def Info: polytechnique-filetlongrouge.pdf  used on input line 1
+038.
+(pdftex.def)             Requested size: 124.21375pt x 2.16808pt.
+File: polytechnique-filetcourt.pdf Graphic file (type pdf)
+<use polytechnique-filetcourt.pdf>
+Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 1042.
 
-Overfull \hbox (18.00092pt too wide) in paragraph at lines 1012--1018
-\T1/lmr/m/n/10 ment, et n'y est pas re-ven-di-qué. Le pro-to-cole et l'ou-tilla
-ge existent dé-sor-mais ([]),
- []
+(pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
+Package cleveref Info: loaded `french' language definitions on input line 1052.
 
+File: polytechnique-logohori.pdf Graphic file (type pdf)
+<use polytechnique-logohori.pdf>
+Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 1052.
+(pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
+Package cleveref Info: loaded `french' language definitions on input line 1052.
 
-Overfull \hbox (14.07439pt too wide) in paragraph at lines 1023--1027
+ [14]
+File: polytechnique-filetcourt.pdf Graphic file (type pdf)
+<use polytechnique-filetcourt.pdf>
+Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 1052.
+
+(pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
+File: polytechnique-filetcourt.pdf Graphic file (type pdf)
+<use polytechnique-filetcourt.pdf>
+Package pdftex.def Info: polytechnique-filetcourt.pdf  used on input line 1100.
+
+(pdftex.def)             Requested size: 28.40604pt x 2.16808pt.
+Package cleveref Info: loaded `french' language definitions on input line 1127.
+
+File: polytechnique-logohori.pdf Graphic file (type pdf)
+<use polytechnique-logohori.pdf>
+Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 1127.
+(pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
+Package cleveref Info: loaded `french' language definitions on input line 1127.
+
+ [15]
+Overfull \hbox (14.07439pt too wide) in paragraph at lines 1127--1131
 []\T1/lmr/m/n/10 Le mo-dèle est en-traîné à $\OML/lmm/m/it/10 ^^N \OMS/lmsy/m/n
 /10 2 f\OT1/lmr/m/n/10 0\OML/lmm/m/it/10 ; \OT1/lmr/m/n/10 1\OML/lmm/m/it/10 ; 
 \OT1/lmr/m/n/10 3\OMS/lmsy/m/n/10 g []$\T1/lmr/m/n/10 ,
  []
 
-Package cleveref Info: loaded `french' language definitions on input line 1040.
-
-File: polytechnique-logohori.pdf Graphic file (type pdf)
-<use polytechnique-logohori.pdf>
-Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 1040.
-(pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
-Package cleveref Info: loaded `french' language definitions on input line 1040.
-
-[14]
-LaTeX Info: Redefining \\ on input line 1046.
+LaTeX Info: Redefining \\ on input line 1150.
 File: polytechnique-filetlongrouge.pdf Graphic file (type pdf)
 <use polytechnique-filetlongrouge.pdf>
 Package pdftex.def Info: polytechnique-filetlongrouge.pdf  used on input line 1
-046.
+150.
 (pdftex.def)             Requested size: 124.21375pt x 2.16808pt.
-LaTeX Info: Redefining \\ on input line 1081.
+LaTeX Info: Redefining \\ on input line 1196.
 File: polytechnique-filetlongrouge.pdf Graphic file (type pdf)
 <use polytechnique-filetlongrouge.pdf>
 Package pdftex.def Info: polytechnique-filetlongrouge.pdf  used on input line 1
-081.
+196.
 (pdftex.def)             Requested size: 124.21375pt x 2.16808pt.
-Package cleveref Info: loaded `french' language definitions on input line 1081.
+Package cleveref Info: loaded `french' language definitions on input line 1196.
 
 File: polytechnique-logohori.pdf Graphic file (type pdf)
 <use polytechnique-logohori.pdf>
-Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 1081.
+Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 1196.
 (pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
-Package cleveref Info: loaded `french' language definitions on input line 1081.
+Package cleveref Info: loaded `french' language definitions on input line 1196.
 
- [15]
-Package cleveref Info: loaded `french' language definitions on input line 1083.
+[16]
+Package cleveref Info: loaded `french' language definitions on input line 1198.
 
 File: polytechnique-logohori.pdf Graphic file (type pdf)
 <use polytechnique-logohori.pdf>
-Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 1083.
+Package pdftex.def Info: polytechnique-logohori.pdf  used on input line 1198.
 (pdftex.def)             Requested size: 156.35799pt x 56.90453pt.
-Package cleveref Info: loaded `french' language definitions on input line 1083.
+Package cleveref Info: loaded `french' language definitions on input line 1198.
 
- [16] 
+ [17] 
 enddocument/afterlastpage: lastpage setting LastPage.
 (./main.aux
 Package cleveref Info: loaded `french' language definitions on input line 12.
@@ -1798,19 +1807,19 @@ L3 programming layer <2024-01-22>
 LaTeX Font Warning: Some font shapes were not available, defaults substituted.
 
 Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: E984C976B2095319F5F72C2D3F67ADDC;4928.
+(rerunfilecheck)             Checksum: C5703C0AABA88893B4F7F6A63CBAA6B0;5272.
 Package logreq Info: Writing requests to 'main.run.xml'.
 \openout1 = `main.run.xml'.
 
  ) 
 Here is how much of TeX's memory you used:
- 50068 strings out of 474222
- 1160369 string characters out of 5748733
- 2021060 words of memory out of 5000000
- 71515 multiletter control sequences out of 15000+600000
+ 50083 strings out of 474222
+ 1160621 string characters out of 5748733
+ 2023918 words of memory out of 5000000
+ 71522 multiletter control sequences out of 15000+600000
  660095 words of font info for 104 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 84i,19n,102p,859b,3082s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 84i,19n,102p,859b,3096s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/share/texmf/fonts/type1/public/lm/lmbx10.pfb></usr/share/texmf/fonts/ty
 pe1/public/lm/lmbx9.pfb></usr/share/texmf/fonts/type1/public/lm/lmbxi10.pfb></u
 sr/share/texmf/fonts/type1/public/lm/lmcsc10.pfb></usr/share/texmf/fonts/type1/
@@ -1826,14 +1835,14 @@ xmf/fonts/type1/public/lm/lmri10.pfb></usr/share/texmf/fonts/type1/public/lm/lm
 ri9.pfb></usr/share/texmf/fonts/type1/public/lm/lmss12.pfb></usr/share/texmf/fo
 nts/type1/public/lm/lmssbx10.pfb></usr/share/texmf/fonts/type1/public/lm/lmsy10
 .pfb></usr/share/texmf/fonts/type1/public/lm/lmsy5.pfb></usr/share/texmf/fonts/
-type1/public/lm/lmsy6.pfb></usr/share/texmf/fonts/type1/public/lm/lmsy7.pfb></u
-sr/share/texmf/fonts/type1/public/lm/lmsy9.pfb></usr/share/texmf/fonts/type1/pu
-blic/lm/lmtk10.pfb></usr/share/texmf/fonts/type1/public/lm/lmtt9.pfb></usr/shar
-e/texlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb>
-Output written on main.pdf (16 pages, 1867153 bytes).
+type1/public/lm/lmsy7.pfb></usr/share/texmf/fonts/type1/public/lm/lmsy9.pfb></u
+sr/share/texmf/fonts/type1/public/lm/lmtk10.pfb></usr/share/texmf/fonts/type1/p
+ublic/lm/lmtt9.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/s
+ymbols/msbm10.pfb>
+Output written on main.pdf (17 pages, 1876628 bytes).
 PDF statistics:
- 571 PDF objects out of 1000 (max. 8388607)
- 457 compressed objects within 5 object streams
- 100 named destinations out of 1000 (max. 500000)
- 222 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 587 PDF objects out of 1000 (max. 8388607)
+ 473 compressed objects within 5 object streams
+ 108 named destinations out of 1000 (max. 500000)
+ 230 words of extra memory for PDF output out of 10000 (max. 10000000)
 

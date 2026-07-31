@@ -1,0 +1,18 @@
+[MultiPayload] Loaded  49,723 samples from data/isaac_0.0kg.h5
+[MultiPayload] Loaded  49,766 samples from data/isaac_1.0kg.h5
+[MultiPayload] Loaded  48,815 samples from data/isaac_3.0kg.h5
+[MultiPayload] Combined: 148,304 samples from 3 files
+[split] split(seed=12345): train=118,644 val=14,830 test=14,830 (total 148,304)
+[baseline] --no_rnea: BLACK BOX. tau_pred = network output alone; analytical RNEA term dropped; dissipativity constraint disabled.
+epoch    1 | train 29.5957 (mse 29.5956) | val 3.1931 (mse 3.1931) | dissip_viol 0.0000
+epoch    2 | train 2.0589 (mse 2.0589) | val 1.6107 (mse 1.6107) | dissip_viol 0.0000
+
+[eval] Restored best-validation checkpoint for final metrics.
+
+[eval] Per-joint VAL  RMSE (Nm), in-sample for selection: [1.9589, 1.8520, 1.4266, 1.2004, 0.4621, 0.5617, 0.0611]
+[eval] Per-joint TEST RMSE (Nm), HELD OUT  -> REPORT THIS: [1.9714, 1.6633, 1.3646, 1.2591, 0.4697, 0.5644, 0.0608]
+[eval] Mean test RMSE: 1.0505 Nm
+  Joints 1-4 (87 Nm): 1.5646 Nm  |  Joints 5-7 (12 Nm): 0.3650 Nm
+  -> Scale within tolerance (ratio 0.2x).
+
+Done. Best val loss 1.6107. Saved to models/run_20260731_164244/ (greybox_best.pt)

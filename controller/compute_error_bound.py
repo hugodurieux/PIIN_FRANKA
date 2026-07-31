@@ -76,7 +76,12 @@ def main():
         print(f"[compute_error_bound] Loaded FrictionNet from {fric_path}")
 
     # Same split as training/train.py and evaluation/eval_baselines.py.
-    full = MultiPayloadDataset(args.data, max_samples=cfg.get("max_samples"))
+    # NOT truncated by the run's max_samples: since 2026-07-31 that flag is a
+    # TRAINING budget applied after the split, so the test split is the full
+    # one regardless of the budget the model was trained under. Truncating here
+    # would reconstruct a different, smaller test set than the model was scored
+    # on and the bound would not match the reported RMSE.
+    full = MultiPayloadDataset(args.data)
     print(f"[compute_error_bound] {describe(len(full))}")
     _, _, test_ds = make_splits(full)
     loader = torch.utils.data.DataLoader(test_ds, batch_size=args.batch_size,

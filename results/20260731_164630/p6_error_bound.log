@@ -1,0 +1,76 @@
+[compute_error_bound] Loaded FrictionNet from models/run_20260731_164633/friction_net_best.pt
+[MultiPayload] Loaded  49,723 samples from data/isaac_0.0kg.h5
+[MultiPayload] Loaded  49,766 samples from data/isaac_1.0kg.h5
+[MultiPayload] Loaded  48,815 samples from data/isaac_3.0kg.h5
+[MultiPayload] Combined: 148,304 samples from 3 files
+[compute_error_bound] split(seed=12345): train=118,644 val=14,830 test=14,830 (total 148,304)
+[compute_error_bound] HELD-OUT TEST set: 14830 samples
+
+Per-joint TEST RMSE (Nm) -- cross-check against config.json's per_joint_test_rmse:
+  [1.0217, 0.9346, 0.5530, 0.8433, 0.3705, 0.3547, 0.2875]
+
+config.json per_joint_test_rmse was:
+  [1.02174711227417, 0.9346299171447754, 0.5530158877372742, 0.8433093428611755, 0.370528906583786, 0.3546968102455139, 0.2875496745109558]
+config.json per_joint_val_rmse (in-sample for selection, do not quote):
+  [0.7849246263504028, 1.1783355474472046, 0.5543729662895203, 0.7516125440597534, 0.36820879578590393, 0.3488921523094177, 0.2976318895816803]
+
+Per-joint error percentiles (Nm) -- diagnosing tail shape before trusting the max as a Lyapunov bound:
+  joint | p   50 | p   90 | p   99 | p 99.9 | p  100
+  J   1 |  0.082 |  0.636 |  1.955 |  5.808 | 74.878
+  J   2 |  0.090 |  0.709 |  2.218 |  6.943 | 81.777
+  J   3 |  0.081 |  0.678 |  1.719 |  3.704 | 28.876
+  J   4 |  0.077 |  0.573 |  2.338 |  4.377 | 46.635
+  J   5 |  0.067 |  0.590 |  1.475 |  2.099 |  2.988
+  J   6 |  0.061 |  0.547 |  1.342 |  2.352 |  4.577
+  J   7 |  0.052 |  0.487 |  1.101 |  1.580 |  2.115
+
+Worst 5 samples per joint (for diagnosis -- inspect q/qdot/delta for outlier configs, e.g. near joint limits or high qdot):
+
+  --- Joint 1 worst offenders ---
+    err=74.88 Nm | delta=1.00 kg | q[0]=-1.802 rad | qdot[0]=-0.829 rad/s | tau_theo=0.82 | tau_res=-0.42 | tau_pred=0.40 | tau_real=75.28
+    err=67.50 Nm | delta=3.00 kg | q[0]=-1.550 rad | qdot[0]=-0.850 rad/s | tau_theo=7.63 | tau_res=5.18 | tau_pred=12.81 | tau_real=80.31
+    err=28.81 Nm | delta=3.00 kg | q[0]=-2.897 rad | qdot[0]=-0.000 rad/s | tau_theo=2.10 | tau_res=-1.71 | tau_pred=0.39 | tau_real=29.20
+    err=19.74 Nm | delta=1.00 kg | q[0]=-2.897 rad | qdot[0]=0.000 rad/s | tau_theo=3.97 | tau_res=-2.06 | tau_pred=1.92 | tau_real=21.66
+    err=15.53 Nm | delta=1.00 kg | q[0]=-0.622 rad | qdot[0]=-0.888 rad/s | tau_theo=-10.29 | tau_res=2.04 | tau_pred=-8.25 | tau_real=-23.78
+
+  --- Joint 2 worst offenders ---
+    err=81.78 Nm | delta=1.00 kg | q[1]=-1.543 rad | qdot[1]=-0.693 rad/s | tau_theo=58.34 | tau_res=-2.78 | tau_pred=55.56 | tau_real=-26.22
+    err=21.97 Nm | delta=0.00 kg | q[1]=-0.726 rad | qdot[1]=-0.493 rad/s | tau_theo=26.13 | tau_res=0.52 | tau_pred=26.66 | tau_real=4.69
+    err=20.04 Nm | delta=1.00 kg | q[1]=0.969 rad | qdot[1]=-0.204 rad/s | tau_theo=-46.09 | tau_res=-1.53 | tau_pred=-47.62 | tau_real=-67.66
+    err=17.77 Nm | delta=0.00 kg | q[1]=-1.041 rad | qdot[1]=0.626 rad/s | tau_theo=42.76 | tau_res=-3.25 | tau_pred=39.51 | tau_real=57.28
+    err=12.98 Nm | delta=0.00 kg | q[1]=0.183 rad | qdot[1]=-0.253 rad/s | tau_theo=-27.04 | tau_res=2.04 | tau_pred=-25.00 | tau_real=-12.02
+
+  --- Joint 3 worst offenders ---
+    err=28.88 Nm | delta=3.00 kg | q[2]=0.171 rad | qdot[2]=-0.375 rad/s | tau_theo=1.27 | tau_res=-1.33 | tau_pred=-0.06 | tau_real=28.81
+    err=17.24 Nm | delta=1.00 kg | q[2]=-0.514 rad | qdot[2]=-0.636 rad/s | tau_theo=23.01 | tau_res=-1.28 | tau_pred=21.73 | tau_real=4.49
+    err=14.17 Nm | delta=1.00 kg | q[2]=1.965 rad | qdot[2]=-0.047 rad/s | tau_theo=-13.53 | tau_res=2.36 | tau_pred=-11.18 | tau_real=3.00
+    err=13.24 Nm | delta=3.00 kg | q[2]=2.235 rad | qdot[2]=-0.591 rad/s | tau_theo=25.27 | tau_res=-0.75 | tau_pred=24.51 | tau_real=11.27
+    err=8.54 Nm | delta=0.00 kg | q[2]=-1.641 rad | qdot[2]=1.194 rad/s | tau_theo=19.37 | tau_res=-2.41 | tau_pred=16.96 | tau_real=25.50
+
+  --- Joint 4 worst offenders ---
+    err=46.64 Nm | delta=1.00 kg | q[3]=-0.070 rad | qdot[3]=0.007 rad/s | tau_theo=8.17 | tau_res=-1.09 | tau_pred=7.08 | tau_real=-39.55
+    err=39.24 Nm | delta=1.00 kg | q[3]=-1.112 rad | qdot[3]=1.587 rad/s | tau_theo=-16.94 | tau_res=1.04 | tau_pred=-15.90 | tau_real=23.33
+    err=37.91 Nm | delta=1.00 kg | q[3]=-3.072 rad | qdot[3]=0.000 rad/s | tau_theo=-2.66 | tau_res=-1.66 | tau_pred=-4.32 | tau_real=33.60
+    err=34.41 Nm | delta=3.00 kg | q[3]=-0.070 rad | qdot[3]=-0.000 rad/s | tau_theo=-14.16 | tau_res=-0.96 | tau_pred=-15.12 | tau_real=-49.53
+    err=17.13 Nm | delta=1.00 kg | q[3]=-1.734 rad | qdot[3]=-0.369 rad/s | tau_theo=-4.91 | tau_res=1.17 | tau_pred=-3.74 | tau_real=-20.87
+
+  --- Joint 5 worst offenders ---
+    err=2.99 Nm | delta=0.00 kg | q[4]=2.897 rad | qdot[4]=0.002 rad/s | tau_theo=-0.04 | tau_res=0.25 | tau_pred=0.21 | tau_real=-2.78
+    err=2.87 Nm | delta=3.00 kg | q[4]=-2.731 rad | qdot[4]=0.649 rad/s | tau_theo=-5.72 | tau_res=0.32 | tau_pred=-5.40 | tau_real=-2.53
+    err=2.70 Nm | delta=3.00 kg | q[4]=2.713 rad | qdot[4]=-0.686 rad/s | tau_theo=-1.50 | tau_res=1.28 | tau_pred=-0.22 | tau_real=2.48
+    err=2.41 Nm | delta=3.00 kg | q[4]=1.078 rad | qdot[4]=-1.009 rad/s | tau_theo=-0.08 | tau_res=2.96 | tau_pred=2.88 | tau_real=0.47
+    err=2.32 Nm | delta=3.00 kg | q[4]=0.860 rad | qdot[4]=-0.478 rad/s | tau_theo=5.63 | tau_res=0.23 | tau_pred=5.87 | tau_real=3.55
+
+  --- Joint 6 worst offenders ---
+    err=4.58 Nm | delta=1.00 kg | q[5]=-0.018 rad | qdot[5]=-0.000 rad/s | tau_theo=4.04 | tau_res=-2.10 | tau_pred=1.94 | tau_real=6.52
+    err=2.80 Nm | delta=0.00 kg | q[5]=0.273 rad | qdot[5]=-0.739 rad/s | tau_theo=1.33 | tau_res=2.04 | tau_pred=3.36 | tau_real=0.56
+    err=2.80 Nm | delta=0.00 kg | q[5]=0.274 rad | qdot[5]=-0.739 rad/s | tau_theo=1.33 | tau_res=2.04 | tau_pred=3.36 | tau_real=0.56
+    err=2.79 Nm | delta=0.00 kg | q[5]=0.278 rad | qdot[5]=-0.739 rad/s | tau_theo=1.32 | tau_res=2.02 | tau_pred=3.34 | tau_real=0.56
+    err=2.75 Nm | delta=0.00 kg | q[5]=0.257 rad | qdot[5]=-0.738 rad/s | tau_theo=1.34 | tau_res=1.97 | tau_pred=3.30 | tau_real=0.56
+
+  --- Joint 7 worst offenders ---
+    err=2.12 Nm | delta=3.00 kg | q[6]=-2.536 rad | qdot[6]=0.228 rad/s | tau_theo=-0.08 | tau_res=-2.04 | tau_pred=-2.13 | tau_real=-0.01
+    err=1.92 Nm | delta=1.00 kg | q[6]=-1.031 rad | qdot[6]=0.923 rad/s | tau_theo=-0.02 | tau_res=-1.90 | tau_pred=-1.92 | tau_real=-0.00
+    err=1.91 Nm | delta=1.00 kg | q[6]=-1.021 rad | qdot[6]=0.920 rad/s | tau_theo=-0.02 | tau_res=-1.89 | tau_pred=-1.92 | tau_real=-0.00
+    err=1.89 Nm | delta=1.00 kg | q[6]=-1.013 rad | qdot[6]=0.916 rad/s | tau_theo=-0.02 | tau_res=-1.87 | tau_pred=-1.89 | tau_real=-0.00
+    err=1.73 Nm | delta=1.00 kg | q[6]=-1.001 rad | qdot[6]=0.911 rad/s | tau_theo=-0.02 | tau_res=-1.71 | tau_pred=-1.73 | tau_real=-0.00

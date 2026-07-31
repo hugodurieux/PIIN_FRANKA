@@ -49,25 +49,21 @@ from torch.utils.data import DataLoader
 from network.grey_box_net import GreyBoxNet, ENCODINGS
 from network.friction_net import FrictionNet
 from training.constraints import AugmentedLagrangian
-from training.dataset import SyntheticDataset, FrankaDynamicsDataset, MultiPayloadDataset
+from training.dataset import (SyntheticDataset, FrankaDynamicsDataset,
+                              MultiPayloadDataset, _random_subsample_indices)
 from training.splits import make_splits, describe, SPLIT_SEED, SPLIT_FRACTIONS
 
 
 def build_dataset(args):
-    """Instantiate the full dataset (before splitting), honouring --max_samples."""
-    max_samples = getattr(args, "max_samples", None)
+    """Instantiate the FULL dataset, untruncated.
 
+    --max_samples is deliberately NOT applied here. See build_loaders.
+    """
     if args.synthetic or not args.data:
-        full = SyntheticDataset(n=args.synthetic_n, max_samples=max_samples)
-    elif len(args.data) > 1:
-        full = MultiPayloadDataset(args.data, max_samples=max_samples)
-    else:
-        full = FrankaDynamicsDataset(args.data[0], max_samples=max_samples)
-
-    if max_samples is not None:
-        print(f"[N4] Dataset truncated to {len(full)} samples "
-              f"(max_samples={max_samples})")
-    return full
+        return SyntheticDataset(n=args.synthetic_n)
+    if len(args.data) > 1:
+        return MultiPayloadDataset(args.data)
+    return FrankaDynamicsDataset(args.data[0])
 
 
 def build_loaders(args):
@@ -84,6 +80,29 @@ def build_loaders(args):
     full = build_dataset(args)
     print(f"[split] {describe(len(full))}")
     train_ds, val_ds, test_ds = make_splits(full)
+
+    # --max_samples is a TRAINING BUDGET, applied AFTER the split.
+    #
+    # It used to truncate the dataset BEFORE splitting, which shrank the test
+    # set along with the training set: the 5k/25k/50k runs of 2026-07-31 were
+    # scored on 500/2500/5000 samples drawn from three DIFFERENT subsets, so
+    # their numbers were neither comparable with each other nor with the full
+    # run. The resulting curve was non-monotonic and the 25k run showed val
+    # 0.2601 against test 0.7427 -- small-sample noise, not a data-efficiency
+    # effect. A data-efficiency curve requires the evaluation set held FIXED
+    # while only the training budget varies, which is also what Liu et al.'s
+    # 25 000-sample benchmark means.
+    max_samples = getattr(args, "max_samples", None)
+    if max_samples is not None and max_samples > 0:
+        if max_samples < len(train_ds):
+            idx = _random_subsample_indices(len(train_ds), max_samples)
+            train_ds = torch.utils.data.Subset(train_ds, idx.tolist())
+            print(f"[N4] Training budget capped at {len(train_ds):,} samples "
+                  f"(val and test left at full size, identical across budgets)")
+        else:
+            print(f"[N4] max_samples={max_samples} >= train split "
+                  f"({len(train_ds):,}); using the whole training split")
+
     return (
         DataLoader(train_ds, batch_size=args.batch_size, shuffle=True),
         DataLoader(val_ds, batch_size=args.batch_size, shuffle=False),
@@ -160,9 +179,11 @@ def main():
     p.add_argument("--synthetic", action="store_true")
     p.add_argument("--synthetic_n", type=int, default=4096)
     p.add_argument("--max_samples", type=int, default=None,
-                   help="Truncate dataset to N random samples (seed=42) before "
-                        "train/val split. Enables data-efficiency ablation "
-                        "(novelty N4, Liu et al. 2024). Default: None (use all).")
+                   help="TRAINING BUDGET: cap the train split at N random "
+                        "samples (seed=42) AFTER the 80/10/10 split, leaving "
+                        "val and test at full size so every budget is scored "
+                        "on the identical test set. Enables the data-efficiency "
+                        "ablation (novelty N4, Liu et al. 2024). Default: all.")
     p.add_argument("--epochs", type=int, default=100)
     p.add_argument("--batch_size", type=int, default=256)
     p.add_argument("--lr", type=float, default=1e-3)

@@ -1,0 +1,46 @@
+[eval] dataset signature ae008bd146 over 3 file(s)
+[eval] every model below is scored on this exact test split.
+[MultiPayload] Loaded  49,723 samples from data/isaac_0.0kg.h5
+[MultiPayload] Loaded  49,766 samples from data/isaac_1.0kg.h5
+[MultiPayload] Loaded  48,815 samples from data/isaac_3.0kg.h5
+[MultiPayload] Combined: 148,304 samples from 3 files
+[eval] split(seed=12345): train=118,644 val=14,830 test=14,830 (total 148,304)
+
+=== rnea    ((none)) ===
+  test samples          : 14,830
+  per-joint RMSE  [Nm]  : 1.5875, 2.8408, 1.8240, 1.9529, 0.8829, 1.0622, 0.0418
+  mean RMSE       [Nm]  : 1.4560
+  RMSE / limit    [%]   : 1.82, 3.27, 2.10, 2.24, 7.36, 8.85, 0.35
+  p99.9 abs err   [Nm]  : 15.252, 14.430, 11.837, 8.481, 2.171, 2.262, 0.125
+  samples over torque limit: 147 / 14,830
+
+=== greybox  greybox-reference  (models/run_20260731_164239) ===
+  test samples          : 14,830
+  per-joint RMSE  [Nm]  : 1.4507, 1.2951, 1.0749, 0.9919, 0.3679, 0.3432, 0.2411
+  mean RMSE       [Nm]  : 0.8235
+  RMSE / limit    [%]   : 1.67, 1.49, 1.24, 1.14, 3.07, 2.86, 2.01
+  p99.9 abs err   [Nm]  : 14.392, 9.868, 11.454, 6.087, 1.764, 1.358, 1.126
+  samples over torque limit: 0 / 14,830
+
+=== mlp  baseline-mlp-direct  (models/run_20260731_164244) ===
+  test samples          : 14,830
+  per-joint RMSE  [Nm]  : 1.9714, 1.6633, 1.3646, 1.2591, 0.4697, 0.5644, 0.0608
+  mean RMSE       [Nm]  : 1.0505
+  RMSE / limit    [%]   : 2.27, 1.91, 1.57, 1.45, 3.91, 4.70, 0.51
+  p99.9 abs err   [Nm]  : 17.372, 11.498, 11.902, 6.662, 2.217, 2.680, 0.223
+  samples over torque limit: 0 / 14,830
+
+====================================================================
+% Généré par: python -m evaluation.eval_baselines --latex
+% Toutes les lignes sont mesurées sur LE MÊME split de test (seed=12345).
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Modèle & RMSE de test moyenne [\si{\newton\meter}] & RMSE max par axe [\si{\newton\meter}] & Garanties physiques \\
+\midrule
+RNEA seul (analytique) & \num{1,456} & \num{2,841} & sans objet \\
+MLP direct (boîte noire) & \num{1,050} & \num{1,971} & aucune \\
+\textbf{Gris} \code{isaac-satfix} & \num{0,824} & \num{1,451} & limites + dissipativité \\
+\bottomrule
+\end{tabular}
+
+[eval] wrote results/20260731_164233/p5_comparison.json

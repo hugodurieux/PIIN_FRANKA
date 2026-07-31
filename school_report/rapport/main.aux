@@ -130,63 +130,76 @@
 \@writefile{toc}{\contentsline {section}{\numberline {6}Validation et résultats}{11}{section.6}\protected@file@percent }
 \newlabel{sec-resultats}{{6}{11}{Validation et résultats}{section.6}{}}
 \newlabel{sec-resultats@cref}{{[section][6][]6}{[1][10][]11}}
-\@writefile{toc}{\contentsline {paragraph}{Avertissement sur la provenance des chiffres de cette section.}{11}{paragraph*.20}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Protocole de mesure.}{11}{paragraph*.20}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Lignes de base et protocole de comparaison}{11}{subsection.6.1}\protected@file@percent }
 \newlabel{sec-baselines}{{6.1}{11}{Lignes de base et protocole de comparaison}{subsection.6.1}{}}
 \newlabel{sec-baselines@cref}{{[subsection][1][6]6.1}{[1][11][]11}}
 \@writefile{toc}{\contentsline {paragraph}{Ligne de base analytique (RNEA seul).}{11}{paragraph*.21}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{Ligne de base boîte noire (MLP direct).}{11}{paragraph*.22}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{Modèle proposé (\mbox  {\ttfamilyFB  \small  isaac-satfix}).}{11}{paragraph*.23}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Comparaison aux lignes de base sur le jeu de test indépendant. Les deux premières lignes ne sont pas encore mesurées: tant qu'elles le restent, l'apport quantitatif de la structure grise n'est pas établi (\cref  {sec-limites}).}}{11}{table.caption.24}\protected@file@percent }
-\newlabel{tab-baselines}{{1}{11}{Comparaison aux lignes de base sur le jeu de test indépendant. Les deux premières lignes ne sont pas encore mesurées: tant qu'elles le restent, l'apport quantitatif de la structure grise n'est pas établi (\cref {sec-limites})}{table.caption.24}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Comparaison aux lignes de base, \SI {14830}{} échantillons de test réservés, partition identique pour les trois modèles (\mbox  {\ttfamilyFB  \small  seed=12345}), \num {200} époques et capacité identiques. Le modèle gris divise par \num {2.3} l'erreur du modèle analytique, mais \textbf  {la boîte noire fait mieux que lui}.}}{11}{table.caption.24}\protected@file@percent }
+\newlabel{tab-baselines}{{1}{11}{Comparaison aux lignes de base, \SI {14830}{} échantillons de test réservés, partition identique pour les trois modèles (\code {seed=12345}), \num {200} époques et capacité identiques. Le modèle gris divise par \num {2.3} l'erreur du modèle analytique, mais \textbf {la boîte noire fait mieux que lui}}{table.caption.24}{}}
 \newlabel{tab-baselines@cref}{{[table][1][]1}{[1][11][]11}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Précision du modèle appris}{11}{subsection.6.2}\protected@file@percent }
-\newlabel{sec-res-stage1}{{6.2}{11}{Précision du modèle appris}{subsection.6.2}{}}
-\newlabel{sec-res-stage1@cref}{{[subsection][2][6]6.2}{[1][11][]11}}
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Erreur quadratique moyenne sur le jeu de test, avant et après le filtrage de saturation~\eqref  {eq-satfilter}. L'amélioration est présente sur les sept axes.}}{12}{figure.caption.25}\protected@file@percent }
-\newlabel{fig-rmse}{{2}{12}{Erreur quadratique moyenne sur le jeu de test, avant et après le filtrage de saturation~\eqref {eq-satfilter}. L'amélioration est présente sur les sept axes}{figure.caption.25}{}}
-\newlabel{fig-rmse@cref}{{[figure][2][]2}{[1][11][]12}}
-\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Erreur de prédiction par axe (jeu de test), borne d'erreur $\epsilon _j$ (quantile 99,9\,\%), et gains PD résultants.}}{12}{table.caption.26}\protected@file@percent }
-\newlabel{tab-perjoint}{{2}{12}{Erreur de prédiction par axe (jeu de test), borne d'erreur $\epsilon _j$ (quantile 99,9\,\%), et gains PD résultants}{table.caption.26}{}}
-\newlabel{tab-perjoint@cref}{{[table][2][]2}{[1][11][]12}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}Tenue des garanties physiques}{12}{subsection.6.3}\protected@file@percent }
-\newlabel{sec-res-garanties}{{6.3}{12}{Tenue des garanties physiques}{subsection.6.3}{}}
-\newlabel{sec-res-garanties@cref}{{[subsection][3][6]6.3}{[1][11][]12}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.4}Suivi de trajectoire en boucle fermée}{12}{subsection.6.4}\protected@file@percent }
-\newlabel{sec-res-suivi}{{6.4}{12}{Suivi de trajectoire en boucle fermée}{subsection.6.4}{}}
-\newlabel{sec-res-suivi@cref}{{[subsection][4][6]6.4}{[1][12][]12}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.5}Ablation du résidu appris sous transfert inter-simulateurs}{12}{subsection.6.5}\protected@file@percent }
-\newlabel{sec-res-ablation}{{6.5}{12}{Ablation du résidu appris sous transfert inter-simulateurs}{subsection.6.5}{}}
-\newlabel{sec-res-ablation@cref}{{[subsection][5][6]6.5}{[1][12][]12}}
-\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Ablation du résidu appris en boucle fermée, cinq exécutions à configuration identique. Désactiver le résidu améliore le suivi d'un ordre de grandeur sur l'axe~5 et divise par deux l'erreur cartésienne de bride.}}{13}{table.caption.27}\protected@file@percent }
-\newlabel{tab-ablation}{{3}{13}{Ablation du résidu appris en boucle fermée, cinq exécutions à configuration identique. Désactiver le résidu améliore le suivi d'un ordre de grandeur sur l'axe~5 et divise par deux l'erreur cartésienne de bride}{table.caption.27}{}}
-\newlabel{tab-ablation@cref}{{[table][3][]3}{[1][12][]13}}
-\@writefile{toc}{\contentsline {paragraph}{Ce que ce résultat établit, et ce qu'il n'établit pas.}{13}{paragraph*.28}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {7}Discussion et limites}{13}{section.7}\protected@file@percent }
-\newlabel{sec-discussion}{{7}{13}{Discussion et limites}{section.7}{}}
-\newlabel{sec-discussion@cref}{{[section][7][]7}{[1][13][]13}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}Le biais d'optimisation non corrigé}{13}{subsection.7.1}\protected@file@percent }
-\newlabel{sec-res-desequilibre}{{7.1}{13}{Le biais d'optimisation non corrigé}{subsection.7.1}{}}
-\newlabel{sec-res-desequilibre@cref}{{[subsection][1][7]7.1}{[1][13][]13}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Limites de l'intégration au moteur physique}{13}{subsection.7.2}\protected@file@percent }
-\newlabel{sec-limites-integration}{{7.2}{13}{Limites de l'intégration au moteur physique}{subsection.7.2}{}}
-\newlabel{sec-limites-integration@cref}{{[subsection][2][7]7.2}{[1][13][]13}}
-\@writefile{toc}{\contentsline {paragraph}{Un défaut de configuration qui imitait un défaut de physique.}{13}{paragraph*.29}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{La boîte noire est plus précise que le modèle gris.}{11}{paragraph*.26}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces RMSE de test par axe [\si {\newton \meter }]. L'axe~7 est le cas révélateur: RNEA seul y atteint \num {0.042}, et le résidu appris \emph  {dégrade} ce résultat d'un facteur~\num {6.9}.}}{12}{table.caption.25}\protected@file@percent }
+\newlabel{tab-perjoint-baselines}{{2}{12}{RMSE de test par axe [\si {\newton \meter }]. L'axe~7 est le cas révélateur: RNEA seul y atteint \num {0.042}, et le résidu appris \emph {dégrade} ce résultat d'un facteur~\num {6.9}}{table.caption.25}{}}
+\newlabel{tab-perjoint-baselines@cref}{{[table][2][]2}{[1][11][]12}}
+\@writefile{toc}{\contentsline {paragraph}{Le résidu appris dégrade les axes que RNEA modélise déjà bien.}{12}{paragraph*.27}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Précision du modèle appris}{12}{subsection.6.2}\protected@file@percent }
+\newlabel{sec-res-stage1}{{6.2}{12}{Précision du modèle appris}{subsection.6.2}{}}
+\newlabel{sec-res-stage1@cref}{{[subsection][2][6]6.2}{[1][12][]12}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Erreur quadratique moyenne sur le jeu de test, avant et après le filtrage de saturation~\eqref  {eq-satfilter}. L'amélioration est présente sur les sept axes.}}{12}{figure.caption.28}\protected@file@percent }
+\newlabel{fig-rmse}{{2}{12}{Erreur quadratique moyenne sur le jeu de test, avant et après le filtrage de saturation~\eqref {eq-satfilter}. L'amélioration est présente sur les sept axes}{figure.caption.28}{}}
+\newlabel{fig-rmse@cref}{{[figure][2][]2}{[1][12][]12}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Modèle gris sur le jeu de test réservé: erreur de prédiction par axe, borne $\epsilon _j$ (quantile \SI {99.9}{\percent }) et gains PD qui en découlent par \cref  {eq-gains} avec $\kappa = 2$. La queue de distribution est lourde — le maximum absolu atteint \SI {74.9}{\newton \meter } sur l'axe~1 contre un $p_{99,9}$ de \SI {5.81}{\newton \meter } — ce qui est précisément pourquoi la borne est prise en quantile et non en maximum (\cref  {sec-limites}).}}{13}{table.caption.29}\protected@file@percent }
+\newlabel{tab-perjoint}{{3}{13}{Modèle gris sur le jeu de test réservé: erreur de prédiction par axe, borne $\epsilon _j$ (quantile \SI {99.9}{\percent }) et gains PD qui en découlent par \cref {eq-gains} avec $\kappa = 2$. La queue de distribution est lourde — le maximum absolu atteint \SI {74.9}{\newton \meter } sur l'axe~1 contre un $p_{99,9}$ de \SI {5.81}{\newton \meter } — ce qui est précisément pourquoi la borne est prise en quantile et non en maximum (\cref {sec-limites})}{table.caption.29}{}}
+\newlabel{tab-perjoint@cref}{{[table][3][]3}{[1][12][]13}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}Ablations: ce que chaque composant apporte réellement}{13}{subsection.6.3}\protected@file@percent }
+\newlabel{sec-res-ablations}{{6.3}{13}{Ablations: ce que chaque composant apporte réellement}{subsection.6.3}{}}
+\newlabel{sec-res-ablations@cref}{{[subsection][3][6]6.3}{[1][12][]13}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Ablations sur le jeu de test réservé. Les deux composants pèsent moins de \SI {1.5}{\percent } sur la précision.}}{13}{table.caption.30}\protected@file@percent }
+\newlabel{tab-ablations}{{4}{13}{Ablations sur le jeu de test réservé. Les deux composants pèsent moins de \SI {1.5}{\percent } sur la précision}{table.caption.30}{}}
+\newlabel{tab-ablations@cref}{{[table][4][]4}{[1][12][]13}}
+\@writefile{toc}{\contentsline {paragraph}{L'encodage spatial ne pèse presque rien.}{13}{paragraph*.31}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{FrictionNet n'apporte pas de précision.}{13}{paragraph*.32}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.4}Tenue des garanties physiques}{13}{subsection.6.4}\protected@file@percent }
+\newlabel{sec-res-garanties}{{6.4}{13}{Tenue des garanties physiques}{subsection.6.4}{}}
+\newlabel{sec-res-garanties@cref}{{[subsection][4][6]6.4}{[1][13][]13}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.5}Suivi de trajectoire en boucle fermée}{13}{subsection.6.5}\protected@file@percent }
+\newlabel{sec-res-suivi}{{6.5}{13}{Suivi de trajectoire en boucle fermée}{subsection.6.5}{}}
+\newlabel{sec-res-suivi@cref}{{[subsection][5][6]6.5}{[1][13][]13}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.6}Ablation du résidu appris sous transfert inter-simulateurs}{14}{subsection.6.6}\protected@file@percent }
+\newlabel{sec-res-ablation}{{6.6}{14}{Ablation du résidu appris sous transfert inter-simulateurs}{subsection.6.6}{}}
+\newlabel{sec-res-ablation@cref}{{[subsection][6][6]6.6}{[1][14][]14}}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Ablation du résidu appris en boucle fermée, cinq exécutions à configuration identique. Désactiver le résidu améliore le suivi d'un ordre de grandeur sur l'axe~5 et divise par deux l'erreur cartésienne de bride.}}{14}{table.caption.33}\protected@file@percent }
+\newlabel{tab-ablation}{{5}{14}{Ablation du résidu appris en boucle fermée, cinq exécutions à configuration identique. Désactiver le résidu améliore le suivi d'un ordre de grandeur sur l'axe~5 et divise par deux l'erreur cartésienne de bride}{table.caption.33}{}}
+\newlabel{tab-ablation@cref}{{[table][5][]5}{[1][14][]14}}
+\@writefile{toc}{\contentsline {paragraph}{Ce que ce résultat établit, et ce qu'il n'établit pas.}{14}{paragraph*.34}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}Discussion et limites}{14}{section.7}\protected@file@percent }
+\newlabel{sec-discussion}{{7}{14}{Discussion et limites}{section.7}{}}
+\newlabel{sec-discussion@cref}{{[section][7][]7}{[1][14][]14}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}Le biais d'optimisation non corrigé}{14}{subsection.7.1}\protected@file@percent }
+\newlabel{sec-res-desequilibre}{{7.1}{14}{Le biais d'optimisation non corrigé}{subsection.7.1}{}}
+\newlabel{sec-res-desequilibre@cref}{{[subsection][1][7]7.1}{[1][14][]14}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Limites de l'intégration au moteur physique}{15}{subsection.7.2}\protected@file@percent }
+\newlabel{sec-limites-integration}{{7.2}{15}{Limites de l'intégration au moteur physique}{subsection.7.2}{}}
+\newlabel{sec-limites-integration@cref}{{[subsection][2][7]7.2}{[1][15][]15}}
+\@writefile{toc}{\contentsline {paragraph}{Un défaut de configuration qui imitait un défaut de physique.}{15}{paragraph*.35}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Une leçon méthodologique transposable.}{15}{paragraph*.36}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{État après correction.}{15}{paragraph*.37}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Ce que cette tâche ne valide pas.}{15}{paragraph*.38}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.3}Limites structurelles et méthodologiques}{15}{subsection.7.3}\protected@file@percent }
+\newlabel{sec-limites}{{7.3}{15}{Limites structurelles et méthodologiques}{subsection.7.3}{}}
+\newlabel{sec-limites@cref}{{[subsection][3][7]7.3}{[1][15][]15}}
 \abx@aux@cite{0}{liu2024}
 \abx@aux@segm{0}{0}{liu2024}
-\@writefile{toc}{\contentsline {paragraph}{Une leçon méthodologique transposable.}{14}{paragraph*.30}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{État après correction.}{14}{paragraph*.31}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Ce que cette tâche ne valide pas.}{14}{paragraph*.32}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {7.3}Limites structurelles et méthodologiques}{14}{subsection.7.3}\protected@file@percent }
-\newlabel{sec-limites}{{7.3}{14}{Limites structurelles et méthodologiques}{subsection.7.3}{}}
-\newlabel{sec-limites@cref}{{[subsection][3][7]7.3}{[1][14][]14}}
-\@writefile{toc}{\contentsline {section}{\numberline {8}Conclusion}{15}{section.8}\protected@file@percent }
-\newlabel{sec-conclusion}{{8}{15}{Conclusion}{section.8}{}}
-\newlabel{sec-conclusion@cref}{{[section][8][]8}{[1][15][]15}}
-\@writefile{toc}{\contentsline {paragraph}{Travaux futurs.}{15}{paragraph*.33}\protected@file@percent }
-\newlabel{LastPage}{{8}{16}{Travaux futurs.}{page.16}{}}
-\gdef\lastpage@lastpage{16}
-\gdef\lastpage@lastpageHy{16}
+\@writefile{toc}{\contentsline {section}{\numberline {8}Conclusion}{16}{section.8}\protected@file@percent }
+\newlabel{sec-conclusion}{{8}{16}{Conclusion}{section.8}{}}
+\newlabel{sec-conclusion@cref}{{[section][8][]8}{[1][16][]16}}
+\@writefile{toc}{\contentsline {paragraph}{Travaux futurs.}{16}{paragraph*.39}\protected@file@percent }
+\newlabel{LastPage}{{8}{17}{Travaux futurs.}{page.17}{}}
+\gdef\lastpage@lastpage{17}
+\gdef\lastpage@lastpageHy{17}
 \abx@aux@read@bbl@mdfivesum{54B4B670DE2AEBC7D0938C799D8B6E63}
 \abx@aux@defaultrefcontext{0}{deng2024}{nyt/global//global/global}
 \abx@aux@defaultrefcontext{0}{djeumou2022}{nyt/global//global/global}
@@ -196,4 +209,4 @@
 \abx@aux@defaultrefcontext{0}{lutter2019iclr}{nyt/global//global/global}
 \abx@aux@defaultrefcontext{0}{sutanto2020}{nyt/global//global/global}
 \abx@aux@defaultrefcontext{0}{wang2024cac}{nyt/global//global/global}
-\gdef \@abspage@last{16}
+\gdef \@abspage@last{17}

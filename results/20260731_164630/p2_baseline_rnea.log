@@ -1,0 +1,17 @@
+[eval] dataset signature ae008bd146 over 3 file(s)
+[eval] every model below is scored on this exact test split.
+[MultiPayload] Loaded  49,723 samples from data/isaac_0.0kg.h5
+[MultiPayload] Loaded  49,766 samples from data/isaac_1.0kg.h5
+[MultiPayload] Loaded  48,815 samples from data/isaac_3.0kg.h5
+[MultiPayload] Combined: 148,304 samples from 3 files
+[eval] split(seed=12345): train=118,644 val=14,830 test=14,830 (total 148,304)
+
+=== rnea    ((none)) ===
+  test samples          : 14,830
+  per-joint RMSE  [Nm]  : 1.5875, 2.8408, 1.8240, 1.9529, 0.8829, 1.0622, 0.0418
+  mean RMSE       [Nm]  : 1.4560
+  RMSE / limit    [%]   : 1.82, 3.27, 2.10, 2.24, 7.36, 8.85, 0.35
+  p99.9 abs err   [Nm]  : 15.252, 14.430, 11.837, 8.481, 2.171, 2.262, 0.125
+  samples over torque limit: 147 / 14,830
+
+[eval] wrote results/20260731_164630/p2_baseline_rnea.json
