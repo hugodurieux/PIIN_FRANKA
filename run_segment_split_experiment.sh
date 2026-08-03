@@ -73,12 +73,37 @@ echo "interpreter: $PY"
 echo "seeds      : ${SEEDS[*]}"
 echo "epochs     : $EPOCHS"
 
+# A short run is a machinery check, not a measurement -- and its output looks
+# exactly like a measurement. The black box starts from noise while the grey
+# box starts from RNEA, so a truncated run measures convergence SPEED, which
+# the grey structure wins trivially and which is not the question. Mark it
+# everywhere so the logs cannot be misread later.
+SMOKE=0
+if [ "$EPOCHS" -lt 50 ]; then
+    SMOKE=1
+    cat <<'WARN'
+
+  #####################################################################
+  ##  SMOKE TEST ONLY -- EPOCHS < 50. THE NUMBERS BELOW ARE NOT A     ##
+  ##  RESULT AND MUST NOT BE REPORTED.                                ##
+  ##                                                                  ##
+  ##  The black box trains from scratch; the grey box inherits RNEA   ##
+  ##  from epoch 0. A truncated run measures convergence speed, not   ##
+  ##  accuracy, and flatters the grey box by construction.            ##
+  ##                                                                  ##
+  ##  This run checks the machinery only. Use EPOCHS=200 (default).   ##
+  #####################################################################
+
+WARN
+fi
+
 mkdir -p "$RESULTS"
 {
     echo "date:    $(date -Iseconds)"
     echo "python:  $($PY --version 2>&1)"
     echo "seeds:   ${SEEDS[*]}"
     echo "epochs:  $EPOCHS"
+    [ "$SMOKE" -eq 1 ] && echo "STATUS:  SMOKE TEST (epochs < 50) -- NOT A RESULT"
     command -v nvidia-smi >/dev/null && nvidia-smi --query-gpu=name,memory.total \
         --format=csv,noheader
 } > "$RESULTS/env.txt" 2>&1
@@ -87,7 +112,11 @@ mkdir -p "$RESULTS"
 # cannot be recovered, everything downstream is meaningless.
 echo
 echo "=== segment recovery check ==="
-"$PY" -m training.segment_splits --data $DATA 2>&1 \
+# Segment RECOVERY is seed-independent; the split preview it prints is not.
+# Pass the first seed so the preview matches what the first run will actually
+# use -- printing the default partition next to a run using another seed reads
+# as a mismatch and invites exactly the wrong conclusion.
+"$PY" -m training.segment_splits --data $DATA --split_seed "${SEEDS[0]}" 2>&1 \
     | tee "$RESULTS/p0_segment_check.log"
 # shellcheck disable=SC2181
 if [ "${PIPESTATUS[0]}" -ne 0 ]; then
@@ -161,6 +190,16 @@ echo
 echo "Compare against the SAMPLE-split numbers (results/20260731_164630/):"
 echo "    rnea 1.456   greybox 0.624   mlp 0.447   -> black box ahead by 28 %"
 echo
+if [ "$SMOKE" -eq 1 ]; then
+    cat <<'WARN'
+  #####################################################################
+  ##  REMINDER: SMOKE TEST (EPOCHS < 50). DISCARD THESE NUMBERS.      ##
+  ##  They show the machinery runs. They do not answer the question.  ##
+  #####################################################################
+WARN
+    exit 0
+fi
+
 echo "Read the spread across seeds before concluding anything. A gap smaller"
 echo "than the seed-to-seed spread is not a measured difference."
 echo

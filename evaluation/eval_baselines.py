@@ -236,7 +236,54 @@ def print_result(r: dict) -> None:
 
 LABEL = {"rnea": "RNEA seul (analytique)",
          "mlp": "MLP direct (boîte noire)",
-         "greybox": "\\textbf{Gris} \\code{isaac-satfix}"}
+         "greybox": "\\textbf{Gris (proposé)}"}
+
+
+def _label(r) -> str:
+    """Row label, carrying the run's OWN tag rather than a hardcoded one.
+
+    The grey-box label used to read \\code{isaac-satfix} for every run, so a
+    table generated from any other checkpoint silently claimed to be the
+    reference model. The tag comes from the run's config.json.
+    """
+    base = LABEL.get(r["kind"], r["kind"])
+    tag = r.get("tag") or ""
+    if r["kind"] != "rnea" and tag:
+        return f"{base} \\code{{{tag}}}"
+    return base
+
+
+def _provenance(results) -> list:
+    """Comment lines stating the partition the table was measured under.
+
+    Sample-wise and segment-wise numbers are NOT comparable and must never
+    share a table. Without this, the two are indistinguishable once pasted.
+    """
+    seeds = sorted({r.get("split_seed", SPLIT_SEED) for r in results})
+    modes = sorted({r.get("split_mode", "sample") for r in results})
+    n_test = sorted({r.get("n_test", 0) for r in results})
+    mode_txt = "/".join(modes)
+    seed_txt = "/".join(str(s) for s in seeds)
+    out = [
+        "% Généré par: python -m evaluation.eval_baselines --latex",
+        f"% Partition: split_mode={mode_txt}, split_seed={seed_txt}, "
+        f"n_test={n_test[0] if len(n_test) == 1 else n_test}.",
+    ]
+    if "segment" in modes:
+        out.append(
+            "% ATTENTION: partition PAR TRAJECTOIRE. Ces valeurs ne sont PAS "
+            "comparables à celles")
+        out.append(
+            "% d'une partition par échantillon et ne doivent pas figurer dans "
+            "le même tableau.")
+        out.append(
+            "% Peu de trajectoires de test: ne rien conclure d'une seule "
+            "graine.")
+    if len(modes) > 1 or len(seeds) > 1:
+        out.append(
+            "% ERREUR: lignes mesurées sous des partitions DIFFÉRENTES. "
+            "Ne pas utiliser.")
+    return out
 
 # What each model is actually CONSTRAINED to, as implemented -- not as one
 # might assume. --no_rnea keeps the torque-limit penalty (a statement about
@@ -256,9 +303,7 @@ GUARANTEES = {
 
 def latex_summary_table(results) -> str:
     """Baseline summary: mean RMSE, worst joint, torque violations, guarantees."""
-    lines = [
-        "% Généré par: python -m evaluation.eval_baselines --latex",
-        f"% Même split de test pour toutes les lignes (seed={SPLIT_SEED}).",
+    lines = _provenance(results) + [
         "\\begin{tabular}{@{}lcccc@{}}",
         "\\toprule",
         "Modèle & RMSE moyenne & RMSE pire axe & Éch. hors limites "
@@ -269,7 +314,7 @@ def latex_summary_table(results) -> str:
     for r in results:
         pct = 100.0 * r["n_samples_over_torque_limit"] / max(r["n_test"], 1)
         lines.append(
-            f"{LABEL.get(r['kind'], r['kind'])} & "
+            f"{_label(r)} & "
             f"\\num{{{r['mean_rmse']:.3f}}} & "
             f"\\num{{{max(r['per_joint_rmse']):.3f}}} & "
             f"{r['n_samples_over_torque_limit']} "
@@ -282,9 +327,7 @@ def latex_summary_table(results) -> str:
 
 def latex_per_joint_table(results) -> str:
     """Per-joint RMSE for every model. This is the table that shows J7."""
-    lines = [
-        "% Généré par: python -m evaluation.eval_baselines --latex",
-        f"% Même split de test pour toutes les lignes (seed={SPLIT_SEED}).",
+    lines = _provenance(results) + [
         "\\begin{tabular}{@{}lccccccc@{}}",
         "\\toprule",
         "RMSE de test [\\si{\\newton\\meter}] & J1 & J2 & J3 & J4 & J5 & J6 & J7 \\\\",
@@ -292,7 +335,7 @@ def latex_per_joint_table(results) -> str:
     ]
     for r in results:
         cells = " & ".join(f"\\num{{{v:.3f}}}" for v in r["per_joint_rmse"])
-        lines.append(f"{LABEL.get(r['kind'], r['kind'])} & {cells} \\\\")
+        lines.append(f"{_label(r)} & {cells} \\\\")
     lines += ["\\bottomrule", "\\end{tabular}"]
     return "\n".join(lines)
 
