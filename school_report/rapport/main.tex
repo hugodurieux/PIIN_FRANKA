@@ -715,7 +715,8 @@ données réservées.
     (\cref{sec-res-suivi,sec-limites-integration}).
     \item \textbf{Le modèle gris divise par \num{2.3} l'erreur du modèle
     analytique} issu de l'URDF, de \SI{1.46}{} à \SI{0.62}{\newton\meter} en
-    moyenne (\cref{tab-baselines}).
+    moyenne, sur la partition employée ici (\cref{tab-baselines};
+    portée précisée en \cref{sec-res-partition}).
     \item \textbf{Les contraintes physiques tiennent.} Zéro violation de limite
     de couple sur les \SI{14830}{} échantillons de test, là où le modèle
     analytique seul en produit sur \SI{0.99}{\percent} d'entre eux
@@ -980,11 +981,14 @@ partition, et il porte précisément sur la comparaison que ce travail cherchait
 \num{148304} échantillons — entre entraînement, validation et test, de sorte
 qu'aucune trajectoire de test n'ait jamais été vue. La boîte noire perd alors
 l'appui de la mémorisation et doit extrapoler, ce que le terme analytique du
-modèle gris fait par construction. \textbf{Cette mesure n'a pas été
-réalisée}, et tant qu'elle ne l'est pas, l'écart de \SI{28}{\percent} de
-\cref{tab-baselines} doit être lu comme une borne supérieure de l'avantage de
-la boîte noire plutôt que comme un résultat établi. C'est la première
-expérience que devrait mener une reprise de ce travail.
+modèle gris fait par construction. Une implémentation de cette partition par
+groupe existe dans le dépôt et une mesure préliminaire a été conduite, mais
+elle repose sur trop peu de trajectoires de test pour être rapportée ici: son
+analyse est laissée aux travaux futurs. En conséquence, l'écart de
+\SI{28}{\percent} de \cref{tab-baselines} doit être lu comme une borne
+supérieure de l'avantage de la boîte noire plutôt que comme un résultat
+établi, et les comparaisons de cette section comme des mesures
+d'interpolation à l'intérieur de la famille d'excitation employée.
 
 \subsection{Précision du modèle appris}
 \label{sec-res-stage1}
