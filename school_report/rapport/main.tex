@@ -919,9 +919,10 @@ les sept axes.}
 \caption{Modèle gris sur le jeu de test réservé: erreur de prédiction par axe,
 borne $\epsilon_j$ (quantile \SI{99.9}{\percent}) et gains PD qui en découlent
 par \cref{eq-gains} avec $\kappa = 2$. La queue de distribution est lourde — le
-maximum absolu atteint \SI{74.9}{\newton\meter} sur l'axe~1 contre un $p_{99,9}$
-de \SI{5.81}{\newton\meter} — ce qui est précisément pourquoi la borne est prise
-en quantile et non en maximum (\cref{sec-limites}).}
+maximum absolu atteint \SI{81.8}{\newton\meter} sur l'axe~2 contre un $p_{99,9}$
+de \SI{6.94}{\newton\meter}, soit un rapport de~\num{12} — ce qui est
+précisément pourquoi la borne est prise en quantile et non en maximum
+(\cref{sec-limites}).}
 \label{tab-perjoint}
 \small
 \begin{tabular}{@{}lccccccc@{}}
@@ -1000,7 +1001,7 @@ Le modèle appris pilote effectivement le robot: la loi~\eqref{eq-ctpd} est
 trajectoires planifiées. Le comportement observé confirme quantitativement la
 conséquence contre-intuitive annoncée en \cref{sec-boucle}: l'axe~5, l'un des
 mieux modélisés et donc l'un des plus faiblement gainés
-($K_{p,55} = \num{4,41}$, contre $\num{32,04}$ pour l'axe~2), porte un biais
+($K_{p,55} = \num{4,41}$, contre $\num{48,20}$ pour l'axe~2), porte un biais
 statique systématique, toujours de même signe, de l'ordre de
 \SIrange{0.013}{0.053}{\radian} selon la configuration. Ce biais croît avec
 l'allonge du bras (environ \SI{-0.044}{\radian} à \SI{0.45}{\meter},
@@ -1078,9 +1079,9 @@ résultat survit à ce confondant.
 La perte MSE n'est pas pondérée, incitant le réseau à ignorer le poignet (limite
 \SI{12}{\newton\meter}) au profit des axes porteurs (\SI{87}{\newton\meter}). C'est
 directement visible dans \cref{tab-perjoint}: rapportée à la limite de couple,
-l'erreur des axes~5 à~7 (\SIrange{2.49}{3.11}{\percent}) est trois fois celle des
-axes~1 à~4 (\SIrange{0.62}{1.03}{\percent}), alors qu'elle paraît meilleure en
-valeur absolue. Ce défaut justifie l'implémentation future d'une pondération
+l'erreur des axes~5 à~7 (\SIrange{2.40}{3.09}{\percent}) est près de trois fois
+celle des axes~1 à~4 (\SIrange{0.64}{1.17}{\percent}), alors qu'elle paraît
+meilleure en valeur absolue. Ce défaut justifie l'implémentation future d'une pondération
 diagonale $\mathrm{diag}(1/\bar{\tau}_j^2)$ dans la perte.
 
 \subsection{Limites de l'intégration au moteur physique}
@@ -1151,8 +1152,8 @@ préhension réelle, faute d'avoir fait varier la masse de l'objet saisi.
     une correction partielle; une pénalité explicite sur $\|\taures\|$ par axe,
     calibrée sur l'erreur résiduelle de RNEA, en serait une plus directe.
     \item[Queue de distribution lourde, non traitée.] L'erreur maximale atteint
-    \SI{74.9}{\newton\meter} sur l'axe~1 pour un $p_{99,9}$ de
-    \SI{5.81}{\newton\meter}. L'inspection des pires échantillons montre des
+    \SI{81.8}{\newton\meter} sur l'axe~2 pour un $p_{99,9}$ de
+    \SI{6.94}{\newton\meter}. L'inspection des pires échantillons montre des
     couples réels proches de la limite associés à des prédictions analytiques
     quasi nulles, ce qui suggère des artefacts de collecte (contacts,
     transitoires) plutôt que des défauts de modèle. Ces échantillons ne sont
