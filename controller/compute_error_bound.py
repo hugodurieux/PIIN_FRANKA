@@ -81,6 +81,23 @@ def main():
     # one regardless of the budget the model was trained under. Truncating here
     # would reconstruct a different, smaller test set than the model was scored
     # on and the bound would not match the reported RMSE.
+    # This module only implements the SAMPLE-wise split. A checkpoint trained
+    # with --split_mode segment has a different partition, so the "test" set
+    # built below would contain trajectories it was trained on -- and epsilon_j
+    # feeds the live Kp/Kd. Silent mismatch here is exactly the failure this
+    # file was written to eliminate, so it is a hard error rather than a
+    # warning. Wiring segment mode through is deliberately left undone: it
+    # changes what the arm physically runs with and needs its own tested step.
+    if cfg.get("split_mode", "sample") != "sample":
+        raise SystemExit(
+            f"{args.run_dir} was trained with split_mode="
+            f"{cfg['split_mode']!r}, but compute_error_bound.py only "
+            "implements the sample-wise split. Its test set would overlap "
+            "that model's training trajectories, and epsilon_j sets the live "
+            "controller gains. Use a sample-split checkpoint, or extend this "
+            "script to training/segment_splits.py first."
+        )
+
     full = MultiPayloadDataset(args.data)
     print(f"[compute_error_bound] {describe(len(full))}")
     _, _, test_ds = make_splits(full)

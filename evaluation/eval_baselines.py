@@ -56,6 +56,7 @@ import json
 import os
 from typing import Optional
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
@@ -63,6 +64,8 @@ from network.constants import N_JOINTS, TORQUE_LIMITS, FRICTION_NET_HIDDEN
 from network.friction_net import FrictionNet
 from training.dataset import MultiPayloadDataset, FrankaDynamicsDataset
 from training.splits import make_splits, describe, SPLIT_SEED
+from training.segment_splits import (make_segment_splits, segment_ids,
+                                     report_group_sizes)
 
 KINDS = ("rnea", "greybox", "mlp")
 
@@ -73,16 +76,68 @@ def dataset_signature(paths) -> str:
     return h
 
 
-def build_test_loader(data_paths, batch_size=512):
-    """Load the dataset and return ONLY its test split, plus its size."""
+def build_test_loader(data_paths, batch_size=512, split_mode="sample",
+                      split_seed=SPLIT_SEED):
+    """Load the dataset and return ONLY its test split, plus its size.
+
+    ``split_mode`` and ``split_seed`` MUST match what the checkpoints were
+    trained under. Evaluating a segment-split checkpoint on the sample-split
+    test set scores it on trajectories it was trained on, which is the very
+    leak the segment mode exists to remove. :func:`check_split_agreement`
+    enforces this against each checkpoint's own config.json.
+    """
     if len(data_paths) > 1:
         full = MultiPayloadDataset(data_paths)
     else:
         full = FrankaDynamicsDataset(data_paths[0])
-    print(f"[eval] {describe(len(full))}")
-    _, _, test_ds = make_splits(full)
+
+    if split_mode == "segment":
+        gids = segment_ids(data_paths)
+        print(f"[eval] mode=segment, {np.unique(gids).size} trajectories, "
+              f"{len(full):,} samples, seed={split_seed}")
+        _, _, test_ds = make_segment_splits(full, data_paths, seed=split_seed)
+        print(report_group_sizes(
+            gids,
+            np.empty(0, dtype=np.int64),
+            np.empty(0, dtype=np.int64),
+            np.asarray(test_ds.indices),
+        ))
+    else:
+        print(f"[eval] mode=sample, {describe(len(full))}")
+        _, _, test_ds = make_splits(full, seed=split_seed)
     loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
     return loader, len(test_ds)
+
+
+def check_split_agreement(run_dirs, split_mode, split_seed):
+    """Fail loudly if a checkpoint was trained under a different partition.
+
+    A silent mismatch here does not crash and does not look wrong -- it just
+    reports a model on data it has already seen. That is exactly the class of
+    defect this whole line of work exists to remove, so it is a hard error.
+    """
+    for run_dir in run_dirs:
+        cfg_path = os.path.join(run_dir, "config.json")
+        if not os.path.exists(cfg_path):
+            print(f"[eval] WARNING: {run_dir} has no config.json; cannot "
+                  "verify it was trained under the same split.")
+            continue
+        with open(cfg_path) as f:
+            cfg = json.load(f)
+        # Runs predating --split_mode have no such key and are sample-wise.
+        got_mode = cfg.get("split_mode", "sample")
+        got_seed = cfg.get("split_seed", SPLIT_SEED)
+        if got_mode != split_mode or got_seed != split_seed:
+            raise SystemExit(
+                f"SPLIT MISMATCH for {run_dir}:\n"
+                f"  trained with  split_mode={got_mode!r} "
+                f"split_seed={got_seed}\n"
+                f"  evaluating as split_mode={split_mode!r} "
+                f"split_seed={split_seed}\n"
+                "Its test split would contain data it was trained on. Pass "
+                "--split_mode/--split_seed matching the checkpoints, or "
+                "retrain them under this partition."
+            )
 
 
 def load_model(run_dir: str, device: str):
@@ -254,6 +309,13 @@ def main():
                    help="Several models at once, as kind=run_dir tokens, e.g. "
                         "'rnea=' 'greybox=models/run_A' 'mlp=models/run_B'.")
     p.add_argument("--batch_size", type=int, default=512)
+    p.add_argument("--split_mode", type=str, default="sample",
+                   choices=("sample", "segment"),
+                   help="MUST match how the checkpoints were trained; this is "
+                        "verified against each config.json. 'segment' splits "
+                        "by whole trajectory (see training/segment_splits.py).")
+    p.add_argument("--split_seed", type=int, default=SPLIT_SEED,
+                   help="MUST match training. Also verified.")
     p.add_argument("--latex", action="store_true",
                    help="Also print the report's table body.")
     p.add_argument("--json_out", type=str, default=None,
@@ -264,7 +326,6 @@ def main():
     sig = dataset_signature(args.data)
     print(f"[eval] dataset signature {sig} over {len(args.data)} file(s)")
     print("[eval] every model below is scored on this exact test split.")
-    loader, _ = build_test_loader(args.data, args.batch_size)
 
     jobs = []
     if args.compare:
@@ -292,10 +353,24 @@ def main():
                   f"cross-checking against config.json.")
         jobs.append((kind, args.run_dir))
 
+    # Verify BEFORE loading data: a mismatch is a hard error, and finding it
+    # after a full dataset load wastes the run.
+    check_split_agreement(
+        [rd for _, rd in jobs if rd], args.split_mode, args.split_seed
+    )
+    loader, _ = build_test_loader(
+        args.data, args.batch_size,
+        split_mode=args.split_mode, split_seed=args.split_seed,
+    )
+
     results = []
     for kind, run_dir in jobs:
         r = evaluate(kind, loader, device, run_dir)
         r["dataset_signature"] = sig
+        # Recorded so a JSON of results can never be read as the wrong
+        # partition, and so the two modes cannot be tabulated together.
+        r["split_mode"] = args.split_mode
+        r["split_seed"] = args.split_seed
         print_result(r)
         results.append(r)
 

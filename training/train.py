@@ -43,6 +43,7 @@ import json
 import os
 from datetime import datetime
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
@@ -52,6 +53,8 @@ from training.constraints import AugmentedLagrangian
 from training.dataset import (SyntheticDataset, FrankaDynamicsDataset,
                               MultiPayloadDataset, _random_subsample_indices)
 from training.splits import make_splits, describe, SPLIT_SEED, SPLIT_FRACTIONS
+from training.segment_splits import (make_segment_splits, segment_ids,
+                                     report_group_sizes)
 
 
 def build_dataset(args):
@@ -67,19 +70,50 @@ def build_dataset(args):
 
 
 def build_loaders(args):
-    """Build train / validation / test DataLoaders.
+    """Build train / validation / test DataLoaders, under one of two splits.
 
-    The split is an 80/10/10 partition from ``training.splits`` -- the single
-    source of truth shared with ``controller/compute_error_bound.py`` and
-    ``evaluation/eval_baselines.py``, so all three see the SAME test set.
+    ``--split_mode sample`` (default) is the 80/10/10 partition from
+    ``training.splits`` -- the source shared with
+    ``controller/compute_error_bound.py`` and ``evaluation/eval_baselines.py``,
+    so all three see the SAME test set. It replaced the old 90/10 train/val
+    split, under which the reported RMSE and the Lyapunov bound epsilon_j were
+    both measured on the very set used to select the checkpoint.
 
-    This replaces the old 90/10 train/val split, under which the reported RMSE
-    and the Lyapunov bound epsilon_j were both measured on the very set used to
-    select the checkpoint. See training/splits.py for the full rationale.
+    ``--split_mode segment`` partitions by whole TRAJECTORY instead. The
+    sample-wise split assumes i.i.d. rows, but the data is 30 continuous 5 s
+    trajectories at 1 kHz, so every test row has a near-duplicate 1 ms away in
+    training. See ``training/segment_splits.py``.
+
+    The two modes produce DIFFERENT partitions. Their numbers are not
+    comparable and must not share a table. The mode is recorded in the run's
+    config.json, and ``eval_baselines.py`` refuses to score a checkpoint under
+    a partition it was not trained on.
     """
     full = build_dataset(args)
-    print(f"[split] {describe(len(full))}")
-    train_ds, val_ds, test_ds = make_splits(full)
+
+    split_mode = getattr(args, "split_mode", "sample")
+    split_seed = getattr(args, "split_seed", SPLIT_SEED)
+    if split_mode == "segment":
+        # Group-wise: whole trajectories go to one split, so no test sample has
+        # a 1 ms neighbour in training. See training/segment_splits.py for why
+        # the sample-wise split flatters the black-box baseline specifically.
+        if args.synthetic or not args.data:
+            raise SystemExit(
+                "--split_mode segment needs real HDF5 data (--data); the "
+                "synthetic dataset has no trajectory structure."
+            )
+        gids = segment_ids(args.data)
+        print(f"[split] mode=segment, {np.unique(gids).size} trajectories, "
+              f"{len(full):,} samples, seed={split_seed}")
+        train_ds, val_ds, test_ds = make_segment_splits(
+            full, args.data, seed=split_seed
+        )
+        idx = (np.asarray(train_ds.indices), np.asarray(val_ds.indices),
+               np.asarray(test_ds.indices))
+        print(report_group_sizes(gids, *idx))
+    else:
+        print(f"[split] mode=sample, {describe(len(full))}")
+        train_ds, val_ds, test_ds = make_splits(full, seed=split_seed)
 
     # --max_samples is a TRAINING BUDGET, applied AFTER the split.
     #
@@ -184,6 +218,20 @@ def main():
                         "val and test at full size so every budget is scored "
                         "on the identical test set. Enables the data-efficiency "
                         "ablation (novelty N4, Liu et al. 2024). Default: all.")
+    p.add_argument("--split_mode", type=str, default="sample",
+                   choices=("sample", "segment"),
+                   help="How to partition the data. 'sample' (default) is the "
+                        "historical 80/10/10 over individual rows, kept so "
+                        "recorded numbers stay reproducible. 'segment' splits "
+                        "by whole TRAJECTORY, so no test sample has a 1 ms "
+                        "neighbour in training -- the data is 30 continuous "
+                        "5 s trajectories at 1 kHz, not i.i.d. samples. The "
+                        "two modes are NOT comparable and must not share a "
+                        "table. See training/segment_splits.py.")
+    p.add_argument("--split_seed", type=int, default=SPLIT_SEED,
+                   help="Seed for the partition. With --split_mode segment "
+                        "there are only ~3 test trajectories, so a single "
+                        "seed is not a result: run >= 3 and report the spread.")
     p.add_argument("--epochs", type=int, default=100)
     p.add_argument("--batch_size", type=int, default=256)
     p.add_argument("--lr", type=float, default=1e-3)
@@ -358,10 +406,12 @@ def main():
         print(f"  -> Scale within tolerance (ratio {ratio:.1f}x).")
 
     # save config + final
+    # vars(args) already carries split_mode and split_seed; do NOT re-add
+    # split_seed from the constant here -- the right-hand side of `|` wins and
+    # would silently record the default whenever --split_seed was passed.
     config = vars(args) | {
         "best_val_loss": best_val,
         "run_id": run_id,
-        "split_seed": SPLIT_SEED,
         "split_fractions": list(SPLIT_FRACTIONS),
         "per_joint_val_rmse": val_rmse.tolist(),
         "per_joint_test_rmse": test_rmse.tolist(),
