@@ -720,10 +720,12 @@ données réservées.
     de couple sur les \SI{14830}{} échantillons de test, là où le modèle
     analytique seul en produit sur \SI{0.99}{\percent} d'entre eux
     (\cref{sec-res-garanties}).
-    \item \textbf{Une boîte noire de capacité identique est plus précise}
-    (\SI{0.45}{} contre \SI{0.62}{\newton\meter}). La valeur de la structure
-    grise ne réside donc pas dans la précision brute
-    (\cref{sec-baselines}).
+    \item \textbf{Sur ces données, une boîte noire de capacité identique est
+    plus précise} (\SI{0.45}{} contre \SI{0.62}{\newton\meter}) --- mais la
+    partition étant tirée au niveau de l'échantillon sur des séries
+    temporelles, cet écart favorise mécaniquement le modèle qui mémorise le
+    plus, et constitue une borne supérieure plutôt qu'un résultat établi
+    (\cref{sec-baselines,sec-res-partition}).
     \item \textbf{Le résidu appris dégrade les axes que le terme analytique
     modélise déjà bien}, d'un facteur~\num{6.9} sur l'axe~7. Le même effet est
     mesuré indépendamment en boucle fermée, où désactiver le résidu divise
@@ -751,7 +753,13 @@ Cette précaution n'est pas rhétorique. Jusqu'au 31~juillet 2026 le dépôt ne
 contenait aucun jeu de test: la RMSE publiée était celle de la validation, sur
 laquelle le point de contrôle était aussi sélectionné, et $\epsilon_j$ — donc
 les gains embarqués — en était tirée. Les chiffres ci-dessous sont les premiers
-du projet à être réellement hors échantillon, et ils diffèrent des précédents.
+du projet à être mesurés hors du critère de sélection, et ils diffèrent des
+précédents. Ils ne sont pas pour autant hors échantillon au sens fort: la
+partition est tirée au niveau de l'échantillon sur des séries temporelles à
+\SI{1}{\kilo\hertz}, ce qui laisse subsister une dépendance entre
+entraînement et test. \Cref{sec-res-partition} établit la portée exacte de
+cette limite et ce qu'elle fausse; elle doit être lue avant toute
+interprétation des écarts entre modèles.
 
 L'apprentissage a été réalisé sur une carte NVIDIA GeForce RTX~3090
 (\SI{24}{\gibi\byte}) et un processeur Intel Core i9-12900KF (16~c\oe urs,
@@ -836,9 +844,61 @@ Gris (proposé) & \num{1.022} & \num{0.935} & \num{0.553} & \num{0.843}
 \end{tabular}
 \end{table}
 
-\paragraph{La boîte noire est plus précise que le modèle gris.} C'est le
-résultat le plus important de cette section, et il contredit l'hypothèse de
-départ. Sur le poignet l'écart est d'un demi-ordre de grandeur: axe~5
+% Figure générée à partir de results/20260731_164630/p5_comparison.json,
+% champ "rmse_pct_of_limit" (jeu de test réservé, 14 830 échantillons).
+% Normalisation par la limite de couple : sans elle, l'axe 7 (limite
+% 12 N.m) est illisible à côté de l'axe 2 (limite 87 N.m).
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=0.92\textwidth, height=6.2cm,
+    ybar, bar width=6pt,
+    xlabel={axe articulaire},
+    ylabel={RMSE de test [\si{\percent} de la limite de couple]},
+    symbolic x coords={J1,J2,J3,J4,J5,J6,J7},
+    xtick=data, ymin=0, ymax=10.4,
+    grid=major, grid style={black!12},
+    legend columns=3,
+    legend style={font=\small, at={(0.5,1.03)}, anchor=south,
+        draw=black!30, fill=white},
+    legend cell align=left,
+    tick label style={font=\small}, label style={font=\small}
+]
+\addplot[draw=black, fill=black!25] coordinates {
+(J1,1.825) (J2,3.265) (J3,2.097) (J4,2.245) (J5,7.358) (J6,8.852)
+(J7,0.349)};
+\addlegendentry{RNEA seul}
+\addplot[draw=black, fill=white, postaction={pattern=north east lines}]
+coordinates {
+(J1,1.116) (J2,0.971) (J3,0.465) (J4,0.853) (J5,0.547) (J6,0.564)
+(J7,0.259)};
+\addlegendentry{MLP direct}
+\addplot[draw=black, fill=black!70] coordinates {
+(J1,1.174) (J2,1.074) (J3,0.636) (J4,0.969) (J5,3.088) (J6,2.956)
+(J7,2.396)};
+\addlegendentry{Gris (proposé)}
+\end{axis}
+\end{tikzpicture}
+\caption{Erreur de prédiction sur le \textbf{jeu de test réservé}
+(\SI{14830}{} échantillons), rapportée à la limite de couple de chaque axe.
+La normalisation est nécessaire: en valeur absolue, les axes du poignet
+(limite \SI{12}{\newton\meter}) sont illisibles à côté des axes porteurs
+(\SI{87}{\newton\meter}). Deux lectures s'imposent. D'une part le modèle
+analytique est au plus mal sur le poignet (axes~5 et~6), là où le modèle
+appris a donc le plus à apporter. D'autre part c'est précisément là que le
+modèle gris reste loin de la boîte noire, alors qu'il l'égale sur les axes~1
+à~4: l'écart global de \cref{tab-baselines} est presque entièrement un écart
+de poignet. Les remarques de \cref{sec-res-partition} sur la partition des
+données s'appliquent aux trois séries.}
+\label{fig-perjoint-baselines}
+\end{figure}
+
+\paragraph{La boîte noire est plus précise que le modèle gris sur ces
+données.} Le résultat contredit l'hypothèse de départ et doit être rapporté
+comme tel; \cref{sec-res-partition} en établit ensuite la portée exacte, qui
+est plus étroite qu'il n'y paraît. Sur le poignet l'écart est d'un demi-ordre
+de grandeur: axe~5
 \num{0.066} contre \num{0.371}, axe~6 \num{0.068} contre \num{0.355}, axe~7
 \num{0.031} contre \num{0.288}. Deux mécanismes l'expliquent, et ils se
 cumulent. D'une part RNEA est particulièrement \emph{faux} sur le poignet —
@@ -870,15 +930,83 @@ seule cause: le résidu n'est pas régularisé par axe, et la perte MSE non
 pondérée (\cref{sec-res-desequilibre}) ne lui donne aucune raison de rester nul
 là où il devrait l'être.
 
+\subsection{Une réserve sur la partition, et sur ce qu'elle fausse}
+\label{sec-res-partition}
+
+La comparaison qui précède appelle une réserve méthodologique qui en limite la
+portée, et il faut l'énoncer avant d'en tirer quoi que ce soit.
+
+Les données sont constituées de \num{30} trajectoires continues de
+\SI{5}{\second} — \num{10} segments d'excitation de Fourier autour de centres
+de Sobol, pour chacune des trois charges — échantillonnées à
+\SI{1}{\kilo\hertz}. La partition de \cref{sec-probleme} est en revanche
+\emph{tirée uniformément au niveau de l'échantillon}. Deux pas de temps
+consécutifs, distants de \SI{1}{\milli\second} sur la même trajectoire, sont
+donc répartis indépendamment: tout échantillon de test possède, dans le jeu
+d'entraînement, des voisins quasi identiques en $(\q, \qd)$.
+
+\paragraph{Ce que cela invalide, et ce que cela n'invalide pas.} Le défaut de
+\emph{sélection} décrit en \cref{sec-probleme} est bien corrigé: le point de
+contrôle n'est plus choisi sur l'ensemble rapporté, et $\epsilon_j$ n'en est
+plus tiré. Cela reste la correction la plus importante du projet.
+L'\emph{indépendance} des échantillons, elle, n'est pas acquise, et la
+\cref{sec-resultats} ne doit pas être lue comme une mesure de généralisation à
+des trajectoires nouvelles. Elle mesure l'interpolation à l'intérieur d'une
+famille d'excitation de \num{30} trajectoires.
+
+\paragraph{L'effet n'est pas le même pour les trois modèles, et c'est le
+point.} Un voisin à \SI{1}{\milli\second} n'apporte rien au modèle analytique,
+qui ne s'ajuste à aucune donnée: la ligne RNEA de \cref{tab-baselines} est
+insensible à cette fuite. Les deux modèles appris en bénéficient, mais
+inégalement, et le plus favorisé est celui qui doit le plus mémoriser. Le
+modèle gris n'a qu'un résidu à apprendre, l'inertie et la gravité lui étant
+fournies analytiquement; la boîte noire doit tout reconstruire à partir des
+seules données.
+
+Un indice quantitatif le confirme, et il est difficile à expliquer autrement.
+La boîte noire ne reçoit \emph{pas} l'accélération $\qdd$ en entrée: son
+encodage est celui de \cref{eq-encodage}, soit $(\q, \qd, \delta)$. Elle est
+donc structurellement incapable de représenter le couple inertiel
+$M(\q)\,\qdd$, terme dominant de la dynamique — et elle l'emporte pourtant
+de \SI{28}{\percent}. Avec \num{30} trajectoires seulement et un tirage au
+niveau de l'échantillon, le couple $(\q, \qd)$ identifie presque toujours la
+trajectoire et la phase, ce qui rend $\qdd$ implicitement récupérable par
+mémorisation. L'écart mesuré est donc au moins en partie un artefact de la
+partition, et il porte précisément sur la comparaison que ce travail cherchait
+à établir.
+
+\paragraph{La correction, et son statut.} La mesure correcte est une partition
+\emph{par groupe}: répartir les \num{30} segments — et non les
+\num{148304} échantillons — entre entraînement, validation et test, de sorte
+qu'aucune trajectoire de test n'ait jamais été vue. La boîte noire perd alors
+l'appui de la mémorisation et doit extrapoler, ce que le terme analytique du
+modèle gris fait par construction. \textbf{Cette mesure n'a pas été
+réalisée}, et tant qu'elle ne l'est pas, l'écart de \SI{28}{\percent} de
+\cref{tab-baselines} doit être lu comme une borne supérieure de l'avantage de
+la boîte noire plutôt que comme un résultat établi. C'est la première
+expérience que devrait mener une reprise de ce travail.
+
 \subsection{Précision du modèle appris}
 \label{sec-res-stage1}
 
 Le modèle gris atteint \SIrange{0.29}{1.02}{\newton\meter} par axe sur le jeu
-de test réservé (\cref{tab-perjoint}). L'amélioration apportée par le filtrage de
-saturation~\eqref{eq-satfilter} est nette et présente sur les sept axes
-(\cref{fig-rmse}): la comparaison \code{isaac-first-real} contre
-\code{isaac-satfix} est une expérience contrôlée, les deux exécutions ne
-différant que par ce filtre.
+de test réservé (\cref{tab-perjoint}).
+
+L'amélioration apportée par le filtrage de saturation~\eqref{eq-satfilter} est
+nette et présente sur les sept axes (\cref{fig-rmse}): la comparaison
+\code{isaac-first-real} contre \code{isaac-satfix} est une expérience
+contrôlée, les deux exécutions ne différant que par ce filtre.
+\textbf{Cette figure est la seule du document à ne pas porter sur le jeu de
+test réservé}, et elle est conservée sous cette réserve explicite: les deux
+exécutions datent du 16~juillet 2026, antérieures à
+l'introduction de la partition à trois voies, et les valeurs tracées sont des
+RMSE de \emph{validation} — mesurées, qui plus est, sur l'ensemble ayant servi
+à sélectionner le point de contrôle. Elles ne sont donc comparables ni entre
+elles ni avec le reste de cette section en valeur absolue. La mesure ne peut
+pas être refaite proprement: le jeu de données antérieur au filtre n'existe
+plus, le filtre s'appliquant à la génération. Seul le \emph{sens} de l'effet
+— une amélioration sur les sept axes — est retenu ici; son amplitude ne l'est
+pas.
 
 \begin{figure}[htbp]
 \centering
@@ -887,7 +1015,7 @@ différant que par ce filtre.
     width=0.86\textwidth, height=5.6cm,
     ybar, bar width=7pt,
     xlabel={axe articulaire},
-    ylabel={RMSE de test [\si{\newton\meter}]},
+    ylabel={RMSE de validation [\si{\newton\meter}]},
     symbolic x coords={J1,J2,J3,J4,J5,J6,J7},
     xtick=data, ymin=0, ymax=2.0,
     grid=major, grid style={black!12},
@@ -908,9 +1036,14 @@ différant que par ce filtre.
 \addlegendentry{\code{isaac-satfix}}
 \end{axis}
 \end{tikzpicture}
-\caption{Erreur quadratique moyenne sur le jeu de test, avant et après le
-filtrage de saturation~\eqref{eq-satfilter}. L'amélioration est présente sur
-les sept axes.}
+\caption{Effet du filtrage de saturation~\eqref{eq-satfilter}: RMSE
+\textbf{de validation}, avant et après. L'amélioration est présente sur les
+sept axes. \textbf{Mesures antérieures à la partition à trois voies}
+(16~juillet 2026), donc sur l'ensemble ayant servi à la sélection du point de
+contrôle: seul le signe de l'effet est exploitable, non son amplitude, et ces
+valeurs ne sont pas comparables à celles du reste de la
+\cref{sec-resultats}. La comparaison ne peut être refaite, le jeu de données
+antérieur au filtre n'existant plus.}
 \label{fig-rmse}
 \end{figure}
 
@@ -1135,9 +1268,19 @@ préhension réelle, faute d'avoir fait varier la masse de l'objet saisi.
 \subsection{Limites structurelles et méthodologiques}
 \label{sec-limites}
 \begin{description}
-    \item[La structure grise n'est pas justifiée par la précision.] Mesurée à
-    protocole identique, une boîte noire de même capacité et de même budget
-    fait \SI{28}{\percent} mieux (\cref{tab-baselines}). La justification de
+    \item[Partition tirée au niveau de l'échantillon.] Les données sont
+    \num{30} trajectoires continues échantillonnées à \SI{1}{\kilo\hertz},
+    mais la partition est tirée par échantillon: chaque point de test a des
+    voisins à \SI{1}{\milli\second} dans l'entraînement
+    (\cref{sec-res-partition}). Le biais de sélection est corrigé, pas
+    l'indépendance des échantillons. La correction — une partition par
+    segment — n'a pas été exécutée, et elle conditionne l'interprétation de
+    toutes les comparaisons entre modèles appris de
+    \cref{tab-baselines}. C'est la limite la plus sérieuse de ce travail.
+    \item[La structure grise n'est pas justifiée par la précision sur ces
+    données.] Mesurée à protocole identique, une boîte noire de même capacité
+    et de même budget fait \SI{28}{\percent} mieux (\cref{tab-baselines}) —
+    sous la réserve, non levée, du point précédent. La justification de
     l'approche grise doit donc reposer sur ce que la boîte noire n'offre pas —
     garanties structurelles, extraction automatique depuis l'URDF, absence de
     réapprentissage de l'inertie et de la gravité — et non sur l'erreur de
