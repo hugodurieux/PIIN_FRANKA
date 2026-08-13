@@ -236,7 +236,7 @@ def main() -> int:
         log.info("Registering grasp_object in the MoveIt2 planning scene...")
         arm.add_collision_box(
             "grasp_object",
-            position=(0.55, -0.25, 0.02),
+            position=(0.55, 0.0, 0.02),
             size=(0.06, 0.06, 0.06),
         )
 
@@ -250,7 +250,7 @@ def main() -> int:
             # Used to shrink the collision object back down right before
             # attach, so it no longer overlaps the floor collision box below.
             collision_object_bare_size=(0.04, 0.04, 0.04),
-            collision_object_position=(0.55, -0.25, 0.02),
+            collision_object_position=(0.55, 0.0, 0.02),
         )
         executor = GraspExecutor(cfg, gripper, arm_controller=arm)
 

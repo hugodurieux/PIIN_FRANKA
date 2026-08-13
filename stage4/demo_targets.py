@@ -157,9 +157,16 @@ TARGETS: dict[str, np.ndarray] = {
     # MuJoCo puts the cube in another: this entry, panda_arm_mujoco.xml's
     # grasp_object body pos, that file's `home` keyframe freejoint qpos, and
     # test_grasp_pick.py's add_collision_box + collision_object_position.
+    # 2026-08-13: y moved -0.25 -> 0 to return to the ONLY configuration with a
+    # characterised success rate. y=-0.25 was staged for a phase B run that was
+    # never executed (SESSION.md: "CONFIGURED BUT NOT RUN"), so the scene was
+    # sitting at an unmeasured pose. Every number the demo is claimed against --
+    # phase A's 3/3 with a 1.0 mm spread, and phase F's 7.5 mm flange error with
+    # the residual off -- was measured at x=0.55, y=0. To resume the phase B
+    # sweep, set y back to -0.25 here AND in the four other sites listed above.
     "grasp_object": _pose(
         x=0.55,
-        y=-0.25,
+        y=0.0,
         z=0.02 + _FLANGE_TO_FINGERTIP_Z,
         rotation=_TOP_DOWN_FINGERS_ALIGNED,
     ),
