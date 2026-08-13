@@ -99,14 +99,37 @@ class ComputedTorquePDController:
                 ``DEFAULT_KP`` from ``lyapunov_gains.py``.
             kd: (7, 7) derivative gain matrix.  If *None*, uses
                 ``DEFAULT_KD`` from ``lyapunov_gains.py``.
-            disable_residual: 2026-07-28 diagnostic-only flag (Stage 4 investigation
-                of the joint4/6/7 freeze). Default False preserves the validated
-                tau_cmd = tau_rnea + tau_res + tau_pd composition exactly. When
-                True, tau_res is forced to zero and the GreyBoxNet/FrictionNet are
-                never even called -- isolates whether the LEARNED model is a factor
-                in the freeze, as opposed to RNEA/PD/physics alone. Not used by any
-                default launch path; only set via pinn_controller_node's own
-                identically-named, identically-defaulted-False parameter.
+            disable_residual: when True, tau_res is forced to zero and the
+                GreyBoxNet/FrictionNet are never called, leaving
+                tau_cmd = tau_rnea + tau_pd.
+
+                Introduced 2026-07-28 as a diagnostic for the joint4/6/7 freeze.
+                It is NO LONGER diagnostic-only: as of 2026-08-13 it is the
+                configuration the Stage 4 demo ships with, via
+                ``ros2_ws/launch_pinn_demo.sh``. The reason is measured, not
+                stylistic -- the phase F ablation of 2026-07-29, at x=0.55 and
+                margin 4.0 with every other variable held identical:
+
+                    residual ON   panda_joint5 bias -0.0337 rad, flange 14.3 mm
+                    residual OFF  panda_joint5 bias -0.0015 rad, flange  7.5 mm
+
+                a 22x reduction in steady-state bias and a halved Cartesian
+                error from switching the learned model off. The gain confound
+                pushes the other way (lower Kp would make e_ss = tau/Kp LARGER),
+                so the result survives it.
+
+                This is a domain-transfer failure, not a refutation of the
+                grey-box approach: the checkpoint was trained on Isaac Sim data
+                and is evaluated in MuJoCo, so it adds Isaac's dynamics gap to a
+                simulator that does not have it. Training on in-domain data
+                (``generate_mujoco_dataset.py``) is the route to turning the
+                residual back on; until that is done and re-measured, OFF is the
+                honest default for the demo.
+
+                The default stays False so that every other caller -- training,
+                evaluation, the ablation script -- keeps the validated
+                tau_rnea + tau_res + tau_pd composition. Only the demo launcher
+                sets it True, and it says so out loud at startup.
         """
         # White-box: RNEA from URDF (pinocchio_baseline is never modified)
         self.rnea = RneaBaseline(urdf_path)

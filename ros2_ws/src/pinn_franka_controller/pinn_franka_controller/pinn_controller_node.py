@@ -109,12 +109,19 @@ class PinnControllerNode(Node):
         # these joints at all -- distinguishes "gain is simply too weak" from
         # "something else entirely is preventing motion regardless of gain."
         self.declare_parameter("gain_safety_margin_override", -1.0)
-        # 2026-07-28 DIAGNOSTIC (Stage 4 investigation of the joint4/6/7
-        # freeze): forwards to ComputedTorquePDController's disable_residual.
-        # Default False preserves the validated tau_cmd composition exactly.
-        # Set true via --ros-args -p disable_residual:=true to run RNEA+PD
-        # only (learned GreyBoxNet/FrictionNet never called), isolating
-        # whether the trained residual model is a factor in the freeze.
+        # Forwards to ComputedTorquePDController's disable_residual: RNEA + PD
+        # only, learned GreyBoxNet/FrictionNet never called.
+        #
+        # Added 2026-07-28 to isolate the trained model during the joint4/6/7
+        # freeze investigation. As of 2026-08-13 it is no longer diagnostic-only
+        # -- it is what the Stage 4 demo ships with (launch_pinn_demo.sh),
+        # because the 2026-07-29 phase F ablation measured the Isaac-trained
+        # residual DEGRADING tracking in MuJoCo: joint5 bias -0.0337 -> -0.0015
+        # rad and flange error 14.3 -> 7.5 mm when it is switched off. See
+        # ComputedTorquePDController.__init__ for the full reasoning.
+        #
+        # The default stays False so training, evaluation and the ablation
+        # script keep the validated composition; only the demo launcher sets it.
         self.declare_parameter("disable_residual", False)
 
         self._urdf_path: str = (

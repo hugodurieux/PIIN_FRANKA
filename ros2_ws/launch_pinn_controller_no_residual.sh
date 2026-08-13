@@ -1,19 +1,26 @@
 #!/bin/bash
-# 2026-07-28 DIAGNOSTIC -- Stage 4 investigation of the joint4/6/7 freeze.
-# Same as launch_pinn_controller.sh but with disable_residual:=true, so
-# tau_cmd = tau_rnea + tau_pd only (the learned GreyBoxNet/FrictionNet is
-# never called). Written as a script, not a pasted long ros2 launch
-# one-liner, because long ros2 CLI commands with inline args have
-# repeatedly been corrupted by terminal line-wrapping on paste (see
-# CLAUDE.md's terminal-command lesson) -- exactly what just happened when
-# this was pasted directly (checkpoint_path silently dropped, controller
-# fell back to publishing zero torques with no model loaded at all).
+# =====================================================================
+# DEPRECATED 2026-08-13 -- this script now forwards to launch_pinn_demo.sh.
 #
-# Usage: bash ros2_ws/launch_pinn_controller_no_residual.sh
-source /home/hci-student/projects/pinn_franka/ros2_ws/set_pinn_env.sh
-source /opt/ros/jazzy/setup.bash
-source /home/hci-student/projects/pinn_franka/ros2_ws/install/setup.bash
-ros2 launch pinn_franka_controller pinn_controller.launch.py \
-    urdf_path:=/home/hci-student/projects/pinn_franka/pinocchio_baseline/panda.urdf \
-    checkpoint_path:=/home/hci-student/projects/pinn_franka/models/run_20260716_121302/greybox_best.pt \
-    disable_residual:=true
+# It used to launch the controller with disable_residual:=true but WITHOUT
+# gain_safety_margin_override, so it silently reverted Kp to the Lyapunov
+# default while also switching the residual off. Steady-state error is
+# e_ss = tau/Kp, so that changed two things at once and made every number it
+# produced uninterpretable.
+#
+# That mattered little while it was one diagnostic among many. It matters a lot
+# now that the demo ships with the residual OFF, because this is the most
+# obvious name to reach for and it was the wrong script. Rather than delete it
+# and leave a dangling reference in the notes, it forwards.
+#
+#   For the demo:        bash ros2_ws/launch_pinn_demo.sh
+#   For the ablation:    bash ros2_ws/launch_pinn_controller_ablation.sh
+#   For residual ON:     bash ros2_ws/launch_pinn_controller_boosted.sh 4.0
+# =====================================================================
+echo "NOTE: launch_pinn_controller_no_residual.sh is deprecated." >&2
+echo "      It omitted gain_safety_margin_override, changing Kp and the" >&2
+echo "      residual at once. Forwarding to launch_pinn_demo.sh, which is" >&2
+echo "      the same intent with the gains held at the validated margin 4.0." >&2
+echo "" >&2
+
+exec bash /home/hci-student/projects/pinn_franka/ros2_ws/launch_pinn_demo.sh "$@"
