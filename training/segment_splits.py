@@ -39,14 +39,23 @@ WHAT THIS MODULE DOES
 ---------------------
 Splits by TRAJECTORY SEGMENT, so no test trajectory is ever seen in training.
 
-Segment boundaries were not written into the HDF5 files, but they are exactly
-recoverable.  Each file stores ``attrs["n_segments"]`` (= 10), and each segment
-restarts from an independent Sobol centre, so the largest ``n_segments - 1``
-jumps in ||q[i+1] - q[i]|| inside a file are its internal boundaries.  Taking a
-KNOWN COUNT of largest jumps is deliberate: a bare magnitude threshold would
-also fire on the gaps left mid-segment by the saturation filter
-(``SATURATION_MARGIN``), which removes runs of timesteps and so creates real
-but smaller discontinuities.
+Boundaries come from one of two sources, in this order:
+
+1. An explicit ``segment_id`` dataset, if the file has one.  This is exact.
+   ``generate_mujoco_dataset.py`` writes it; the older Isaac and Fourier files
+   do not.
+2. Otherwise they are recovered.  Each such file stores ``attrs["n_segments"]``
+   (= 10) and each segment restarts from an independent Sobol centre, so the
+   largest ``n_segments - 1`` jumps in ||q[i+1] - q[i]|| inside a file are its
+   internal boundaries.  Taking a KNOWN COUNT of largest jumps is deliberate: a
+   bare magnitude threshold would also fire on the gaps left mid-segment by the
+   saturation filter (``SATURATION_MARGIN``), which removes runs of timesteps
+   and so creates real but smaller discontinuities.
+
+Recovery is a heuristic and it degrades as segments get shorter and more
+numerous, or as more rows are dropped mid-segment.  It is kept only so the
+already-recorded Isaac numbers stay reproducible; new generators should write
+``segment_id`` and take path 1.
 
 The split is stratified BY FILE: each payload contributes the same proportion
 of segments to train/val/test.  Without this, an unlucky seed can put all test
@@ -186,6 +195,24 @@ def segment_ids(
     next_id = 0
     for f_i, path in enumerate(h5_paths):
         with h5py.File(path, "r") as f:
+            # --- exact path: the file recorded its own boundaries -----------
+            # generate_mujoco_dataset.py writes segment_id directly. Prefer it
+            # unconditionally over the jump heuristic below: the heuristic
+            # assumes rows are contiguous within a segment, which stops being
+            # true as soon as the generator drops samples mid-segment (velocity
+            # guard, position clipping, or the Isaac saturation filter). Those
+            # gaps are real discontinuities and would be mistaken for boundaries.
+            if "segment_id" in f and n_segments_per_file is None:
+                local = np.asarray(f["segment_id"][:], dtype=np.int64)
+                uniq = np.unique(local)
+                # Compact to 0..k-1 so ids stay dense even if a segment was
+                # dropped entirely, then offset into the global numbering.
+                remap = {v: i for i, v in enumerate(uniq)}
+                ids = np.array([remap[v] + next_id for v in local], dtype=np.int64)
+                all_ids.append(ids)
+                next_id += len(uniq)
+                continue
+
             q = f["q"][:]
             if n_segments_per_file is not None:
                 n_seg = int(n_segments_per_file[f_i])
@@ -193,8 +220,8 @@ def segment_ids(
                 n_seg = int(f.attrs["n_segments"])
             else:
                 raise ValueError(
-                    f"{path} has no 'n_segments' attribute; pass "
-                    "n_segments_per_file explicitly"
+                    f"{path} has no 'n_segments' attribute and no 'segment_id' "
+                    "dataset; pass n_segments_per_file explicitly"
                 )
 
         starts = segment_starts_in_file(q, n_seg)
