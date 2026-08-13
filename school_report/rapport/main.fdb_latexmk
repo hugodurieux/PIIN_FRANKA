@@ -1,13 +1,14 @@
 # Fdb version 4
-["biber main"] 1785729143.66266 "main.bcf" "main.bbl" "main" 1785731894.1006 0
+["biber main"] 1785737595.55126 "main.bcf" "main.bbl" "main" 1785738505.51949 0
   "bibliography.bib" 1785470765.43732 7137 9b144cfe9727051a17bed93fe48c064c ""
-  "main.bcf" 1785731893.98407 108540 25c9d0aa8397c046c999442f13644c7e "pdflatex"
+  "main.bcf" 1785738505.42579 108541 fc7e5706833225a834a5a8226bc937dd "pdflatex"
   (generated)
   "main.bbl"
   "main.blg"
   (rewritten before read)
-["pdflatex"] 1785731892.39387 "main.tex" "main.pdf" "main" 1785731894.10079 0
+["pdflatex"] 1785738503.78897 "/home/hci-student/projects/pinn_franka/school_report/rapport/main.tex" "main.pdf" "main" 1785738505.51969 0
   "/etc/texmf/web2c/texmf.cnf" 1785128094.77091 475 c0e671620eb5563b2130f56340a5fde8 ""
+  "/home/hci-student/projects/pinn_franka/school_report/rapport/main.tex" 1785738501.84888 65677 18c4b8468ff06655445cbb88208db8f5 ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/amsfonts/symbols/msam10.tfm" 1246382020 916 f87d7c45f9c908e672703b83b72241a3 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/amsfonts/symbols/msam5.tfm" 1246382020 924 9904cf1d39e9767e7a3622f2a125a565 ""
@@ -255,7 +256,6 @@
   "/usr/share/texmf/fonts/tfm/public/lm/ec-lmss12.tfm" 1254269338 11232 955a7245396175d9219648eadc654ac9 ""
   "/usr/share/texmf/fonts/tfm/public/lm/ec-lmss17.tfm" 1254269338 11252 57c8b53a3aeebba8c17658d4221d47ec ""
   "/usr/share/texmf/fonts/tfm/public/lm/ec-lmssbx10.tfm" 1254269338 11168 06d87f5698fd1b642d96449b7c8d90b0 ""
-  "/usr/share/texmf/fonts/tfm/public/lm/ec-lmtk10.tfm" 1254269338 1368 5bfeb1cf8f9f0acdb7436bfaa8e0da4e ""
   "/usr/share/texmf/fonts/tfm/public/lm/ec-lmtt10.tfm" 1254269338 1372 2ef2c2b492b3c4cd7879fe083abbb061 ""
   "/usr/share/texmf/fonts/tfm/public/lm/ec-lmtt9.tfm" 1254269338 1372 a2ff2d4391a2d6bba15b518acb79e80f ""
   "/usr/share/texmf/fonts/tfm/public/lm/lmex10.tfm" 1148093231 992 ce925c9346c7613270a79afbee98c070 ""
@@ -303,7 +303,6 @@
   "/usr/share/texmf/fonts/type1/public/lm/lmsy5.pfb" 1254269338 28210 987b40585e9bcf6463d6155bb4219492 ""
   "/usr/share/texmf/fonts/type1/public/lm/lmsy7.pfb" 1254269338 27941 d1f5d03f61a46c3fcc3a2ba904ddda52 ""
   "/usr/share/texmf/fonts/type1/public/lm/lmsy9.pfb" 1254269338 27835 16c2fa83351d4ef8cf5aebfab8a44bc1 ""
-  "/usr/share/texmf/fonts/type1/public/lm/lmtk10.pfb" 1255129361 117319 7f8361f845845ce6d5b36cbd9f9cf377 ""
   "/usr/share/texmf/fonts/type1/public/lm/lmtt9.pfb" 1255129361 108480 ee1de99df36ee0a16b36023b9c9d8a58 ""
   "/usr/share/texmf/tex/latex/lm/lmodern.sty" 1616454256 1608 b00724785a9e9c599e5181bb8729160b ""
   "/usr/share/texmf/tex/latex/lm/omllmm.fd" 1616454256 890 57f5adccd504fb5c98bdf99ed7e7f195 ""
@@ -317,12 +316,12 @@
   "/usr/share/texmf/web2c/texmf.cnf" 1707919699 40399 f2c302f7d2af602abb742093540a5834 ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1785128176.96461 5472669 54eaf61a88b6b7896ebd0dac973cb29c ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1785128248 8213310 c87b9f5fc3aa66e6136de2b95c7fb229 ""
-  "main.aux" 1785731893.96907 25129 f33352baecee710e1a5e97fcbb08ac33 "pdflatex"
-  "main.bbl" 1785729144.09741 13809 54b4b670de2aebc7d0938c799d8b6e63 "biber main"
-  "main.out" 1785731893.98407 5630 837bed84a63a9e5a183b9bbe635ddd7d "pdflatex"
-  "main.run.xml" 1785731893.98614 2337 3acfe57ba3f65a4ddc09761182585e81 "pdflatex"
-  "main.tex" 1785731887.81445 71742 d73037d5cd9c309f08ee15ae95c24715 ""
-  "main.toc" 1785731893.98614 5921 c45feddab0d8d7998d700cd92bee0712 "pdflatex"
+  "main.aux" 1785738505.41779 24508 d52d6cf2c77fb7463a77d68c485a87a4 "pdflatex"
+  "main.bbl" 1785737595.97631 13809 54b4b670de2aebc7d0938c799d8b6e63 "biber main"
+  "main.out" 1785738505.42579 5597 bee1f2c9777ca005a461e9d83850581e "pdflatex"
+  "main.run.xml" 1785738505.42722 2337 0326c9cb6c2d606ab3d999534414b1fb "pdflatex"
+  "main.tex" 1785738501.84888 65677 18c4b8468ff06655445cbb88208db8f5 ""
+  "main.toc" 1785738505.42722 5700 75c73c3315d3b1e25658da834380eeb9 "pdflatex"
   "polytechnique-armes.pdf" 1785470765.47832 219178 2b99ba9f02d2c7193defe3df100738bb ""
   "polytechnique-filetcourt.pdf" 1785470765.47832 8371 34509d06272abb93a39a8577988e90bb ""
   "polytechnique-filetlongrouge.pdf" 1785470765.47832 7218 a88e0b387e2f0e8b9cb79e3f3419147d ""

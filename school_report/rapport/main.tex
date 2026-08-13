@@ -1,26 +1,29 @@
 % =====================================================================
-% Rapport de recherche — Master
-% Pipeline « URDF vers robot commandé » par réseau de neurones informé
-% par la physique (PINN gris) — Franka Emika Panda 7 DoF
+% Master's research report
+% "URDF to controlled robot" pipeline via a physics-informed
+% neural network (grey box) — Franka Emika Panda 7 DoF
 %
-% Structure révisée 2026-07-31 contre school_report/review/
-% analyse_publication_hugo.md (feuille de route ICRA/IROS/CoRL) :
-%   1. séparation Préliminaires / Formulation du problème / Méthode
-%   2. titre dense, résumé resserré (contexte / verrou / approche / chiffres)
-%   3. travaux connexes en titres de paragraphe (run-in headings)
-%   4. figure de pipeline explicitant les pertes et les flux de gradient
-%   5. lignes de base et ablations formalisées
-%   6. cleveref, \paragraph standard, ponctuation des équations
-%   7. résultat négatif relégué en Discussion, suivi de trajectoire en tête
+% Structure revised 2026-07-31 against school_report/review/
+% analyse_publication_hugo.md (ICRA/IROS/CoRL roadmap):
+%   1. Preliminaries / Problem formulation / Method separated
+%   2. dense title, tightened abstract (context / lock / approach / figures)
+%   3. related work as run-in paragraph headings
+%   4. pipeline figure showing the losses and the gradient flows
+%   5. baselines and ablations formalised
+%   6. cleveref, standard \paragraph, equation punctuation
+%   7. negative result moved to Discussion, tracking result leads
+%
+% Language: English (main). A French abstract is kept on the title page.
+% babel: english MUST come last so it is the main document language.
 % =====================================================================
 
 \documentclass[a4paper, oneside]{article}
 
 \usepackage[a4paper, fancysections, titlepage, pagenumber]{polytechnique}
-% french en dernier = langue principale ; english reste disponible pour
-% l'abstract anglais, qui sinon hérite de la virgule décimale, du « à » de
-% \SIrange et de l'espace fine avant « : » propres au français.
-\usepackage[english, french]{babel}
+% english last = main language; french stays available for the French
+% abstract, which would otherwise inherit the English decimal point and
+% \SIrange phrasing.
+\usepackage[french, english]{babel}
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage[hidelinks]{hyperref}
@@ -29,17 +32,16 @@
 \usepackage{array}
 \usepackage{longtable}
 
-% Unités physiques standardisées
-\usepackage[locale=FR, per-mode=symbol]{siunitx}
-\sisetup{output-decimal-marker={,}, group-separator={\,},
-    list-final-separator={ et }, list-separator={, }}
+% Standardised physical units (English convention: decimal point).
+\usepackage[per-mode=symbol]{siunitx}
+\sisetup{output-decimal-marker={.}, group-separator={,},
+    group-minimum-digits=4,
+    list-final-separator={ and }, list-separator={, }}
 \usepackage{tikz}
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.16}
-% Convention numérique française pour tous les graphiques et amélioration du contraste
+% Improved contrast for greyscale printing.
 \pgfplotsset{
-    /pgf/number format/use comma,
-    /pgf/number format/1000 sep={\,},
     cycle list={%
         {draw=black, fill=black!70, mark=none},
         {draw=black, fill=white, postaction={pattern=north east lines}, mark=none},
@@ -50,32 +52,32 @@
 \usepackage{caption}
 \captionsetup{font=small, labelfont=bf}
 
-% Bibliographie
+% Bibliography
 \usepackage{csquotes}
 \usepackage[backend=biber, style=numeric, sorting=nyt, giveninits=true]{biblatex}
 \addbibresource{bibliography.bib}
 
-% Renvois automatiques normalisés. cleveref doit être chargé APRÈS hyperref
-% et amsmath. Remplace les « section 3 » / « équation (2) » écrits à la main :
-% \cref applique seul la casse et l'abréviation propres au style de la langue.
-\usepackage[french]{cleveref}
+% Normalised cross-references. cleveref must be loaded AFTER hyperref and
+% amsmath. It replaces hand-written "section 3" / "equation (2)": \cref
+% applies the case and abbreviation conventions of the language by itself.
+\usepackage[english]{cleveref}
 
-% Les titres de paragraphe utilisent le \paragraph standard de LaTeX (et non
-% une macro maison). Mais titlesec — chargé par polytechnique.sty — écrit les
-% \paragraph dans la table des matières en ignorant \setcounter{tocdepth}{2} :
-% vérifié en compilant, la TOC se remplissait de 32 entrées de paragraphe.
-% Neutraliser \l@paragraph supprime leur rendu quelle que soit la couche qui
-% a écrit l'entrée, contrairement à tocdepth que titlesec court-circuite.
+% Paragraph headings use LaTeX's standard \paragraph (not a home-made
+% macro). But titlesec — loaded by polytechnique.sty — writes \paragraph
+% entries into the table of contents while ignoring
+% \setcounter{tocdepth}{2}: verified by compiling, the TOC filled with 32
+% paragraph entries. Neutralising \l@paragraph suppresses their rendering
+% whatever layer wrote the entry, unlike tocdepth which titlesec bypasses.
 \makeatletter
 \renewcommand*\l@paragraph[2]{}
 \renewcommand*\l@subparagraph[2]{}
 \makeatother
 
-% Valeur que seul l'auteur peut renseigner. Volontairement sans caractère
-% souligné : « _ » est un caractère de mode mathématique et faisait
-% échouer la compilation (Missing $ inserted) sur les anciens marqueurs
-% du type [NOM_DE_L_EQUIPE_A_COMPLETER]. Greppable via « acompleter ».
-\newcommand{\acompleter}[1]{\textbf{[#1 --- à compléter]}}
+% Value only the author can fill in. Deliberately without an underscore:
+% "_" is a math-mode character and made the compilation fail (Missing $
+% inserted) on the old [NOM_DE_L_EQUIPE_A_COMPLETER] markers. Greppable
+% via "acompleter".
+\newcommand{\acompleter}[1]{\textbf{[#1 --- to be completed]}}
 
 \newcommand{\code}[1]{%
     \mbox{\ttfamily\small%
@@ -99,12 +101,11 @@
 
 \author{Hugo Durieux}
 \date{\today}
-\title{Réseaux de neurones gris informés par la physique pour
-l'apprentissage de dynamique conditionnée par la charge et la commande
-d'un manipulateur 7~DoF}
-\subtitle{Chaîne automatisée du fichier URDF au robot commandé, et commande
-temps réel à \SI{1}{\kilo\hertz} d'un Franka Emika Panda simulé
-(Isaac~Sim / MuJoCo)}
+\title{Grey-box physics-informed neural networks for payload-conditioned
+dynamics learning and control of a 7~DoF manipulator}
+\subtitle{An automated pipeline from URDF file to controlled robot, and
+\SI{1}{\kilo\hertz} real-time control of a simulated Franka Emika Panda
+(MuJoCo)}
 
 \begin{document}
 
@@ -113,35 +114,6 @@ temps réel à \SI{1}{\kilo\hertz} d'un Franka Emika Panda simulé
 \begin{center}
 \begin{minipage}{0.88\textwidth}
 \small
-\textbf{Résumé.} La commande en couple d'un manipulateur repose sur un modèle
-dynamique fidèle, que le modèle rigide analytique issu d'un fichier URDF ne
-fournit pas dès lors que frottements et compliance interviennent. Aucun travail
-publié ne compose à ce jour un terme analytique et un résidu appris
-simultanément sur sept axes, sous contraintes physiques dures, conditionné par
-la charge portée et interrogé à \SI{1}{\kilo\hertz}. Nous construisons une chaîne
-automatisée qui prend le seul fichier URDF en entrée et produit un modèle gris
-$\taupred = \taurbd + \taures$, dont le terme analytique est évalué par RNEA
-sans dérivation manuelle et dont le résidu neuronal, conditionné par la masse
-portée, expose trois degrés de garantie croissants (libre, imposé par
-lagrangien augmenté, structurel par construction). Ce modèle alimente une loi
-de couple calculé plus PD à \SI{1000}{\hertz} dont les gains sont dérivés d'une borne
-d'erreur mesurée sur un jeu de test réservé. Sur \SI{14830}{} échantillons
-réservés, le modèle gris atteint \SIrange{0.29}{1.02}{\newton\meter} par axe
-(\SIrange{0.64}{3.09}{\percent} de la limite de couple) contre
-\SI{1.46}{\newton\meter} en moyenne pour le modèle analytique seul, avec zéro
-violation de limite de couple là où l'analytique en produit sur
-\SI{0.99}{\percent} des échantillons. Deux résultats vont toutefois contre
-l'hypothèse de départ et sont rapportés comme tels: une boîte noire de capacité
-et de budget identiques fait \emph{mieux} que le modèle gris
-(\SI{0.45}{\newton\meter} contre \SI{0.62}{\newton\meter} en moyenne), et le
-résidu appris \emph{dégrade} les axes que le terme analytique modélise déjà
-bien — d'un facteur~\num{6.9} sur l'axe~7. Le même phénomène se mesure en
-boucle fermée: désactiver le résidu divise par~\num{22} le biais statique de
-l'axe~5 et par deux l'erreur cartésienne de bride.
-
-\medskip
-\begin{otherlanguage}{english}
-\sisetup{output-decimal-marker={.}, range-phrase={ to }}
 \textbf{Abstract.} Torque-level manipulator control requires a faithful dynamics
 model, which the analytical rigid-body model derived from a URDF does not
 provide once friction and transmission compliance are accounted for. No
@@ -163,11 +135,12 @@ torque-limit violations where the analytical model violates them on
 and are reported as such: a black box of identical capacity and budget does
 \emph{better} than the grey box (\SI{0.45}{\newton\meter} against
 \SI{0.62}{\newton\meter} mean), and the learned residual \emph{degrades} the
-joints the analytical term already models well -- by a factor of \num{6.9} on
+joints the analytical term already models well --- by a factor of \num{6.9} on
 joint~7. The same phenomenon appears in closed loop: disabling the residual
 divides joint~5's steady-state bias by \num{22} and halves the Cartesian flange
 error.
-\end{otherlanguage}
+
+\medskip
 \end{minipage}
 \end{center}
 
@@ -180,236 +153,228 @@ error.
 \label{sec-intro}
 % =====================================================================
 
-\subsection{Un modèle exact et néanmoins faux}
+\subsection{A model that is exact and nevertheless wrong}
 \label{sec-intro-motivation}
 
-Ce travail a été mené dans le cadre d'un stage de recherche de Master à
-l'Université de Melbourne, au sein de l'équipe
-\acompleter{nom de l'équipe d'accueil}, dont l'un des axes est l'interaction
-humain-agent. Un robot qui partage un espace de travail avec une personne, ou
-qui répond à une consigne de haut niveau plutôt qu'à une trajectoire
-programmée, ne peut être sûr et réactif que si son modèle dynamique interne est
-à la fois exact et interrogeable en temps réel. C'est cette exigence double —
-précision du modèle, disponibilité en boucle de commande — qui motive le choix
-d'un manipulateur physiquement instrumentable comme le Franka Emika Panda comme
-cible de ce travail, au-delà du seul intérêt pour la méthode d'apprentissage
-elle-même.
+This work was carried out as part of a Master's research internship at the
+University of Melbourne, within the Human-Computer-Interaction team,
+one of whose research directions is human--agent interaction. A robot that
+shares a workspace with a person, or that responds to a high-level instruction
+rather than to a programmed trajectory, can only be safe and reactive if its
+internal dynamic model is both accurate and queryable in real time. It is this
+double requirement  model accuracy, availability inside the control loop 
+that motivates choosing a physically instrumentable manipulator such as the
+Franka Emika Panda as the target of this work, beyond the interest of the
+learning method itself.
 
-La commande précise d'un bras manipulateur repose sur la connaissance de sa
-dynamique, c'est-à-dire de l'application qui relie une trajectoire articulaire
-souhaitée aux couples moteurs qui la réalisent. Cette relation admet une forme
-analytique fermée, rappelée en \cref{sec-prelim}, entièrement déterminée dès
-lors que la géométrie et les paramètres inertiels du robot sont connus — donc
-calculable directement à partir d'un fichier URDF (\emph{Unified Robot
-Description Format}).
+Precise control of a manipulator arm relies on knowledge of its dynamics, that
+is, of the mapping that relates a desired joint trajectory to the motor torques
+that realise it. This relation admits a closed analytical form, recalled in
+\cref{sec-prelim}, entirely determined once the geometry and the inertial
+parameters of the robot are known and therefore computable directly from a
+URDF file (\emph{Unified Robot Description Format}).
 
-Le problème est que cette forme analytique est fausse sur un robot réel. Les
-frottements secs et visqueux des réducteurs harmoniques, la compliance des
-transmissions, le jeu mécanique (\emph{backlash}), les pertes dépendantes de la
-température et l'usure des actionneurs produisent un écart systématique entre
-le couple prédit par le modèle rigide et le couple réellement mesuré. Cet
-écart, appelé ici couple résiduel, est de l'ordre de plusieurs newton-mètres
-sur un Franka Emika Panda et n'est pas modélisable analytiquement de manière
-fiable. C'est précisément là que l'apprentissage automatique intervient — et
-c'est aussi là que se joue tout le contenu scientifique du présent travail:
-non pas dans le remplacement du modèle rigide, mais dans le traitement de ce
-qu'il ne dit pas.
+The problem is that this analytical form is wrong on a real robot. Dry and
+viscous friction in the harmonic drives, transmission compliance, mechanical
+backlash, temperature-dependent losses and actuator wear produce a systematic
+gap between the torque predicted by the rigid-body model and the torque
+actually measured. This gap, called the residual torque here, is of the order
+of several newton-metres on a Franka Emika Panda and cannot be modelled
+analytically in a reliable way. This is precisely where machine learning comes
+in  and it is also where the entire scientific content of the present work
+lies: not in replacing the rigid-body model, but in handling what it does not
+say.
 
-Deux voies s'opposent. La première apprend la dynamique de bout en bout, comme
-une boîte noire: un réseau de neurones reçoit l'état et prédit le couple.
-Cette approche est flexible mais coûteuse en données, ne garantit aucune
-propriété physique et généralise mal hors de la distribution d'entraînement. La
-seconde, dite \emph{informée par la physique}, contraint le réseau à respecter
-la structure des équations de la mécanique — soit en inscrivant cette structure
-dans l'architecture, soit en l'imposant par des termes de perte. Les réseaux
-lagrangiens profonds~\cite{lutter2019iclr} et, plus récemment, les travaux de
-Liu, Borja et Della~Santina~\cite{liu2024} ont établi la viabilité théorique et
-expérimentale de cette seconde voie sur des manipulateurs réels.
+Two routes oppose each other. The first learns the dynamics end to end, as a
+black box: a neural network receives the state and predicts the torque. This
+approach is flexible but data-hungry, guarantees no physical property and
+generalises poorly outside the training distribution. The second, called
+\emph{physics-informed}, constrains the network to respect the structure of the
+equations of mechanics  either by writing that structure into the
+architecture, or by imposing it through loss terms. Deep Lagrangian
+networks~\cite{lutter2019iclr} and, more recently, the work of Liu, Borja and
+Della~Santina~\cite{liu2024} have established the theoretical and experimental
+viability of this second route on real manipulators.
 
-\subsection{Objectif et verrou scientifique}
+\subsection{Objective and scientific lock}
 \label{sec-verrou}
 
-L'objectif de ce travail est de \textbf{construire et valider une chaîne
-automatique qui prend en entrée le seul fichier de description d'un
-manipulateur et produit en sortie un robot effectivement commandé} par un
-modèle dynamique appris, interrogé à chaque période de la boucle de commande.
-Cette chaîne comprend l'apprentissage d'un modèle dynamique gris
-(\emph{grey-box}), sa mise en service dans une loi de commande temps réel, et
-une tâche de manipulation servant de test d'intégration.
+The objective of this work is to \textbf{build and validate an automatic
+pipeline that takes as input the description file of a manipulator alone and
+produces as output a robot effectively controlled} by a learned dynamic model,
+queried at every period of the control loop. This pipeline comprises the
+learning of a grey-box dynamic model, its deployment in a real-time control
+law, and a manipulation task serving as an integration test.
 
-Formulé ainsi, l'objectif paraît relever de l'ingénierie. Trois difficultés
-distinctes le rendent non trivial, et ce sont elles qui définissent la
-contribution.
+Stated this way, the objective may look like engineering. Three distinct
+difficulties make it non-trivial, and they are what defines the contribution.
 
-\paragraph{La généralité s'obtient contre la précision.}
-La littérature obtient ses meilleurs résultats en dérivant à la main les
-équations d'un robot particulier, puis en ajustant un réseau sur cette
-structure. Rendre le procédé automatique à partir d'un simple URDF signifie
-renoncer à toute dérivation manuelle: le graphe cinématique, les dimensions du
-réseau, l'excitation des trajectoires d'apprentissage et les bornes physiques
-doivent être extraits du fichier de description.
+\paragraph{Generality is obtained at the expense of accuracy.}
+The literature obtains its best results by deriving the equations of one
+particular robot by hand, then fitting a network on top of that structure.
+Making the procedure automatic from a plain URDF means giving up any manual
+derivation: the kinematic graph, the network dimensions, the excitation of the
+training trajectories and the physical bounds must all be extracted from the
+description file.
 
-\paragraph{Les garanties physiques survivent mal à l'apprentissage.}
-Un résidu appris librement peut injecter de l'énergie dans le système —
-physiquement absurde pour un terme censé représenter des frottements — et
-prédire des couples supérieurs aux limites des actionneurs. Sur un système à
-7~degrés de liberté, ces contraintes doivent être satisfaites simultanément sur
-sept axes dont les limites de couple diffèrent d'un facteur~7 (\SI{87}{\newton\meter}
-pour les quatre premiers axes, \SI{12}{\newton\meter} pour les trois derniers), ce qui
-déséquilibre naturellement l'optimisation.
+\paragraph{Physical guarantees survive learning badly.}
+A freely learned residual can inject energy into the system  physically
+absurd for a term meant to represent friction  and predict torques above the
+actuator limits. On a 7-degree-of-freedom system these constraints must be
+satisfied simultaneously on seven joints whose torque limits differ by a factor
+of~7 (\SI{87}{\newton\meter} for the first four joints, \SI{12}{\newton\meter}
+for the last three), which naturally unbalances the optimisation.
 
-\paragraph{L'exactitude hors ligne ne fait pas une commande.}
-Une erreur de prédiction faible sur un jeu de test ne dit rien de la
-stabilité en boucle fermée. Insérer un réseau de neurones dans une boucle à
-\SI{1000}{\hertz} impose une inférence sous la milliseconde, un ordonnancement temps réel
-fiable, et une loi de commande dont on sache borner l'erreur.
+\paragraph{Offline accuracy does not make a controller.}
+A low prediction error on a test set says nothing about closed-loop stability.
+Inserting a neural network into a \SI{1000}{\hertz} loop imposes sub-millisecond
+inference, reliable real-time scheduling, and a control law whose error can be
+bounded.
 
-\subsection{Contributions et état d'avancement}
+\subsection{Contributions and state of progress}
 \label{sec-contributions}
 
-Ce travail se positionne explicitement par rapport à l'état de l'art défini par
-Liu \emph{et al.}~\cite{liu2024}, référence la plus proche: même robot (Franka
-Panda 7~DoF), même classe de méthodes (réseaux informés par la physique), même
-finalité (modéliser puis commander). Quatre contributions sont revendiquées.
+This work positions itself explicitly with respect to the state of the art
+defined by Liu \emph{et al.}~\cite{liu2024}, the closest reference: the same
+robot (Franka Panda 7~DoF), the same class of methods (physics-informed
+networks), the same purpose (model, then control). Four contributions are
+claimed.
 
 \begin{enumerate}
-    \item \textbf{Une chaîne automatisée \og URDF vers modèle \fg{}.} Le
-    fichier URDF est la seule entrée: le graphe cinématique et les paramètres
-    inertiels en sont extraits par Pinocchio, le terme analytique est évalué par
-    RNEA sans aucune dérivation manuelle.
-    \item \textbf{L'intégration du modèle appris dans une boucle de commande à
-    \SI{1000}{\hertz}.} Le modèle est interrogé à chaque période de commande par un n\oe ud
-    ROS2 qui pilote un Franka simulé sous MuJoCo.
-    \item \textbf{La montée en dimension à 7~DoF sous contraintes physiques
-    dures.} Les contraintes de limites de couple et de dissipativité sont
-    imposées simultanément par lagrangien augmenté à montée duale, et
-    complétées par une garantie structurelle de dissipativité.
-    \item \textbf{Une mesure du coût du transfert inter-simulateurs.} Une
-    ablation contrôlée du résidu en boucle fermée (\cref{sec-res-ablation})
-    quantifie ce que coûte le déploiement, sous MuJoCo, d'un résidu appris sur
-    Isaac~Sim. Elle fournit la ligne de base que doit battre le protocole
-    d'affinage à ossature gelée, implémenté mais non encore validé.
+    \item \textbf{An automated ``URDF to model'' pipeline.} The URDF file is the
+    sole input: the kinematic graph and the inertial parameters are extracted
+    from it by Pinocchio, and the analytical term is evaluated by RNEA with no
+    manual derivation whatsoever.
+    \item \textbf{The integration of the learned model into a
+    \SI{1000}{\hertz} control loop.} The model is queried at every control
+    period by a ROS2 node that drives a Franka simulated under MuJoCo.
+    \item \textbf{The scaling up to 7~DoF under hard physical constraints.} The
+    torque-limit and dissipativity constraints are imposed simultaneously by an
+    augmented Lagrangian with dual ascent, and completed by a structural
+    guarantee of dissipativity.
+    \item \textbf{A measurement of the cost of cross-simulator transfer.} A
+    controlled ablation of the residual in closed loop
+    (\cref{sec-res-ablation}) quantifies what it costs to deploy, under MuJoCo,
+    a residual learned on MuJoCo. It provides the baseline that the
+    frozen-backbone fine-tuning protocol  implemented but not yet validated
+     has to beat.
 \end{enumerate}
 
-Il faut annoncer d'emblée l'état réel d'avancement: les contributions~1 et~3
-sont implémentées et validées quantitativement; la contribution~2 est validée
-en boucle fermée, mais la mesure de latence d'inférence n'a pas été formellement
-mesurée par un banc dédié; la contribution~4 est mesurée mais son corollaire —
-l'affinage réduit-il effectivement l'écart~? — reste à valider
-(\cref{sec-limites}).
+The actual state of progress must be stated up front: contributions~1 and~3 are
+implemented and quantitatively validated; contribution~2 is validated in closed
+loop, but the inference latency has not been formally measured on a dedicated
+bench; contribution~4 is measured, but its corollary  does fine-tuning
+actually reduce the gap?  remains to be validated (\cref{sec-limites}).
 
 % =====================================================================
-\section{Travaux connexes}
+\section{Related work}
 \label{sec-etat-art}
 % =====================================================================
 
-L'axe de lecture retenu ici est celui qui sépare réellement les méthodes entre
-elles: \textbf{où la connaissance physique est injectée dans le problème
-d'apprentissage, et ce qu'elle garantit en retour}. Les quatre familles
-ci-dessous sont ordonnées de la contrainte la plus forte à la plus faible.
+The axis of reading adopted here is the one that genuinely separates the
+methods from one another: \textbf{where the physical knowledge is injected into
+the learning problem, and what it guarantees in return}. The four families
+below are ordered from the strongest constraint to the weakest.
 
-\paragraph{Identification de paramètres.}
-Conserver intégralement la structure analytique~\eqref{eq-rbd} et ne chercher
-qu'à en identifier les paramètres. Sutanto \emph{et al.}~\cite{sutanto2020} en
-proposent la version moderne et différentiable. L'intérêt est
-l'interprétabilité, la limite est structurelle: un modèle rigide ne peut
-représenter ni frottements non linéaires ni compliance, quelle que soit la
-qualité de l'identification.
+\paragraph{Parameter identification.}
+Keep the analytical structure~\eqref{eq-rbd} intact and seek only to identify
+its parameters. Sutanto \emph{et al.}~\cite{sutanto2020} propose the modern,
+differentiable version of this. The benefit is interpretability; the limitation
+is structural: a rigid model can represent neither nonlinear friction nor
+compliance, whatever the quality of the identification.
 
-\paragraph{Physique inscrite dans l'architecture.}
-Déplacer la physique dans l'architecture du réseau. Les réseaux lagrangiens
-profonds~\cite{lutter2019iclr} apprennent la matrice d'inertie sous forme
-factorisée de Cholesky, ce qui garantit sa définie-positivité par construction.
-Duong \emph{et al.}~\cite{duong2024} transposent l'idée dans le formalisme
-port-hamiltonien sur groupes de Lie. La garantie ne dépend alors pas des
-données, mais le prix payé est la perte de généralité automatique: il faut
-réapprendre des quantités (inertie, gravité) que l'URDF fournit déjà
-exactement. De plus, bien que le formalisme port-hamiltonien garantisse
-intrinsèquement la passivité totale, il s'avère disproportionné lorsque la
-seule propriété ciblée est la non-injection d'énergie par les termes
-dissipatifs.
+\paragraph{Physics written into the architecture.}
+Move the physics into the architecture of the network. Deep Lagrangian
+networks~\cite{lutter2019iclr} learn the inertia matrix in Cholesky-factorised
+form, which guarantees its positive-definiteness by construction. Duong
+\emph{et al.}~\cite{duong2024} transpose the idea into the port-Hamiltonian
+formalism on Lie groups. The guarantee then does not depend on the data, but
+the price paid is the loss of automatic generality: quantities that the URDF
+already provides exactly (inertia, gravity) have to be relearned. Moreover,
+although the port-Hamiltonian formalism intrinsically guarantees total
+passivity, it turns out to be disproportionate when the only targeted property
+is the non-injection of energy by the dissipative terms.
 
-\paragraph{Modèles gris: composer analytique et résidu.}
-Composer un terme analytique connu avec un résidu appris. Djeumou
-\emph{et al.}~\cite{djeumou2022} en donnent la formulation de référence. Deng
-\emph{et al.}~\cite{deng2024} avertissent utilement qu'un modèle peut afficher
-une erreur moyenne excellente tout en produisant des erreurs maximales
-absurdes — argument direct en faveur de contraintes dures plutôt que d'une
-simple minimisation de l'erreur quadratique. L'architecture développée en
-\cref{sec-methode} est une instance de cette famille grise.
+\paragraph{Grey-box models: composing analytical and residual.}
+Compose a known analytical term with a learned residual. Djeumou
+\emph{et al.}~\cite{djeumou2022} give the reference formulation. Deng
+\emph{et al.}~\cite{deng2024} usefully warn that a model can display an
+excellent mean error while producing absurd maximum errors --- a direct
+argument in favour of hard constraints rather than a plain least-squares
+minimisation. The architecture developed in \cref{sec-methode} is an instance
+of this grey family.
 
-\paragraph{Contraintes propres à la boucle fermée.}
-La boucle fermée impose ses propres exigences, souvent absentes des travaux
-purement hors ligne. La cadence disqualifie les intégrations lourdes comme le
-filtrage de Kalman étendu~\cite{wang2024cac} à \SI{1000}{\hertz}. Hu \emph{et
-al.}~\cite{hu2026} établissent un fait crucial pour le conditionnement par la
-charge: l'erreur de jeu mécanique dépend de la position et de la vitesse, mais
-non de la masse portée — ce qui justifie de ne conditionner par $\delta$ que le
-terme résiduel, et non l'ensemble du modèle.
+\paragraph{Constraints specific to the closed loop.}
+The closed loop imposes its own requirements, often absent from purely offline
+work. The control rate disqualifies heavy integrations such as extended Kalman
+filtering~\cite{wang2024cac} at \SI{1000}{\hertz}. Hu \emph{et
+al.}~\cite{hu2026} establish a fact that is crucial for payload conditioning:
+the backlash error depends on position and velocity, but not on the carried
+mass --- which justifies conditioning only the residual term on $\delta$,
+rather than the whole model.
 
-\paragraph{Le verrou retenu.}
-La composition grise est un acquis. Elle n'a pas encore été portée
-\emph{simultanément} à sept axes, sous contraintes physiques dures,
-conditionnée par la charge, et interrogée à \SI{1000}{\hertz} dans une boucle de
-commande réelle. C'est la conjonction de ces quatre exigences, et non chacune
-prise isolément, qui définit la contribution du présent travail.
+\paragraph{The lock addressed here.}
+The grey composition is established. It has not yet been carried
+\emph{simultaneously} to seven axes, under hard physical constraints,
+payload-conditioned, and queried at \SI{1000}{\hertz} inside a real control
+loop. It is the conjunction of these four requirements, and not each of them
+taken in isolation, that defines the contribution of the present work.
 
 % =====================================================================
-\section{Préliminaires}
+\section{Preliminaries}
 \label{sec-prelim}
 % =====================================================================
 
-\paragraph{Notations.}
-$\Rset^{n}$ désigne l'espace euclidien de dimension $n$, avec $n = 7$ pour le
-Franka Emika Panda considéré dans tout ce document. Les vecteurs
-$\q, \qd, \qdd \in \Rset^{n}$ désignent respectivement les positions, vitesses
-et accélérations articulaires. Le scalaire $\delta \in \Rset_{+}$ désigne la
-masse portée à l'effecteur (charge utile). Le vecteur
-$\bar{\tau} \in \Rset^{n}_{+}$ rassemble les limites de couple par axe, et
-$\bar{\tau}_{j}$ désigne sa $j$-ième composante. Pour un vecteur $v$, $|v|$
-s'entend composante par composante.
+\paragraph{Notation.}
+$\Rset^{n}$ denotes the $n$-dimensional Euclidean space, with $n = 7$ for the
+Franka Emika Panda considered throughout this document. The vectors
+$\q, \qd, \qdd \in \Rset^{n}$ denote joint positions, velocities and
+accelerations respectively. The scalar $\delta \in \Rset_{+}$ denotes the mass
+carried at the end effector (the payload). The vector
+$\bar{\tau} \in \Rset^{n}_{+}$ collects the per-joint torque limits, and
+$\bar{\tau}_{j}$ denotes its $j$-th component. For a vector $v$, $|v|$ is
+understood component-wise.
 
-\paragraph{Modèle dynamique du corps rigide.}
-Pour un robot série rigide à $n$ degrés de liberté, le modèle dynamique inverse
-prend la forme classique
+\paragraph{Rigid-body dynamic model.}
+For a rigid serial robot with $n$ degrees of freedom, the inverse dynamic model
+takes the classical form
 %
 \begin{equation}
     \tau = M(\q)\,\qdd + C(\q,\qd)\,\qd + G(\q) ,
     \label{eq-rbd}
 \end{equation}
 %
-où $M(\q) \in \Rset^{n \times n}$ est la matrice d'inertie (symétrique définie
-positive), $C(\q,\qd) \in \Rset^{n \times n}$ la matrice des termes de Coriolis
-et centrifuges, $G(\q) \in \Rset^{n}$ le vecteur de gravité et
-$\tau \in \Rset^{n}$ le vecteur des couples articulaires.
-\Cref{eq-rbd} est entièrement déterminée dès lors que la géométrie et les
-paramètres inertiels du robot sont connus; elle se calcule efficacement par
-l'algorithme récursif de Newton-Euler (\emph{Recursive Newton-Euler
-Algorithm}, RNEA) à partir d'une description cinématique et inertielle,
-typiquement un fichier URDF. Dans tout ce travail, l'évaluation de
-\cref{eq-rbd} est notée $\taurbd$ et confiée à Pinocchio; elle n'est
-\emph{jamais} apprise ni modifiée.
+where $M(\q) \in \Rset^{n \times n}$ is the inertia matrix (symmetric positive
+definite), $C(\q,\qd) \in \Rset^{n \times n}$ the matrix of Coriolis and
+centrifugal terms, $G(\q) \in \Rset^{n}$ the gravity vector and
+$\tau \in \Rset^{n}$ the vector of joint torques.
+\Cref{eq-rbd} is entirely determined once the geometry and the inertial
+parameters of the robot are known; it is computed efficiently by the recursive
+Newton--Euler algorithm (RNEA) from a kinematic and inertial description,
+typically a URDF file. Throughout this work the evaluation of \cref{eq-rbd} is
+denoted $\taurbd$ and delegated to Pinocchio; it is \emph{never} learned nor
+modified.
 
-\paragraph{Constantes du Franka Emika Panda.}
-Le robot considéré possède $n = 7$ axes rotoïdes. Les limites de couple valent
-$\bar{\tau} = (87, 87, 87, 87, 12, 12, 12)\,\si{\newton\meter}$ et les vitesses
-maximales $(2{,}175,\ 2{,}175,\ 2{,}175,\ 2{,}175,\ 2{,}610,\ 2{,}610,\
-2{,}610)\,\si{\radian\per\second}$. Le rapport~7 entre les limites des axes
-porteurs et celles du poignet est déterminant pour l'équilibrage de
-l'optimisation, et fait l'objet de la \cref{sec-res-desequilibre}. La cadence
-de commande visée est \SI{1000}{\hertz}, et les charges utiles évaluées sont
+\paragraph{Franka Emika Panda constants.}
+The robot considered has $n = 7$ revolute joints. The torque limits are
+$\bar{\tau} = (87, 87, 87, 87, 12, 12, 12)\,\si{\newton\meter}$ and the maximum
+velocities $(2.175,\ 2.175,\ 2.175,\ 2.175,\ 2.610,\ 2.610,\
+2.610)\,\si{\radian\per\second}$. The factor of~7 between the limits of the
+load-bearing joints and those of the wrist is decisive for the balance of the
+optimisation, and is the subject of \cref{sec-res-desequilibre}. The target
+control rate is \SI{1000}{\hertz}, and the payloads evaluated are
 $\delta \in \{0, 1, 3\}\,\si{\kilogram}$.
 
 % =====================================================================
-\section{Formulation du problème}
+\section{Problem formulation}
 \label{sec-probleme}
 % =====================================================================
 
-Cette section définit formellement ce qui est minimisé, avant que
-\cref{sec-methode} ne dise comment.
+This section defines formally what is minimised, before \cref{sec-methode} says
+how.
 
-\paragraph{Données.}
-Soit un jeu de données
+\paragraph{Data.}
+Let a dataset
 %
 \begin{equation}
     \Dset = \bigl\{ (\q^{(i)},\ \qd^{(i)},\ \qdd^{(i)},\ \delta^{(i)},\
@@ -417,15 +382,15 @@ Soit un jeu de données
     \label{eq-dataset}
 \end{equation}
 %
-collecté sur un simulateur haute-fidélité (Isaac~Sim), où $\taureal^{(i)}$ est
-le couple effectivement appliqué à l'échantillon $i$. Le jeu est scindé en
-$80\,\%$ d'entraînement, $10\,\%$ de validation (arrêt anticipé) et $10\,\%$
-de test indépendant, ce dernier servant exclusivement au calcul des
-performances rapportées et des bornes d'erreur $\epsilon_j$.
+be collected on a high-fidelity simulator (MuJoCo), where $\taureal^{(i)}$
+is the torque actually applied at sample $i$. The set is split into
+$80\,\%$ training, $10\,\%$ validation (early stopping) and $10\,\%$
+independent test, the latter serving exclusively to compute the reported
+performance and the error bounds $\epsilon_j$.
 
-\paragraph{Modèle recherché.}
-On cherche une application paramétrée $\taures(\cdot\,;\theta)$, de paramètres
-$\theta$, telle que le couple prédit
+\paragraph{Model sought.}
+We seek a parameterised mapping $\taures(\cdot\,;\theta)$, with parameters
+$\theta$, such that the predicted torque
 %
 \begin{equation}
     \taupred(\q,\qd,\qdd,\delta\,;\theta)
@@ -434,21 +399,21 @@ $\theta$, telle que le couple prédit
     \label{eq-modele}
 \end{equation}
 %
-approche $\taureal$. Le terme $\taurbd$ est fixé, l'apprentissage ne porte que
-sur $\theta$. Noter que $\taures$ ne dépend pas de $\qdd$: cette accélération
-n'est disponible que hors ligne, et l'exclure de l'entrée du résidu est ce qui
-rend le modèle interrogeable dans une boucle à \SI{1000}{\hertz} qui ne mesure que
-$\q$ et $\qd$.
+approaches $\taureal$. The term $\taurbd$ is fixed; learning acts on $\theta$
+only. Note that $\taures$ does not depend on $\qdd$: that acceleration is
+available offline only, and excluding it from the residual's input is what
+makes the model queryable inside a \SI{1000}{\hertz} loop that measures $\q$
+and $\qd$ alone.
 
-\paragraph{Objectif.}
-Le problème résolu est le programme contraint
+\paragraph{Objective.}
+The problem solved is the constrained program
 %
 \begin{equation}
     \min_{\theta}\ \
     \underbrace{\frac{1}{N}\sum_{i=1}^{N}
     \bigl\| \taupred^{(i)}(\theta) - \taureal^{(i)} \bigr\|_{2}^{2}}
-    _{\mathcal{L}_{\mathrm{donn\acute{e}es}}(\theta)}
-    \quad \text{sous} \quad
+    _{\mathcal{L}_{\mathrm{data}}(\theta)}
+    \quad \text{subject to} \quad
     \begin{cases}
         \bigl|\taupred^{(i)}(\theta)\bigr| \le \bar{\tau}, \\[2pt]
         \taures^{(i)}(\theta)^{\top} \qd^{(i)} \le 0 ,
@@ -456,39 +421,38 @@ Le problème résolu est le programme contraint
     \label{eq-probleme}
 \end{equation}
 %
-pour tout $i$. La première contrainte interdit de prédire un couple
-irréalisable par les actionneurs. La seconde impose que le résidu soit
-\emph{dissipatif}: il ne doit jamais injecter d'énergie mécanique dans le
-système, ce qui est la traduction formelle de « ce terme représente des
-frottements ». \Cref{sec-methode} présente trois traitements de ces
-contraintes, de rigueur croissante.
+for every $i$. The first constraint forbids predicting a torque the actuators
+cannot deliver. The second requires the residual to be \emph{dissipative}: it
+must never inject mechanical energy into the system, which is the formal
+translation of ``this term represents friction''. \Cref{sec-methode} presents
+three treatments of these constraints, of increasing rigour.
 
 % =====================================================================
-\section{Méthode}
+\section{Method}
 \label{sec-methode}
 % =====================================================================
 
-\subsection{Décomposition: ce qui est calculé, ce qui est appris}
+\subsection{Decomposition: what is computed, what is learned}
 \label{sec-overview}
 
-La dynamique du corps rigide est \emph{calculée}, et l'apprentissage est confiné
-à ce qu'elle ne couvre pas:
+The rigid-body dynamics is \emph{computed}, and learning is confined to what it
+does not cover:
 %
 \begin{equation}
-    \taupred = \underbrace{\taurbd(\q,\qd,\qdd,\delta)}_{\text{calculé}}
+    \taupred = \underbrace{\taurbd(\q,\qd,\qdd,\delta)}_{\text{computed}}
     \;+\;
-    \underbrace{\taures(\q,\qd,\delta)}_{\text{appris, contraint}} ,
+    \underbrace{\taures(\q,\qd,\delta)}_{\text{learned, constrained}} ,
     \label{eq-decompo}
 \end{equation}
 %
-où $\delta \in \Rset_{+}$ désigne la masse portée. \Cref{fig-pipeline} donne la
-vue d'ensemble de la chaîne, en explicitant les deux termes de perte et les
-flux de gradient qui les relient aux deux réseaux entraînés.
+where $\delta \in \Rset_{+}$ denotes the carried mass. \Cref{fig-pipeline}
+gives the overall view of the pipeline, making explicit the loss terms and the
+gradient flows that connect them to the two trained networks.
 
 \begin{figure}[htbp]
 \centering
-% Positionnement en coordonnées absolues (et non en chaînage relatif) :
-% le chaînage faisait chevaucher FrictionNet et la rangée des pertes.
+% Absolute coordinates (rather than relative chaining): chaining made
+% FrictionNet overlap the row of loss nodes.
 \begin{tikzpicture}[
     font=\small, scale=1, transform shape,
     box/.style={draw=black, rounded corners=2pt, align=center,
@@ -501,24 +465,24 @@ flux de gradient qui les relient aux deux réseaux entraînés.
     grad/.style={-{Latex[length=2mm]}, dashed, thick, black!60}
 ]
 
-% ---------- voie analytique (haut) ----------
-\node[calc] (urdf) at (0,0)   {fichier URDF};
+% ---------- analytical path (top) ----------
+\node[calc] (urdf) at (0,0)   {URDF file};
 \node[calc] (rnea) at (3.5,0) {RNEA (Pinocchio)};
 
-% ---------- voie apprise (bas) ----------
-\node[calc]  (state) at (0,-2.3)   {état mesuré\\$(\q,\qd)$, charge $\delta$};
-\node[calc]  (enc)   at (3.5,-2.3) {encodage\\$[\sin\q,\cos\q,\qd,\delta]\in\Rset^{22}$};
+% ---------- learned path (bottom) ----------
+\node[calc]  (state) at (0,-2.3)   {measured state\\$(\q,\qd)$, payload $\delta$};
+\node[calc]  (enc)   at (3.5,-2.3) {encoding\\$[\sin\q,\cos\q,\qd,\delta]\in\Rset^{22}$};
 \node[learn] (mlp)   at (7.9,-1.65) {GreyBoxNet $\rightarrow \taumlp$};
 \node[learn] (fric)  at (7.9,-3.0)  {FrictionNet $\rightarrow \taufric$};
 
-% cadre englobant les deux réseaux entraînés
+% frame enclosing the two trained networks
 \begin{scope}[on background layer]
 \node[draw=black!45, dashed, rounded corners=3pt, fill=black!3,
       fit=(mlp)(fric), inner sep=3.5mm] (resid) {};
 \end{scope}
-\node[font=\scriptsize, anchor=north] at (resid.south) {résidu appris $\taures$};
+\node[font=\scriptsize, anchor=north] at (resid.south) {learned residual $\taures$};
 
-% ---------- sommation ----------
+% ---------- summation ----------
 \node[draw, circle, inner sep=1.5pt] (sum) at (12.4,0) {$+$};
 \node[anchor=west, inner sep=1pt] (taupred) at (12.75,0) {$\taupred$};
 
@@ -529,98 +493,98 @@ flux de gradient qui les relient aux deux réseaux entraînés.
 \draw[flow] (enc.east) -- (fric.west);
 \draw[flow] (resid.east) -| (sum.south);
 
-% ---------- pertes ----------
-\node[loss] (ldata)   at (2.2,-5.6)  {$\mathcal{L}_{\mathrm{donn\acute{e}es}}$\\[1pt]
+% ---------- losses ----------
+\node[loss] (ldata)   at (2.2,-5.6)  {$\mathcal{L}_{\mathrm{data}}$\\[1pt]
      \scriptsize $\|\taupred-\taureal\|_2^2$};
-\node[loss] (lcouple) at (6.6,-5.6)  {$\mathcal{L}_{\mathrm{couple}}$\\[1pt]
+\node[loss] (lcouple) at (6.6,-5.6)  {$\mathcal{L}_{\mathrm{torque}}$\\[1pt]
      \scriptsize $\max(0,|\taupred|-\bar{\tau})$};
 \node[loss] (ldis)    at (11.0,-5.6) {$\mathcal{L}_{\mathrm{dissip}}$\\[1pt]
      \scriptsize $\max(0,\taures^{\top}\qd)$};
 
-% bus de distribution depuis taupred vers les deux pertes qui en dépendent
+% distribution bus from taupred to the two losses that depend on it
 \draw[thick] (13.35,-0.15) -- (13.35,-4.55) -- (2.2,-4.55);
 \draw[flow]  (2.2,-4.55) -- (ldata.north);
 \draw[flow]  (6.6,-4.55) -- (lcouple.north);
-% la dissipativite porte sur taures, pas sur taupred : alimentation dediee
+% dissipativity acts on taures, not on taupred: dedicated feed
 \draw[flow]  (10.2,-3.95) -- (10.2,-4.3) -- (11.0,-4.3) -- (ldis.north);
 
-% ---------- retropropagation ----------
-% Un seul chemin de retour, route par le bas puis par la marge gauche : les
-% trois fleches separees se croisaient et traversaient les boites d'entree.
+% ---------- backpropagation ----------
+% A single return path, routed along the bottom then the left margin: three
+% separate arrows crossed each other and cut through the input boxes.
 \draw[grad] (ldata.south) -- (2.2,-6.5) -- (-1.9,-6.5) -- (-1.9,-0.95)
                           -- (6.9,-0.95) -- (6.9,-1.18);
 \node[font=\scriptsize, anchor=west, black!60] at (-1.8,-3.3) {$\nabla_\theta$};
 \node[font=\scriptsize, anchor=west, black!60] at (-1.6,-6.75)
-    {rétropropagation vers les deux réseaux entraînés};
+    {backpropagation into the two trained networks};
 
 \end{tikzpicture}
-\caption{Vue d'ensemble de la chaîne. Le fichier URDF est la seule entrée
-structurelle: il alimente RNEA, qui produit le terme analytique $\taurbd$,
-jamais appris (fond gris). Seuls GreyBoxNet et FrictionNet (traits épais) sont
-entraînés. Les trois termes de perte sont explicités, ainsi que les flux de
-gradient (tirets) qui les relient aux réseaux:
-$\mathcal{L}_{\mathrm{donn\acute{e}es}}$ ajuste la prédiction,
-$\mathcal{L}_{\mathrm{couple}}$ et $\mathcal{L}_{\mathrm{dissip}}$ pénalisent
-les violations de \cref{eq-probleme}. La dissipativité contraint
-spécifiquement FrictionNet, dont la structure~\eqref{eq-Dmat} la garantit
-en outre par construction.}
+\caption{Overall view of the pipeline. The URDF file is the sole structural
+input: it feeds RNEA, which produces the analytical term $\taurbd$, never
+learned (grey background). Only GreyBoxNet and FrictionNet (thick outlines) are
+trained. The three loss terms are made explicit, together with the gradient
+flows (dashed) that connect them to the networks:
+$\mathcal{L}_{\mathrm{data}}$ fits the prediction,
+$\mathcal{L}_{\mathrm{torque}}$ and $\mathcal{L}_{\mathrm{dissip}}$ penalise
+violations of \cref{eq-probleme}. Dissipativity constrains FrictionNet
+specifically, whose structure~\eqref{eq-Dmat} moreover guarantees it by
+construction.}
 \label{fig-pipeline}
 \end{figure}
 
-\subsection{Le résidu appris et ses trois degrés de garantie}
+\subsection{The learned residual and its three degrees of guarantee}
 \label{sec-residu}
 
-\subsubsection{Degré~0: un résidu libre, régulier, conditionné}
+\subsubsection{Degree~0: a free, smooth, conditioned residual}
 \label{sec-degre0}
 
-L'entrée du réseau est le vecteur
+The input of the network is the vector
 %
 \begin{equation}
     x = \bigl[\sin(\q),\ \cos(\q),\ \qd,\ \delta\bigr] \in \Rset^{22}.
     \label{eq-encodage}
 \end{equation}
 %
-Inclure $\sin(\q)$ et $\cos(\q)$ plutôt que $\q$ lui-même remplit deux rôles:
-lever la discontinuité de $\q$ aux bornes angulaires, et permettre de modéliser
-l'ondulation de couple (\emph{torque ripple}) propre aux réducteurs harmoniques
-du Franka, dont la période est une fonction de l'angle. Toutefois, fournir
-$\delta$ directement au réseau introduit un risque: le modèle pourrait s'en
-servir comme biais pour compenser d'éventuelles erreurs de masse dans le modèle
-analytique Pinocchio, ce qui doit être surveillé.
+Including $\sin(\q)$ and $\cos(\q)$ rather than $\q$ itself serves two purposes:
+removing the discontinuity of $\q$ at the angular bounds, and making it
+possible to model the torque ripple specific to the Franka's harmonic drives,
+whose period is a function of the angle. Feeding $\delta$ directly to the
+network does, however, introduce a risk: the model could use it as a bias to
+compensate for possible mass errors in the analytical Pinocchio model, which
+must be monitored.
 
-L'activation choisie est Mish. ReLU est rejetée pour garantir une dérivée
-continue (sécurité moteur: une dérivée discontinue se traduit par un à-coup de
-couple). Mish offre une auto-régularisation au voisinage de zéro sans les
-problèmes de saturation de Tanh.
+The activation chosen is Mish. ReLU is rejected in order to guarantee a
+continuous derivative (motor safety: a discontinuous derivative translates into
+a torque jerk). Mish offers self-regularisation in the neighbourhood of zero
+without the saturation problems of Tanh.
 
-\subsubsection{Degré~1: des garanties imposées par la fonction objectif}
+\subsubsection{Degree~1: guarantees imposed by the objective function}
 \label{sec-degre1}
 
-Les contraintes de \cref{eq-probleme} sont relâchées en pénalités via un
-lagrangien augmenté à montée duale:
+The constraints of \cref{eq-probleme} are relaxed into penalties through an
+augmented Lagrangian with dual ascent:
 %
 \begin{equation}
     \mathcal{L}
-    = \mathcal{L}_{\mathrm{donn\acute{e}es}}
-    + \underbrace{\overline{\lambda_{t}\,\psi_{\mathrm{couple}}
-      + \tfrac{\rho}{2}\,\psi_{\mathrm{couple}}^{2}}
+    = \mathcal{L}_{\mathrm{data}}
+    + \underbrace{\overline{\lambda_{t}\,\psi_{\mathrm{torque}}
+      + \tfrac{\rho}{2}\,\psi_{\mathrm{torque}}^{2}}
     + \overline{\lambda_{d}\,\psi_{\mathrm{dis}}
       + \tfrac{\rho}{2}\,\psi_{\mathrm{dis}}^{2}}}
-      _{\text{lagrangien augmenté}} ,
+      _{\text{augmented Lagrangian}} ,
     \label{eq-Ltotal}
 \end{equation}
 %
-avec $\psi_{\mathrm{couple}} = \max(0, |\taupred| - \bar{\tau})$ et
-$\psi_{\mathrm{dis}} = \max(0, \taures^{\top}\qd)$. Le paramètre $\rho$ est
-fixé à~1. Contrairement à une pénalité quadratique simple, les multiplicateurs
-$\lambda_{t}, \lambda_{d}$ sont mis à jour par montée duale, ce qui permet
-d'atteindre la satisfaction des contraintes sans faire tendre $\rho$ vers
-l'infini — et donc sans dégrader le conditionnement de l'optimisation.
+with $\psi_{\mathrm{torque}} = \max(0, |\taupred| - \bar{\tau})$ and
+$\psi_{\mathrm{dis}} = \max(0, \taures^{\top}\qd)$. The parameter $\rho$ is set
+to~1. Unlike a plain quadratic penalty, the multipliers $\lambda_{t},
+\lambda_{d}$ are updated by dual ascent, which makes it possible to reach
+constraint satisfaction without driving $\rho$ to infinity --- and therefore
+without degrading the conditioning of the optimisation.
 
-\subsubsection{Degré~2: une garantie obtenue par construction}
+\subsubsection{Degree~2: a guarantee obtained by construction}
 \label{sec-frictionnet}
 
-Le module de frottement produit une matrice diagonale
+The friction module produces a diagonal matrix
 %
 \begin{equation}
     D(x) = \mathrm{diag}\bigl(\mathrm{Softplus}(d) + \varepsilon\bigr),
@@ -633,39 +597,37 @@ Le module de frottement produit une matrice diagonale
     \label{eq-taufric}
 \end{equation}
 %
-garantissant $\taufric^{\top}\qd = -\qd^{\top} D(x)\,\qd \le 0$ pour tout
-$\qd$, puisque $D(x)$ est définie positive par construction. La garantie ne
-dépend donc ni des données ni de la convergence de l'optimisation. Bien que
-mathématiquement robuste grâce à $\varepsilon$, physiquement, si le réseau
-apprend un poids fortement négatif lié à une forte charge $\delta$, le
-frottement pourrait tendre artificiellement vers zéro — la garantie porte sur
-le signe, non sur l'amplitude.
+guaranteeing $\taufric^{\top}\qd = -\qd^{\top} D(x)\,\qd \le 0$ for every
+$\qd$, since $D(x)$ is positive definite by construction. The guarantee
+therefore depends neither on the data nor on the convergence of the
+optimisation. Although mathematically robust thanks to $\varepsilon$,
+physically, if the network learns a strongly negative weight tied to a large
+payload $\delta$, the friction could artificially tend to zero --- the
+guarantee bears on the sign, not on the magnitude.
 
-\subsection{Identification et hygiène des données}
+\subsection{Identification and data hygiene}
 \label{sec-donnees}
 
-\paragraph{Séparation rigoureuse.} Le jeu de données $\Dset$ est scindé comme
-indiqué en \cref{sec-probleme}: $80\,\%$ d'entraînement, $10\,\%$ de validation
-(pour l'arrêt anticipé) et $10\,\%$ de test indépendant, utilisé pour rapporter
-les performances finales et calculer les gains.
+\paragraph{Rigorous separation.} The dataset $\Dset$ is split as indicated in
+\cref{sec-probleme}: $80\,\%$ training, $10\,\%$ validation (for early
+stopping) and $10\,\%$ independent test, used to report the final performance
+and to compute the gains.
 
-\paragraph{Filtrage de saturation.} Les échantillons écrêtés par le simulateur
-sont retirés:
+\paragraph{Saturation filtering.} Samples clipped by the simulator are removed:
 %
 \begin{equation}
     \bigl|\tau_{\mathrm{real},j}\bigr| \le \num{0.97}\,\bar{\tau}_j .
     \label{eq-satfilter}
 \end{equation}
 %
-Un échantillon saturé ne porte aucune information sur la dynamique: il
-renseigne sur la borne de l'actionneur, non sur le couple qu'exigeait le
-mouvement. Le conserver revient à entraîner le résidu à reproduire un
-écrêtage.
+A saturated sample carries no information about the dynamics: it informs about
+the actuator bound, not about the torque the motion required. Keeping it
+amounts to training the residual to reproduce a clipping.
 
-\subsection{Fermer la boucle}
+\subsection{Closing the loop}
 \label{sec-boucle}
 
-La loi de commande est un couple calculé augmenté d'un terme PD:
+The control law is a computed torque augmented with a PD term:
 %
 \begin{equation}
     \taucmd = \taurbd(\q,\qd,\qdd_{\mathrm{d}},\delta) + \taures(\q,\qd,\delta)
@@ -673,190 +635,186 @@ La loi de commande est un couple calculé augmenté d'un terme PD:
     \label{eq-ctpd}
 \end{equation}
 %
-où $e = \q_{\mathrm{d}} - \q$ est l'erreur de suivi. Les gains suivent le
-gabarit de stabilité de Liu \emph{et al.}~\cite{liu2024}:
+where $e = \q_{\mathrm{d}} - \q$ is the tracking error. The gains follow the
+stability template of Liu \emph{et al.}~\cite{liu2024}:
 %
 \begin{equation}
     K_{d,jj} = \kappa\,\epsilon_j , \qquad K_{p,jj} = \frac{K_{d,jj}^{2}}{4} .
     \label{eq-gains}
 \end{equation}
 %
-La borne $\epsilon_j$ est le quantile \SI{99.9}{\percent} de l'erreur évaluée sur le
-jeu de test. Ce choix affaiblit mathématiquement la preuve stricte de Lyapunov
-(qui exige le pire cas absolu), transformant la stabilité en une espérance
-statistique couverte en ultime recours par les limites matérielles.
+The bound $\epsilon_j$ is the \SI{99.9}{\percent} quantile of the error
+evaluated on the test set. This choice mathematically weakens the strict
+Lyapunov proof (which requires the absolute worst case), turning stability into
+a statistical expectation covered, as a last resort, by the hardware limits.
 
-\paragraph{Une conséquence contre-intuitive du gabarit.} Puisque $K_p$ dérive
-de $\epsilon_j$, un axe \emph{mieux} modélisé reçoit un gain plus faible. Or
-l'erreur statique sous couple résiduel constant vaut $e_{\mathrm{ss}} =
-\tau/K_p$. Les axes les mieux appris suivent donc \emph{moins} bien. Ce
-mécanisme est vérifié expérimentalement en \cref{sec-res-suivi} et rediscuté en
-\cref{sec-limites}: il s'agit d'une limite du gabarit de~\cite{liu2024}, non
-d'un défaut d'implémentation.
+\paragraph{A counter-intuitive consequence of the template.} Since $K_p$ derives
+from $\epsilon_j$, a \emph{better} modelled joint receives a lower gain. Yet the
+steady-state error under a constant residual torque is $e_{\mathrm{ss}} =
+\tau/K_p$. The best-learned joints therefore track \emph{worse}. This mechanism
+is verified experimentally in \cref{sec-res-suivi} and discussed again in
+\cref{sec-limites}: it is a limitation of the template of~\cite{liu2024}, not
+an implementation defect.
 
-\paragraph{Écart de domaine (\emph{sim-to-sim gap}).} Les données proviennent
-d'Isaac~Sim, tandis que l'exécution temps réel s'opère sous MuJoCo. Ce choix,
-motivé par des contraintes logicielles (suppression d'asservissements
-concurrents), introduit un écart de domaine assumé, dont
-\cref{sec-res-ablation} mesure précisément le coût.
+\paragraph{Domain gap (\emph{sim-to-sim gap}).} The data come from mujoco
+and the real-time execution also takes place under MuJoCo. This choice, motivated by
+software constraints (removal of competing servo loops), introduces an accepted
+domain gap, whose cost \cref{sec-res-ablation} measures precisely.
 
 % =====================================================================
-\section{Validation et résultats}
+\section{Validation and results}
 \label{sec-resultats}
 % =====================================================================
 
-\paragraph{Synthèse.} Cette section établit cinq résultats, tous mesurés sur
-données réservées.
+\paragraph{Synthesis.} This section establishes five results, all measured on
+held-out data.
 
 \begin{enumerate}
-    \item \textbf{La chaîne fonctionne de bout en bout.} Partant du seul fichier
-    URDF, le modèle appris pilote effectivement un Franka simulé à
-    \SI{1000}{\hertz}, et la séquence de préhension aboutit
+    \item \textbf{The pipeline works end to end.} Starting from the URDF file
+    alone, the learned model effectively drives a simulated Franka at
+    \SI{1000}{\hertz}, and the grasping sequence completes
     (\cref{sec-res-suivi,sec-limites-integration}).
-    \item \textbf{Le modèle gris divise par \num{2.3} l'erreur du modèle
-    analytique} issu de l'URDF, de \SI{1.46}{} à \SI{0.62}{\newton\meter} en
-    moyenne, sur la partition employée ici (\cref{tab-baselines};
-    portée précisée en \cref{sec-res-partition}).
-    \item \textbf{Les contraintes physiques tiennent.} Zéro violation de limite
-    de couple sur les \SI{14830}{} échantillons de test, là où le modèle
-    analytique seul en produit sur \SI{0.99}{\percent} d'entre eux
-    (\cref{sec-res-garanties}).
-    \item \textbf{Sur ces données, une boîte noire de capacité identique est
-    plus précise} (\SI{0.45}{} contre \SI{0.62}{\newton\meter}) --- mais la
-    partition étant tirée au niveau de l'échantillon sur des séries
-    temporelles, cet écart favorise mécaniquement le modèle qui mémorise le
-    plus, et constitue une borne supérieure plutôt qu'un résultat établi
+    \item \textbf{The grey-box model divides the error of the analytical model
+    by \num{2.3}}, from \SI{1.46}{} to \SI{0.62}{\newton\meter} on average, on
+    the partition used here (\cref{tab-baselines}; scope stated precisely in
+    \cref{sec-res-partition}).
+    \item \textbf{The physical constraints hold.} Zero torque-limit violation
+    over the \SI{14830}{} test samples, where the analytical model alone
+    produces them on \SI{0.99}{\percent} of them (\cref{sec-res-garanties}).
+    \item \textbf{On these data, a black box of identical capacity is more
+    accurate} (\SI{0.45}{} against \SI{0.62}{\newton\meter}) --- but since the
+    partition is drawn at the sample level over time series, this gap
+    mechanically favours the model that memorises most, and constitutes an
+    upper bound rather than an established result
     (\cref{sec-baselines,sec-res-partition}).
-    \item \textbf{Le résidu appris dégrade les axes que le terme analytique
-    modélise déjà bien}, d'un facteur~\num{6.9} sur l'axe~7. Le même effet est
-    mesuré indépendamment en boucle fermée, où désactiver le résidu divise
-    par~\num{22} le biais de l'axe~5
+    \item \textbf{The learned residual degrades the joints that the analytical
+    term already models well}, by a factor of \num{6.9} on joint~7. The same
+    effect is measured independently in closed loop, where disabling the
+    residual divides joint~5's bias by \num{22}
     (\cref{tab-perjoint-baselines,sec-res-ablation}).
 \end{enumerate}
 
-Les résultats~4 et~5 vont contre l'hypothèse de départ. Ils sont rapportés
-comme résultats et non comme échecs: le second identifie un mode de défaillance
-précis et reproductible des résidus gris, corroboré par deux mesures
-indépendantes — une hors ligne et une en boucle fermée — et il indique
-directement la correction à apporter (\cref{sec-limites}).
+Results~4 and~5 run against the starting hypothesis. They are reported as
+results and not as failures: the second identifies a precise and reproducible
+failure mode of grey residuals, corroborated by two independent measurements
+--- one offline and one in closed loop --- and it points directly at the
+correction to be made (\cref{sec-limites}).
 
-\paragraph{Protocole de mesure.} Sauf mention contraire, tous les chiffres de
-cette section sont mesurés sur le \textbf{jeu de test réservé}
-(\SI{14830}{} échantillons), jamais vu ni par l'entraînement ni par la
-sélection du point de contrôle. La partition 80/10/10 de \cref{sec-probleme}
-est partagée par l'entraînement, l'évaluation des lignes de base et le calcul
-de $\epsilon_j$, si bien que toutes les lignes de \cref{tab-baselines}
-portent sur exactement les mêmes échantillons. Les comparaisons tiennent la
-capacité, l'architecture et le budget d'époques constants; seul l'élément
-étudié varie.
+\paragraph{Measurement protocol.} Unless stated otherwise, every figure in this
+section is measured on the \textbf{held-out test set} (\SI{14830}{} samples),
+seen neither by training nor by checkpoint selection. The 80/10/10 partition of
+\cref{sec-probleme} is shared by training, by the evaluation of the baselines
+and by the computation of $\epsilon_j$, so that every row of
+\cref{tab-baselines} bears on exactly the same samples. The comparisons hold
+capacity, architecture and epoch budget constant; only the element under study
+varies.
 
-Cette précaution n'est pas rhétorique. Jusqu'au 31~juillet 2026 le dépôt ne
-contenait aucun jeu de test: la RMSE publiée était celle de la validation, sur
-laquelle le point de contrôle était aussi sélectionné, et $\epsilon_j$ — donc
-les gains embarqués — en était tirée. Les chiffres ci-dessous sont les premiers
-du projet à être mesurés hors du critère de sélection, et ils diffèrent des
-précédents. Ils ne sont pas pour autant hors échantillon au sens fort: la
-partition est tirée au niveau de l'échantillon sur des séries temporelles à
-\SI{1}{\kilo\hertz}, ce qui laisse subsister une dépendance entre
-entraînement et test. \Cref{sec-res-partition} établit la portée exacte de
-cette limite et ce qu'elle fausse; elle doit être lue avant toute
-interprétation des écarts entre modèles.
+This precaution is not rhetorical. Until 31~July 2026 the repository contained
+no test set at all: the published RMSE was the validation one, on which the
+checkpoint was also selected, and $\epsilon_j$ --- hence the deployed gains ---
+was derived from it. The figures below are the first in the project to be
+measured outside the selection criterion, and they differ from the previous
+ones. They are not, however, out-of-sample in the strong sense: the partition
+is drawn at the sample level over time series at \SI{1}{\kilo\hertz}, which
+leaves a dependence between training and test. \Cref{sec-res-partition}
+establishes the exact scope of this limitation and what it distorts; it must be
+read before any interpretation of the gaps between models.
 
-L'apprentissage a été réalisé sur une carte NVIDIA GeForce RTX~3090
-(\SI{24}{\gibi\byte}) et un processeur Intel Core i9-12900KF (16~c\oe urs,
-24~fils), sous PyTorch~2.13 avec CUDA~13.2, avec un temps d'exécution mural de
-\SI{245}{\second} pour \num{200} époques sur
-\SI{118644}{} échantillons d'entraînement (\SI{209}{\second} pour la ligne de
-base boîte noire, \SI{242}{\second} pour l'ablation d'encodage).
+Training was carried out on an NVIDIA GeForce RTX~3090
+(\SI{24}{\gibi\byte}) and an Intel Core i9-12900KF processor (16~cores,
+24~threads), under PyTorch~2.13 with CUDA~13.2, with a wall-clock time of
+\SI{245}{\second} for \num{200} epochs over
+\SI{118644}{} training samples (\SI{209}{\second} for the black-box baseline,
+\SI{242}{\second} for the encoding ablation).
 
-\subsection{Lignes de base et protocole de comparaison}
+\subsection{Baselines and comparison protocol}
 \label{sec-baselines}
 
-Trois modèles sont comparés sur le \emph{même} jeu de test indépendant, avec le
-même protocole de division des données et le même critère d'arrêt.
+Three models are compared on the \emph{same} independent test set, with the
+same data-splitting protocol and the same stopping criterion.
 
-\paragraph{Ligne de base analytique (RNEA seul).}
-$\taupred = \taurbd$, sans aucun terme appris ($\theta$ vide). Aucun
-hyperparamètre. Cette ligne de base mesure exactement ce que le fichier URDF
-fournit à lui seul, et donc l'ampleur du couple résiduel que le modèle gris a
-pour tâche de capturer.
+\paragraph{Analytical baseline (RNEA alone).}
+$\taupred = \taurbd$, with no learned term ($\theta$ empty). No
+hyperparameters. This baseline measures exactly what the URDF file provides on
+its own, and therefore the magnitude of the residual torque that the grey-box
+model is tasked with capturing.
 
-\paragraph{Ligne de base boîte noire (MLP direct).}
-$\taupred = f(x\,;\theta)$ avec $x$ donné par \cref{eq-encodage}, c'est-à-dire
-la même entrée et la même capacité que GreyBoxNet, mais \emph{sans} le terme
-$\taurbd$: le réseau doit apprendre l'inertie et la gravité en plus du résidu.
-Même architecture (perceptron multicouche, activation Mish), même nombre de
-couches et d'unités, même optimiseur et même budget d'époques que le modèle
-proposé, afin que l'écart mesuré soit imputable à la structure grise et non à
-la capacité.
+\paragraph{Black-box baseline (direct MLP).}
+$\taupred = f(x\,;\theta)$ with $x$ given by \cref{eq-encodage}, that is, the
+same input and the same capacity as GreyBoxNet, but \emph{without} the
+$\taurbd$ term: the network has to learn inertia and gravity on top of the
+residual. Same architecture (multilayer perceptron, Mish activation), same
+number of layers and units, same optimiser and same epoch budget as the
+proposed model, so that the measured gap is attributable to the grey structure
+and not to capacity.
 
-\paragraph{Modèle proposé (\code{isaac-satfix}).}
-$\taupred = \taurbd + \taures$ selon \cref{eq-decompo}, avec les trois degrés
-de garantie de \cref{sec-residu}.
+\paragraph{Proposed model.}
+$\taupred = \taurbd + \taures$ following \cref{eq-decompo}, with the three
+degrees of guarantee of \cref{sec-residu}.
 
-% Mesures faites le 2026-07-31 : bash run_experiments.sh all
-%   phase 2 -> RNEA seul        (aucun entraînement)
-%   phase 3 -> MLP direct       (--no_rnea)
-%   phase 5 -> tableaux LaTeX ci-dessous, générés par
+% Measurements made on 2026-07-31: bash run_experiments.sh all
+%   phase 2 -> RNEA alone       (no training)
+%   phase 3 -> direct MLP       (--no_rnea)
+%   phase 5 -> the LaTeX tables below, generated by
 %              python -m evaluation.eval_baselines --latex
-% Journaux bruts : results/20260731_164630/
+% Raw logs: results/20260731_164630/
 
 \begin{table}[htbp]
 \centering
-\caption{Comparaison aux lignes de base, \SI{14830}{} échantillons de test
-réservés, partition identique pour les trois modèles (\code{seed=12345}),
-\num{200} époques et capacité identiques. Le modèle gris divise par \num{2.3}
-l'erreur du modèle analytique, mais \textbf{la boîte noire fait mieux que lui}.}
+\caption{Comparison against the baselines, \SI{14830}{} held-out test samples,
+identical partition for all three models (\code{seed=12345}), identical
+capacity and \num{200} epochs. The grey-box model divides the error of the
+analytical model by \num{2.3}, but \textbf{the black box does better than it}.}
 \label{tab-baselines}
 \small
 \begin{tabular}{@{}lcccc@{}}
 \toprule
-Modèle & RMSE moyenne & RMSE pire axe & Éch. hors limites & Garanties \\
- & [\si{\newton\meter}] & [\si{\newton\meter}] & de couple & \\
+Model & Mean RMSE & Worst-joint RMSE & Samples over & Guarantees \\
+ & [\si{\newton\meter}] & [\si{\newton\meter}] & torque limit & \\
 \midrule
-RNEA seul (analytique) & \num{1.456} & \num{2.841} & 147 (\SI{0.99}{\percent})
-& aucune (non entraîné) \\
-\textbf{MLP direct (boîte noire)} & \textbf{\num{0.447}} & \num{0.971}
-& 0 (\SI{0.00}{\percent}) & limites de couple seules \\
-Gris (proposé) & \num{0.624} & \num{1.022} & 0 (\SI{0.00}{\percent})
-& limites + dissipativité \\
+RNEA alone (analytical) & \num{1.456} & \num{2.841} & 147 (\SI{0.99}{\percent})
+& none (not trained) \\
+\textbf{Direct MLP (black box)} & \textbf{\num{0.447}} & \num{0.971}
+& 0 (\SI{0.00}{\percent}) & torque limits only \\
+Grey box (proposed) & \num{0.624} & \num{1.022} & 0 (\SI{0.00}{\percent})
+& limits + dissipativity \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{table}[htbp]
 \centering
-\caption{RMSE de test par axe [\si{\newton\meter}]. L'axe~7 est le cas
-révélateur: RNEA seul y atteint \num{0.042}, et le résidu appris \emph{dégrade}
-ce résultat d'un facteur~\num{6.9}.}
+\caption{Per-joint test RMSE [\si{\newton\meter}]. Joint~7 is the revealing
+case: RNEA alone reaches \num{0.042} there, and the learned residual
+\emph{degrades} that result by a factor of \num{6.9}.}
 \label{tab-perjoint-baselines}
 \small
 \begin{tabular}{@{}lccccccc@{}}
 \toprule
-Modèle & J1 & J2 & J3 & J4 & J5 & J6 & J7 \\
+Model & J1 & J2 & J3 & J4 & J5 & J6 & J7 \\
 \midrule
-RNEA seul & \num{1.588} & \num{2.841} & \num{1.824} & \num{1.953}
+RNEA alone & \num{1.588} & \num{2.841} & \num{1.824} & \num{1.953}
 & \num{0.883} & \num{1.062} & \textbf{\num{0.042}} \\
-MLP direct & \num{0.971} & \num{0.845} & \num{0.405} & \num{0.742}
+Direct MLP & \num{0.971} & \num{0.845} & \num{0.405} & \num{0.742}
 & \textbf{\num{0.066}} & \textbf{\num{0.068}} & \num{0.031} \\
-Gris (proposé) & \num{1.022} & \num{0.935} & \num{0.553} & \num{0.843}
+Grey box (proposed) & \num{1.022} & \num{0.935} & \num{0.553} & \num{0.843}
 & \num{0.371} & \num{0.355} & \num{0.288} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-% Figure générée à partir de results/20260731_164630/p5_comparison.json,
-% champ "rmse_pct_of_limit" (jeu de test réservé, 14 830 échantillons).
-% Normalisation par la limite de couple : sans elle, l'axe 7 (limite
-% 12 N.m) est illisible à côté de l'axe 2 (limite 87 N.m).
+% Figure generated from results/20260731_164630/p5_comparison.json,
+% field "rmse_pct_of_limit" (held-out test set, 14,830 samples).
+% Normalisation by the torque limit: without it, joint 7 (limit 12 N.m)
+% is unreadable next to joint 2 (limit 87 N.m).
 \begin{figure}[htbp]
 \centering
 \begin{tikzpicture}
 \begin{axis}[
     width=0.92\textwidth, height=6.2cm,
     ybar, bar width=6pt,
-    xlabel={axe articulaire},
-    ylabel={RMSE de test [\si{\percent} de la limite de couple]},
+    xlabel={joint},
+    ylabel={test RMSE [\si{\percent} of the torque limit]},
     symbolic x coords={J1,J2,J3,J4,J5,J6,J7},
     xtick=data, ymin=0, ymax=10.4,
     grid=major, grid style={black!12},
@@ -869,148 +827,142 @@ Gris (proposé) & \num{1.022} & \num{0.935} & \num{0.553} & \num{0.843}
 \addplot[draw=black, fill=black!25] coordinates {
 (J1,1.825) (J2,3.265) (J3,2.097) (J4,2.245) (J5,7.358) (J6,8.852)
 (J7,0.349)};
-\addlegendentry{RNEA seul}
+\addlegendentry{RNEA alone}
 \addplot[draw=black, fill=white, postaction={pattern=north east lines}]
 coordinates {
 (J1,1.116) (J2,0.971) (J3,0.465) (J4,0.853) (J5,0.547) (J6,0.564)
 (J7,0.259)};
-\addlegendentry{MLP direct}
+\addlegendentry{direct MLP}
 \addplot[draw=black, fill=black!70] coordinates {
 (J1,1.174) (J2,1.074) (J3,0.636) (J4,0.969) (J5,3.088) (J6,2.956)
 (J7,2.396)};
-\addlegendentry{Gris (proposé)}
+\addlegendentry{grey box (proposed)}
 \end{axis}
 \end{tikzpicture}
-\caption{Erreur de prédiction sur le \textbf{jeu de test réservé}
-(\SI{14830}{} échantillons), rapportée à la limite de couple de chaque axe.
-La normalisation est nécessaire: en valeur absolue, les axes du poignet
-(limite \SI{12}{\newton\meter}) sont illisibles à côté des axes porteurs
-(\SI{87}{\newton\meter}). Deux lectures s'imposent. D'une part le modèle
-analytique est au plus mal sur le poignet (axes~5 et~6), là où le modèle
-appris a donc le plus à apporter. D'autre part c'est précisément là que le
-modèle gris reste loin de la boîte noire, alors qu'il l'égale sur les axes~1
-à~4: l'écart global de \cref{tab-baselines} est presque entièrement un écart
-de poignet. Les remarques de \cref{sec-res-partition} sur la partition des
-données s'appliquent aux trois séries.}
+\caption{Prediction error on the \textbf{held-out test set}
+(\SI{14830}{} samples), reported relative to the torque limit of each joint.
+The normalisation is necessary: in absolute value, the wrist joints
+(limit \SI{12}{\newton\meter}) are unreadable next to the load-bearing joints
+(\SI{87}{\newton\meter}). Two readings stand out. First, the analytical model
+is at its worst on the wrist (joints~5 and~6), which is therefore where the
+learned model has the most to contribute. Second, that is precisely where the
+grey-box model stays far from the black box, whereas it matches it on joints~1
+to~4: the overall gap of \cref{tab-baselines} is almost entirely a wrist gap.
+The remarks of \cref{sec-res-partition} on the data partition apply to all
+three series.}
 \label{fig-perjoint-baselines}
 \end{figure}
 
-\paragraph{La boîte noire est plus précise que le modèle gris sur ces
-données.} Le résultat contredit l'hypothèse de départ et doit être rapporté
-comme tel; \cref{sec-res-partition} en établit ensuite la portée exacte, qui
-est plus étroite qu'il n'y paraît. Sur le poignet l'écart est d'un demi-ordre
-de grandeur: axe~5
-\num{0.066} contre \num{0.371}, axe~6 \num{0.068} contre \num{0.355}, axe~7
-\num{0.031} contre \num{0.288}. Deux mécanismes l'expliquent, et ils se
-cumulent. D'une part RNEA est particulièrement \emph{faux} sur le poignet —
-\SI{7.36}{\percent} et \SI{8.85}{\percent} de la limite de couple sur les axes~5
-et~6, ses pires erreurs relatives — de sorte que le terme analytique y offre un
-mauvais point de départ. D'autre part le résidu gris est contraint d'être
-dissipatif, alors que la boîte noire ne l'est pas: la contrainte limite
-précisément l'ampleur de la correction que le résidu peut apporter là où elle
-serait la plus nécessaire.
+\paragraph{The black box is more accurate than the grey-box model on these
+data.} The result contradicts the starting hypothesis and must be reported as
+such; \cref{sec-res-partition} then establishes its exact scope, which is
+narrower than it looks. On the wrist the gap is half an order of magnitude:
+joint~5 \num{0.066} against \num{0.371}, joint~6 \num{0.068} against
+\num{0.355}, joint~7 \num{0.031} against \num{0.288}. Two mechanisms explain
+it, and they compound. On the one hand RNEA is particularly \emph{wrong} on the
+wrist --- \SI{7.36}{\percent} and \SI{8.85}{\percent} of the torque limit on
+joints~5 and~6, its worst relative errors --- so that the analytical term
+offers a poor starting point there. On the other hand the grey residual is
+constrained to be dissipative, whereas the black box is not: the constraint
+limits precisely the magnitude of the correction the residual can bring exactly
+where it would be most needed.
 
-\paragraph{Le résidu appris dégrade les axes que RNEA modélise déjà bien.}
-L'axe~7 en est la démonstration nette. Le modèle analytique y atteint
-\SI{0.042}{\newton\meter}, soit \SI{0.35}{\percent} de sa limite: il n'y a
-essentiellement rien à apprendre, l'axe étant un roulis de poignet dont l'axe
-passe par la bride, sur lequel la gravité n'exerce presque aucun couple. Le
-résidu y injecte pourtant une erreur d'un facteur~\num{6.9}. Les pires
-échantillons sont explicites: pour $\tau_{\mathrm{real}} = \SI{-0.01}{\newton\meter}$
-et $\taurbd = \SI{-0.08}{\newton\meter}$ — donc une prédiction analytique déjà
-juste — le réseau produit $\taures = \SI{-2.04}{\newton\meter}$. Le coefficient
-diagonal appris $D_{77}$ converge d'ailleurs vers \num{0.67}, la plus grande
-valeur des sept axes, tandis que $D_{11}$ s'effondre à \num{0.019}: le module
-dissipatif est le plus actif là où il n'y a pas de frottement à modéliser.
+\paragraph{The learned residual degrades the joints RNEA already models well.}
+Joint~7 is the clear demonstration. The analytical model reaches
+\SI{0.042}{\newton\meter} there, i.e. \SI{0.35}{\percent} of its limit: there
+is essentially nothing to learn, the joint being a wrist roll whose axis passes
+through the flange, on which gravity exerts almost no torque. The residual
+nevertheless injects an error of a factor of \num{6.9}. The worst samples are
+explicit: for $\tau_{\mathrm{real}} = \SI{-0.01}{\newton\meter}$ and
+$\taurbd = \SI{-0.08}{\newton\meter}$ --- an analytical prediction that is
+already correct --- the network produces $\taures =
+\SI{-2.04}{\newton\meter}$. The learned diagonal coefficient $D_{77}$ converges,
+moreover, to \num{0.67}, the largest value of the seven joints, while $D_{11}$
+collapses to \num{0.019}: the dissipative module is most active exactly where
+there is no friction to model.
 
-\textbf{C'est le même phénomène que l'ablation en boucle fermée de
-\cref{sec-res-ablation}}, mesuré cette fois hors ligne. Désactiver le résidu y
-divisait par~\num{22} le biais de l'axe~5; ici, ne pas l'apprendre du tout
-diviserait par~\num{6.9} l'erreur de l'axe~7. Deux mesures indépendantes, une
-seule cause: le résidu n'est pas régularisé par axe, et la perte MSE non
-pondérée (\cref{sec-res-desequilibre}) ne lui donne aucune raison de rester nul
-là où il devrait l'être.
+\textbf{This is the same phenomenon as the closed-loop ablation of
+\cref{sec-res-ablation}}, measured this time offline. Disabling the residual
+there divided joint~5's bias by \num{22}; here, not learning it at all would
+divide joint~7's error by \num{6.9}. Two independent measurements, one single
+cause: the residual is not regularised per joint, and the unweighted MSE loss
+(\cref{sec-res-desequilibre}) gives it no reason to stay at zero where it
+should be.
 
-\subsection{Une réserve sur la partition, et sur ce qu'elle fausse}
+\subsection{A caveat on the partition, and on what it distorts}
 \label{sec-res-partition}
 
-La comparaison qui précède appelle une réserve méthodologique qui en limite la
-portée, et il faut l'énoncer avant d'en tirer quoi que ce soit.
+The preceding comparison calls for a methodological caveat that limits its
+scope, and it must be stated before drawing anything from it.
 
-Les données sont constituées de \num{30} trajectoires continues de
-\SI{5}{\second} — \num{10} segments d'excitation de Fourier autour de centres
-de Sobol, pour chacune des trois charges — échantillonnées à
-\SI{1}{\kilo\hertz}. La partition de \cref{sec-probleme} est en revanche
-\emph{tirée uniformément au niveau de l'échantillon}. Deux pas de temps
-consécutifs, distants de \SI{1}{\milli\second} sur la même trajectoire, sont
-donc répartis indépendamment: tout échantillon de test possède, dans le jeu
-d'entraînement, des voisins quasi identiques en $(\q, \qd)$.
+The data consist of \num{30} continuous \SI{5}{\second} trajectories ---
+\num{10} Fourier excitation segments around Sobol centres, for each of the
+three payloads --- sampled at \SI{1}{\kilo\hertz}. The partition of
+\cref{sec-probleme}, however, is \emph{drawn uniformly at the sample level}.
+Two consecutive time steps, \SI{1}{\milli\second} apart on the same trajectory,
+are therefore assigned independently: every test sample has, in the training
+set, near-identical neighbours in $(\q, \qd)$.
 
-\paragraph{Ce que cela invalide, et ce que cela n'invalide pas.} Le défaut de
-\emph{sélection} décrit en \cref{sec-probleme} est bien corrigé: le point de
-contrôle n'est plus choisi sur l'ensemble rapporté, et $\epsilon_j$ n'en est
-plus tiré. Cela reste la correction la plus importante du projet.
-L'\emph{indépendance} des échantillons, elle, n'est pas acquise, et la
-\cref{sec-resultats} ne doit pas être lue comme une mesure de généralisation à
-des trajectoires nouvelles. Elle mesure l'interpolation à l'intérieur d'une
-famille d'excitation de \num{30} trajectoires.
+\paragraph{What this invalidates, and what it does not.} The \emph{selection}
+defect described in \cref{sec-probleme} is indeed corrected: the checkpoint is
+no longer chosen on the reported set, and $\epsilon_j$ is no longer derived
+from it. That remains the most important correction in the project. The
+\emph{independence} of the samples, however, is not established, and
+\cref{sec-resultats} must not be read as a measure of generalisation to new
+trajectories. It measures interpolation within a family of \num{30} excitation
+trajectories.
 
-\paragraph{L'effet n'est pas le même pour les trois modèles, et c'est le
-point.} Un voisin à \SI{1}{\milli\second} n'apporte rien au modèle analytique,
-qui ne s'ajuste à aucune donnée: la ligne RNEA de \cref{tab-baselines} est
-insensible à cette fuite. Les deux modèles appris en bénéficient, mais
-inégalement, et le plus favorisé est celui qui doit le plus mémoriser. Le
-modèle gris n'a qu'un résidu à apprendre, l'inertie et la gravité lui étant
-fournies analytiquement; la boîte noire doit tout reconstruire à partir des
-seules données.
+\paragraph{The effect is not the same for the three models, and that is the
+point.} A neighbour \SI{1}{\milli\second} away brings nothing to the analytical
+model, which is fitted to no data: the RNEA row of \cref{tab-baselines} is
+insensitive to this leakage. The two learned models benefit from it, but
+unequally, and the one favoured most is the one that has to memorise most. The
+grey-box model has only a residual to learn, inertia and gravity being supplied
+to it analytically; the black box has to reconstruct everything from the data
+alone.
 
-Un indice quantitatif le confirme, et il est difficile à expliquer autrement.
-La boîte noire ne reçoit \emph{pas} l'accélération $\qdd$ en entrée: son
-encodage est celui de \cref{eq-encodage}, soit $(\q, \qd, \delta)$. Elle est
-donc structurellement incapable de représenter le couple inertiel
-$M(\q)\,\qdd$, terme dominant de la dynamique — et elle l'emporte pourtant
-de \SI{28}{\percent}. Avec \num{30} trajectoires seulement et un tirage au
-niveau de l'échantillon, le couple $(\q, \qd)$ identifie presque toujours la
-trajectoire et la phase, ce qui rend $\qdd$ implicitement récupérable par
-mémorisation. L'écart mesuré est donc au moins en partie un artefact de la
-partition, et il porte précisément sur la comparaison que ce travail cherchait
-à établir.
+A quantitative clue confirms this, and it is hard to explain otherwise. The
+black box does \emph{not} receive the acceleration $\qdd$ as input: its
+encoding is that of \cref{eq-encodage}, namely $(\q, \qd, \delta)$. It is
+therefore structurally incapable of representing the inertial torque
+$M(\q)\,\qdd$, the dominant term of the dynamics --- and it nevertheless wins
+by \SI{28}{\percent}. With only \num{30} trajectories and a sample-level draw,
+the pair $(\q, \qd)$ almost always identifies the trajectory and the phase,
+which makes $\qdd$ implicitly recoverable by memorisation. The measured gap is
+therefore at least partly an artefact of the partition, and it bears precisely
+on the comparison this work set out to establish.
 
-\paragraph{La correction, et son statut.} La mesure correcte est une partition
-\emph{par groupe}: répartir les \num{30} segments — et non les
-\num{148304} échantillons — entre entraînement, validation et test, de sorte
-qu'aucune trajectoire de test n'ait jamais été vue. La boîte noire perd alors
-l'appui de la mémorisation et doit extrapoler, ce que le terme analytique du
-modèle gris fait par construction. Une implémentation de cette partition par
-groupe existe dans le dépôt et une mesure préliminaire a été conduite, mais
-elle repose sur trop peu de trajectoires de test pour être rapportée ici: son
-analyse est laissée aux travaux futurs. En conséquence, l'écart de
-\SI{28}{\percent} de \cref{tab-baselines} doit être lu comme une borne
-supérieure de l'avantage de la boîte noire plutôt que comme un résultat
-établi, et les comparaisons de cette section comme des mesures
-d'interpolation à l'intérieur de la famille d'excitation employée.
+\paragraph{The correction, and its status.} The correct measurement is a
+\emph{group-wise} partition: distributing the \num{30} segments --- and not the
+\num{148304} samples --- between training, validation and test, so that no test
+trajectory has ever been seen. The black box then loses the support of
+memorisation and has to extrapolate, which the analytical term of the grey-box
+model does by construction. An implementation of this group-wise partition
+exists in the repository and a preliminary measurement has been carried out,
+but it rests on too few test trajectories to be reported here: its analysis is
+left to future work. Consequently, the \SI{28}{\percent} gap of
+\cref{tab-baselines} must be read as an upper bound on the advantage of the
+black box rather than as an established result, and the comparisons of this
+section as measurements of interpolation within the excitation family used.
 
-\subsection{Précision du modèle appris}
+\subsection{Accuracy of the learned model}
 \label{sec-res-stage1}
 
-Le modèle gris atteint \SIrange{0.29}{1.02}{\newton\meter} par axe sur le jeu
-de test réservé (\cref{tab-perjoint}).
+The grey-box model reaches \SIrange{0.29}{1.02}{\newton\meter} per joint on the
+held-out test set (\cref{tab-perjoint}).
 
-L'amélioration apportée par le filtrage de saturation~\eqref{eq-satfilter} est
-nette et présente sur les sept axes (\cref{fig-rmse}): la comparaison
-\code{isaac-first-real} contre \code{isaac-satfix} est une expérience
-contrôlée, les deux exécutions ne différant que par ce filtre.
-\textbf{Cette figure est la seule du document à ne pas porter sur le jeu de
-test réservé}, et elle est conservée sous cette réserve explicite: les deux
-exécutions datent du 16~juillet 2026, antérieures à
-l'introduction de la partition à trois voies, et les valeurs tracées sont des
-RMSE de \emph{validation} — mesurées, qui plus est, sur l'ensemble ayant servi
-à sélectionner le point de contrôle. Elles ne sont donc comparables ni entre
-elles ni avec le reste de cette section en valeur absolue. La mesure ne peut
-pas être refaite proprement: le jeu de données antérieur au filtre n'existe
-plus, le filtre s'appliquant à la génération. Seul le \emph{sens} de l'effet
-— une amélioration sur les sept axes — est retenu ici; son amplitude ne l'est
-pas.
+The improvement brought by the saturation filter~\eqref{eq-satfilter} is clear
+and present on all seven joints (\cref{fig-rmse})
+the two runs differing only by that filter.
+\textbf{This figure is the only one in the document not measured on the held-out
+test set}, and it is kept under that explicit caveat: both runs date from
+16~July 2026, before the introduction of the three-way partition, and the
+plotted values are \emph{validation} RMSEs --- measured, moreover, on the set
+used to select the checkpoint. They are therefore comparable neither with each
+other nor with the rest of this section in absolute value. The measurement
+cannot be redone cleanly: the pre-filter dataset no longer exists, the filter
+being applied at generation time. Only the \emph{direction} of the effect ---
+an improvement on all seven joints --- is retained here; its magnitude is not.
 
 \begin{figure}[htbp]
 \centering
@@ -1018,8 +970,8 @@ pas.
 \begin{axis}[
     width=0.86\textwidth, height=5.6cm,
     ybar, bar width=7pt,
-    xlabel={axe articulaire},
-    ylabel={RMSE de validation [\si{\newton\meter}]},
+    xlabel={joint},
+    ylabel={validation RMSE [\si{\newton\meter}]},
     symbolic x coords={J1,J2,J3,J4,J5,J6,J7},
     xtick=data, ymin=0, ymax=2.0,
     grid=major, grid style={black!12},
@@ -1033,38 +985,37 @@ pas.
 \addplot coordinates {
 (J1,1.5694) (J2,1.4355) (J3,1.1351) (J4,1.7685) (J5,0.9680) (J6,0.4885)
 (J7,0.5180)};
-\addlegendentry{\code{isaac-first-real}}
+\addlegendentry{\code{Mujoco-first-real}}
 \addplot coordinates {
 (J1,0.7996) (J2,0.8823) (J3,0.8979) (J4,0.5396) (J5,0.3732) (J6,0.3593)
 (J7,0.2986)};
-\addlegendentry{\code{isaac-satfix}}
+\addlegendentry{\code{Mujoco-satfix}}
 \end{axis}
 \end{tikzpicture}
-\caption{Effet du filtrage de saturation~\eqref{eq-satfilter}: RMSE
-\textbf{de validation}, avant et après. L'amélioration est présente sur les
-sept axes. \textbf{Mesures antérieures à la partition à trois voies}
-(16~juillet 2026), donc sur l'ensemble ayant servi à la sélection du point de
-contrôle: seul le signe de l'effet est exploitable, non son amplitude, et ces
-valeurs ne sont pas comparables à celles du reste de la
-\cref{sec-resultats}. La comparaison ne peut être refaite, le jeu de données
-antérieur au filtre n'existant plus.}
+\caption{Effect of the saturation filter~\eqref{eq-satfilter}:
+\textbf{validation} RMSE, before and after. The improvement is present on all
+seven joints. \textbf{Measurements predating the three-way partition}
+(16~July 2026), hence on the set used for checkpoint selection: only the sign
+of the effect is usable, not its magnitude, and these values are not comparable
+with those in the rest of \cref{sec-resultats}. The comparison cannot be
+redone, the pre-filter dataset no longer existing.}
 \label{fig-rmse}
 \end{figure}
 
 \begin{table}[htbp]
 \centering
-\caption{Modèle gris sur le jeu de test réservé: erreur de prédiction par axe,
-borne $\epsilon_j$ (quantile \SI{99.9}{\percent}) et gains PD qui en découlent
-par \cref{eq-gains} avec $\kappa = 2$. La queue de distribution est lourde — le
-maximum absolu atteint \SI{81.8}{\newton\meter} sur l'axe~2 contre un $p_{99,9}$
-de \SI{6.94}{\newton\meter}, soit un rapport de~\num{12} — ce qui est
-précisément pourquoi la borne est prise en quantile et non en maximum
+\caption{Grey-box model on the held-out test set: per-joint prediction error,
+bound $\epsilon_j$ (\SI{99.9}{\percent} quantile) and the PD gains that follow
+from it through \cref{eq-gains} with $\kappa = 2$. The tail of the distribution
+is heavy --- the absolute maximum reaches \SI{81.8}{\newton\meter} on joint~2
+against a $p_{99.9}$ of \SI{6.94}{\newton\meter}, a ratio of \num{12} --- which
+is precisely why the bound is taken as a quantile and not as a maximum
 (\cref{sec-limites}).}
 \label{tab-perjoint}
 \small
 \begin{tabular}{@{}lccccccc@{}}
 \toprule
-Axe $j$ & 1 & 2 & 3 & 4 & 5 & 6 & 7 \\
+Joint $j$ & 1 & 2 & 3 & 4 & 5 & 6 & 7 \\
 \midrule
 RMSE [\si{\newton\meter}] & \num{1.022} & \num{0.935} & \num{0.553} & \num{0.843}
 & \num{0.371} & \num{0.355} & \num{0.288} \\
@@ -1081,251 +1032,248 @@ RMSE $/\ \bar{\tau}_j$ [\si{\percent}] & \num{1.17} & \num{1.07} & \num{0.64} & 
 \end{tabular}
 \end{table}
 
-\subsection{Ablations: ce que chaque composant apporte réellement}
+\subsection{Ablations: what each component actually contributes}
 \label{sec-res-ablations}
 
-Deux composants revendiqués comme contributions ont été ablatés, à protocole
-strictement identique (même partition, même capacité, \num{200} époques).
+Two components claimed as contributions were ablated, under a strictly
+identical protocol (same partition, same capacity, \num{200} epochs).
 
 \begin{table}[htbp]
 \centering
-\caption{Ablations sur le jeu de test réservé. Les deux composants pèsent
-moins de \SI{1.5}{\percent} sur la précision.}
+\caption{Ablations on the held-out test set. Both components weigh less than
+\SI{1.5}{\percent} on accuracy.}
 \label{tab-ablations}
 \small
 \begin{tabular}{@{}lcc@{}}
 \toprule
-Variante & RMSE moyenne [\si{\newton\meter}] & Écart au modèle complet \\
+Variant & Mean RMSE [\si{\newton\meter}] & Gap to the full model \\
 \midrule
-Gris complet (\code{sincos} + FrictionNet) & \num{0.624} & --- \\
-Sans encodage $\sin/\cos$ (entrée $\q$ brute) & \num{0.631} & \SI{+1.1}{\percent} \\
-Sans FrictionNet & \num{0.633} & \SI{+1.4}{\percent} \\
+Full grey box (\code{sincos} + FrictionNet) & \num{0.624} & --- \\
+Without $\sin/\cos$ encoding (raw $\q$ input) & \num{0.631} & \SI{+1.1}{\percent} \\
+Without FrictionNet & \num{0.633} & \SI{+1.4}{\percent} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{L'encodage spatial ne pèse presque rien.} L'encodage
-$[\sin(\q), \cos(\q)]$ de \cref{eq-encodage} est justifié en
-\cref{sec-degre0} par deux arguments physiques: lever la discontinuité
-angulaire et permettre de représenter l'ondulation de couple. Mesuré, il
-apporte \SI{1.1}{\percent}. L'argument sur la discontinuité reste valable pour
-un déploiement (un modèle entraîné sur $\q$ brut se comporte mal au voisinage
-de $\pm\pi$, ce que la RMSE moyenne ne capture pas), mais l'ondulation de
-couple n'est manifestement pas un terme dominant dans ces données.
+\paragraph{The spatial encoding weighs almost nothing.} The
+$[\sin(\q), \cos(\q)]$ encoding of \cref{eq-encodage} is justified in
+\cref{sec-degre0} by two physical arguments: removing the angular discontinuity
+and making it possible to represent torque ripple. Measured, it contributes
+\SI{1.1}{\percent}. The argument about the discontinuity remains valid for
+deployment (a model trained on raw $\q$ behaves badly in the neighbourhood of
+$\pm\pi$, which the mean RMSE does not capture), but torque ripple is
+evidently not a dominant term in these data.
 
-\paragraph{FrictionNet n'apporte pas de précision.} Le module dissipatif
-(\cref{sec-frictionnet}, novelty N2) coûte \SI{1.4}{\percent} de RMSE quand on
-le retire. Sa valeur n'est donc pas la précision mais la \emph{garantie}: il
-rend $\taufric^{\top}\qd \le 0$ vraie par construction plutôt que par pénalité.
-C'est une propriété que la boîte noire, plus précise, n'offre pas. La
-revendication doit être formulée en ces termes et non en termes d'erreur.
+\paragraph{FrictionNet does not bring accuracy.} The dissipative module
+(\cref{sec-frictionnet}, novelty N2) costs \SI{1.4}{\percent} of RMSE when
+removed. Its value is therefore not accuracy but the \emph{guarantee}: it makes
+$\taufric^{\top}\qd \le 0$ true by construction rather than by penalty. That is
+a property the black box, more accurate, does not offer. The claim must be
+formulated in those terms and not in terms of error.
 
-\subsection{Tenue des garanties physiques}
+\subsection{Compliance with the physical guarantees}
 \label{sec-res-garanties}
 
-La violation de la contrainte de limite de couple est \emph{nulle} sur
-l'ensemble du jeu de test. La violation de dissipativité résiduelle tombe à
-\num{6e-4} sur les données d'entraînement, valeur non nulle car le degré~1
-(\cref{sec-degre1}) relâche la contrainte en pénalité; la composante couverte
-par le degré~2 (\cref{sec-frictionnet}) est, elle, exactement nulle par
-construction.
+The violation of the torque-limit constraint is \emph{zero} over the whole test
+set. The residual dissipativity violation falls to \num{6e-4} on the training
+data, a non-zero value because degree~1 (\cref{sec-degre1}) relaxes the
+constraint into a penalty; the component covered by degree~2
+(\cref{sec-frictionnet}) is, for its part, exactly zero by construction.
 
-\subsection{Suivi de trajectoire en boucle fermée}
+\subsection{Closed-loop trajectory tracking}
 \label{sec-res-suivi}
 
-Le modèle appris pilote effectivement le robot: la loi~\eqref{eq-ctpd} est
-évaluée à \SI{1000}{\hertz} par un n\oe ud ROS2 et le Franka simulé suit les
-trajectoires planifiées. Le comportement observé confirme quantitativement la
-conséquence contre-intuitive annoncée en \cref{sec-boucle}: l'axe~5, l'un des
-mieux modélisés et donc l'un des plus faiblement gainés
-($K_{p,55} = \num{4,41}$, contre $\num{48,20}$ pour l'axe~2), porte un biais
-statique systématique, toujours de même signe, de l'ordre de
-\SIrange{0.013}{0.053}{\radian} selon la configuration. Ce biais croît avec
-l'allonge du bras (environ \SI{-0.044}{\radian} à \SI{0.45}{\meter},
-\SI{-0.050}{\radian} à \SI{0.65}{\meter}, \SI{-0.066}{\radian} à
-\SI{0.70}{\meter}), signature d'un terme dépendant de la charge et non d'un
-décalage constant — soit exactement $e_{\mathrm{ss}} = \tau/K_p$.
+The learned model does drive the robot: law~\eqref{eq-ctpd} is evaluated at
+\SI{1000}{\hertz} by a ROS2 node and the simulated Franka follows the planned
+trajectories. The observed behaviour quantitatively confirms the
+counter-intuitive consequence announced in \cref{sec-boucle}: joint~5, one of
+the best modelled and therefore one of the most weakly gained
+($K_{p,55} = \num{4.41}$, against \num{48.20} for joint~2), carries a
+systematic steady-state bias, always of the same sign, of the order of
+\SIrange{0.013}{0.053}{\radian} depending on the configuration. This bias grows
+with the arm's reach (about \SI{-0.044}{\radian} at \SI{0.45}{\meter},
+\SI{-0.050}{\radian} at \SI{0.65}{\meter}, \SI{-0.066}{\radian} at
+\SI{0.70}{\meter}), the signature of a load-dependent term rather than of a
+constant offset --- that is, exactly $e_{\mathrm{ss}} = \tau/K_p$.
 
-\subsection{Ablation du résidu appris sous transfert inter-simulateurs}
+\subsection{Ablation of the learned residual under cross-simulator transfer}
 \label{sec-res-ablation}
 
-L'expérience la plus informative de ce travail isole la contribution du résidu
-en boucle fermée. À configuration strictement identique (objet à
-\SI{0.55}{\meter}, même marge de gain, même trajectoire planifiée), le résidu
-appris est activé puis désactivé, tout le reste étant tenu constant.
+The most informative experiment of this work isolates the contribution of the
+residual in closed loop. Under a strictly identical configuration (object at
+\SI{0.55}{\meter}, same gain margin, same planned trajectory), the learned
+residual is enabled and then disabled, everything else being held constant.
 
 \begin{table}[htbp]
 \centering
-\caption{Ablation du résidu appris en boucle fermée, cinq exécutions à
-configuration identique. Désactiver le résidu améliore le suivi d'un ordre de
-grandeur sur l'axe~5 et divise par deux l'erreur cartésienne de bride.}
+\caption{Ablation of the learned residual in closed loop, five runs under an
+identical configuration. Disabling the residual improves tracking by an order
+of magnitude on joint~5 and halves the Cartesian flange error.}
 \label{tab-ablation}
 \small
 \begin{tabular}{@{}llccc@{}}
 \toprule
-Exéc. & Résidu & Biais axe~5 [\si{\radian}] & Biais axe~3 [\si{\radian}]
-& Erreur de bride [\si{\meter}] \\
+Run & Residual & Joint~5 bias [\si{\radian}] & Joint~3 bias [\si{\radian}]
+& Flange error [\si{\meter}] \\
 \midrule
-36 & actif   & \num{-0,0264} & \num{-0,0155} & \num{0,0141} \\
-37 & actif   & \num{-0,0434} & \num{-0,0183} & \num{0,0139} \\
-38 & actif   & \num{-0,0312} & \num{-0,0162} & \num{0,0149} \\
+36 & on   & \num{-0.0264} & \num{-0.0155} & \num{0.0141} \\
+37 & on   & \num{-0.0434} & \num{-0.0183} & \num{0.0139} \\
+38 & on   & \num{-0.0312} & \num{-0.0162} & \num{0.0149} \\
 \midrule
-45 & \textbf{inactif} & \textbf{\num{-0,0011}} & \num{-0,0003}
-& \textbf{\num{0,0076}} \\
-46 & \textbf{inactif} & \textbf{\num{-0,0019}} & \num{-0,0007}
-& \textbf{\num{0,0073}} \\
+45 & \textbf{off} & \textbf{\num{-0.0011}} & \num{-0.0003}
+& \textbf{\num{0.0076}} \\
+46 & \textbf{off} & \textbf{\num{-0.0019}} & \num{-0.0007}
+& \textbf{\num{0.0073}} \\
 \midrule
-\multicolumn{2}{@{}l}{Moyenne actif} & \num{-0,0337} & \num{-0,0167}
-& \num{0,0143} \\
-\multicolumn{2}{@{}l}{Moyenne inactif} & \num{-0,0015} & \num{-0,0005}
-& \num{0,0075} \\
+\multicolumn{2}{@{}l}{Mean, residual on} & \num{-0.0337} & \num{-0.0167}
+& \num{0.0143} \\
+\multicolumn{2}{@{}l}{Mean, residual off} & \num{-0.0015} & \num{-0.0005}
+& \num{0.0075} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Le biais moyen de l'axe~5 passe de \SI{-0.0337}{\radian} à
-\SI{-0.0015}{\radian}, soit un facteur~22, et l'erreur cartésienne de bride est
-divisée par deux (\cref{tab-ablation}). Tous les axes s'améliorent, non le seul
-axe~5.
+Joint~5's mean bias goes from \SI{-0.0337}{\radian} to
+\SI{-0.0015}{\radian}, a factor of \num{22}, and the Cartesian flange error is
+halved (\cref{tab-ablation}). All joints improve, not joint~5 alone.
 
-\paragraph{Ce que ce résultat établit, et ce qu'il n'établit pas.}
-Le point de contrôle évalué a été entraîné sur des données Isaac~Sim puis
-déployé sous MuJoCo. Il a donc appris l'écart entre RNEA et la dynamique
-\emph{d'Isaac}, et l'ajoute à un modèle MuJoCo qui ne présente pas cet écart:
-il est évalué hors distribution. La conclusion défendable est que \textbf{le
-résidu appris sur Isaac dégrade le suivi sous transfert inter-simulateurs}. Il
-ne s'agit \emph{pas} d'un constat d'échec de l'approche grise, dont la
-précision hors ligne est établie en \cref{sec-res-stage1}. Ce résultat fournit
-en revanche la ligne de base chiffrée que le protocole d'affinage à ossature
-gelée (\cref{sec-limites}) doit battre, et constitue à ce titre un résultat
-utile plutôt qu'un échec.
+\paragraph{What this result establishes, and what it does not.}
+The checkpoint evaluated was trained on Mujoco data and also deployed under
+MuJoCo. It has therefore learned the gap between RNEA and \emph{Mujoco's}
+dynamics, and adds it to a MuJoCo model that does not exhibit that gap: it is
+being evaluated out of distribution. The defensible conclusion is that
+\textbf{the residual learned on Mujoco degrades tracking under cross-simulator
+transfer}. This is \emph{not} a finding that the grey-box approach fails, its
+offline accuracy being established in \cref{sec-res-stage1}. What this result
+does provide is the quantified baseline that the frozen-backbone fine-tuning
+protocol (\cref{sec-limites}) has to beat, and it is on that account a useful
+result rather than a failure.
 
-Un confondant potentiel doit être écarté: l'ablation modifie-t-elle aussi les
-gains~? Non — la marge de gain est explicitement tenue constante entre les deux
-conditions. De plus, l'effet d'un gain plus faible irait dans le sens
-\emph{opposé} (il augmenterait $e_{\mathrm{ss}} = \tau/K_p$), si bien que le
-résultat survit à ce confondant.
+One potential confounder must be ruled out: does the ablation also change the
+gains? No --- the gain margin is explicitly held constant between the two
+conditions. Moreover, the effect of a lower gain would go the \emph{opposite}
+way (it would increase $e_{\mathrm{ss}} = \tau/K_p$), so the result survives
+that confounder.
 
 % =====================================================================
-\section{Discussion et limites}
+\section{Discussion and limitations}
 \label{sec-discussion}
 % =====================================================================
 
-\subsection{Le biais d'optimisation non corrigé}
+\subsection{The uncorrected optimisation bias}
 \label{sec-res-desequilibre}
-La perte MSE n'est pas pondérée, incitant le réseau à ignorer le poignet (limite
-\SI{12}{\newton\meter}) au profit des axes porteurs (\SI{87}{\newton\meter}). C'est
-directement visible dans \cref{tab-perjoint}: rapportée à la limite de couple,
-l'erreur des axes~5 à~7 (\SIrange{2.40}{3.09}{\percent}) est près de trois fois
-celle des axes~1 à~4 (\SIrange{0.64}{1.17}{\percent}), alors qu'elle paraît
-meilleure en valeur absolue. Ce défaut justifie l'implémentation future d'une pondération
-diagonale $\mathrm{diag}(1/\bar{\tau}_j^2)$ dans la perte.
+The MSE loss is unweighted, which encourages the network to ignore the wrist
+(limit \SI{12}{\newton\meter}) in favour of the load-bearing joints
+(\SI{87}{\newton\meter}). This is directly visible in \cref{tab-perjoint}:
+relative to the torque limit, the error of joints~5 to~7
+(\SIrange{2.40}{3.09}{\percent}) is nearly three times that of joints~1 to~4
+(\SIrange{0.64}{1.17}{\percent}), although it looks better in absolute value.
+This defect justifies the future implementation of a diagonal weighting
+$\mathrm{diag}(1/\bar{\tau}_j^2)$ in the loss.
 
-\subsection{Limites de l'intégration au moteur physique}
+\subsection{Limitations of the integration with the physics engine}
 \label{sec-limites-integration}
 
-La tâche de préhension servait de test d'intégration, et non de mesure de la
-qualité du modèle: elle est rapportée ici, en discussion, plutôt qu'en
-résultats, car ce qu'elle a mesuré s'est révélé être la qualité de
-l'intergiciel et non celle de la dynamique apprise.
+The grasping task served as an integration test, and not as a measure of the
+quality of the model: it is reported here, in the discussion, rather than in
+the results, because what it measured turned out to be the quality of the
+middleware and not that of the learned dynamics.
 
-\paragraph{Un défaut de configuration qui imitait un défaut de physique.}
-Pendant une semaine, trois axes ont paru refuser tout mouvement. Le diagnostic
-final n'a rien à voir avec le modèle appris ni avec la commande: le service
-\code{ResetWorld} de \code{mujoco_ros2_control} rétablit silencieusement le
-régulateur PID de position interne du greffon, sans passer par la routine de
-changement de mode. Aucune couche ne le signale — le gestionnaire de
-contrôleurs continue d'annoncer le contrôleur en couple comme actif, les
-commandes continuent d'être publiées, et le bras se tient convenablement. Tous
-les couples publiés étaient pourtant ignorés, le bras se stabilisant à
-$\q_{\mathrm{home}} - \tau_{\mathrm{gravit\acute{e}}}/p_{\mathrm{PID}}$, valeur
-reproductible à \SI{1e-5}{\radian} près sur trois exécutions indépendantes.
-C'est cette signature arithmétique, et non un message d'erreur, qui a permis
-d'identifier la cause.
+\paragraph{A configuration fault that imitated a physics fault.}
+For a week, three joints appeared to refuse any motion. The final diagnosis has
+nothing to do with the learned model nor with the control law: the
+\code{ResetWorld} service of \code{mujoco_ros2_control} silently restores the
+plugin's internal position PID, without going through the mode-switch routine.
+No layer reports it --- the controller manager continues to announce the effort
+controller as active, commands continue to be published, and the arm holds
+itself up convincingly. Every published torque was nevertheless discarded, the
+arm settling at
+$\q_{\mathrm{home}} - \tau_{\mathrm{gravity}}/p_{\mathrm{PID}}$, a value
+reproducible to within \SI{1e-5}{\radian} across three independent runs. It is
+this arithmetic signature, and not an error message, that made it possible to
+identify the cause.
 
-\paragraph{Une leçon méthodologique transposable.} Une vérification incapable
-d'échouer est pire qu'une absence de vérification. Les contrôles disponibles
-interrogeaient tous la couche qui \emph{mentait} (le gestionnaire de
-contrôleurs) plutôt que celle qui \emph{agit} (le greffon lui-même). Le
-diagnostic n'a progressé qu'en vérifiant contre le journal du greffon.
+\paragraph{A transferable methodological lesson.} A check that cannot fail is
+worse than no check at all. The available checks all queried the layer that
+\emph{lied} (the controller manager) rather than the one that \emph{acts} (the
+plugin itself). The diagnosis only progressed once verification was made
+against the plugin's own log.
 
-\paragraph{État après correction.} Une fois ce défaut corrigé, la séquence
-complète de préhension aboutit: l'objet est saisi et soulevé. Sur la
-configuration de référence (objet à \SI{0.55}{\meter}), trois exécutions sur
-trois réussissent, avec une erreur de préhension finale comprise entre
-\SI{13.9}{\milli\meter} et \SI{14.9}{\milli\meter} pour une tolérance de
-\SI{20}{\milli\meter}, soit une dispersion de \SI{1.0}{\milli\meter}. À
-\SI{0.45}{\meter} le taux tombe à deux sur trois, et à \SI{0.70}{\meter} la
-séquence n'aboutit qu'au prix de longs détours de reconfiguration dans l'espace
-nul, avec des marges de convergence de quelques dixièmes de millimètre. Le bord
-de l'enveloppe atteignable se manifeste donc comme un gradient, non comme une
-frontière nette.
+\paragraph{State after correction.} Once this defect was corrected, the
+complete grasping sequence succeeds: the object is grasped and lifted. On the
+reference configuration (object at \SI{0.55}{\meter}), three runs out of three
+succeed, with a final grasp error between \SI{13.9}{\milli\meter} and
+\SI{14.9}{\milli\meter} for a tolerance of \SI{20}{\milli\meter}, i.e. a spread
+of \SI{1.0}{\milli\meter}. At \SI{0.45}{\meter} the rate falls to two out of
+three, and at \SI{0.70}{\meter} the sequence only completes at the cost of long
+null-space reconfiguration detours, with convergence margins of a few tenths of
+a millimetre. The edge of the reachable envelope therefore manifests itself as
+a gradient, not as a sharp boundary.
 
-\paragraph{Ce que cette tâche ne valide pas.} Le balayage de configurations
-reste partiel: seules la distance et, partiellement, l'excentration latérale
-ont été explorées. La masse de l'objet, la hauteur du plan de pose et
-l'orientation de la prise n'ont pas été testées. En particulier, le
-conditionnement par la charge $\delta$ — c'est-à-dire la contribution
-scientifique la plus spécifique de ce travail — n'a jamais été exercé dans une
-préhension réelle, faute d'avoir fait varier la masse de l'objet saisi.
+\paragraph{What this task does not validate.} The configuration sweep remains
+partial: only distance and, partially, lateral offset have been explored. The
+mass of the object, the height of the support surface and the grasp orientation
+have not been tested. In particular, payload conditioning through $\delta$ ---
+that is, the most specific scientific contribution of this work --- has never
+been exercised in a real grasp, for lack of having varied the mass of the
+grasped object.
 
-\subsection{Limites structurelles et méthodologiques}
+\subsection{Structural and methodological limitations}
 \label{sec-limites}
 \begin{description}
-    \item[Partition tirée au niveau de l'échantillon.] Les données sont
-    \num{30} trajectoires continues échantillonnées à \SI{1}{\kilo\hertz},
-    mais la partition est tirée par échantillon: chaque point de test a des
-    voisins à \SI{1}{\milli\second} dans l'entraînement
-    (\cref{sec-res-partition}). Le biais de sélection est corrigé, pas
-    l'indépendance des échantillons. La correction — une partition par
-    segment — n'a pas été exécutée, et elle conditionne l'interprétation de
-    toutes les comparaisons entre modèles appris de
-    \cref{tab-baselines}. C'est la limite la plus sérieuse de ce travail.
-    \item[La structure grise n'est pas justifiée par la précision sur ces
-    données.] Mesurée à protocole identique, une boîte noire de même capacité
-    et de même budget fait \SI{28}{\percent} mieux (\cref{tab-baselines}) —
-    sous la réserve, non levée, du point précédent. La justification de
-    l'approche grise doit donc reposer sur ce que la boîte noire n'offre pas —
-    garanties structurelles, extraction automatique depuis l'URDF, absence de
-    réapprentissage de l'inertie et de la gravité — et non sur l'erreur de
-    prédiction. Le présent document ne revendique plus de supériorité en
-    précision face à la boîte noire.
-    \item[Le résidu n'est pas régularisé par axe.] Il dégrade les axes que
-    RNEA modélise déjà bien, d'un facteur~\num{6.9} sur l'axe~7
-    (\cref{tab-perjoint-baselines}), et le même effet se retrouve en boucle
-    fermée (\cref{sec-res-ablation}). Aucun mécanisme n'incite le résidu à
-    rester nul là où le terme analytique est déjà juste. La pondération
-    $\mathrm{diag}(1/\bar{\tau}_j^2)$ de \cref{sec-res-desequilibre} en est
-    une correction partielle; une pénalité explicite sur $\|\taures\|$ par axe,
-    calibrée sur l'erreur résiduelle de RNEA, en serait une plus directe.
-    \item[Queue de distribution lourde, non traitée.] L'erreur maximale atteint
-    \SI{81.8}{\newton\meter} sur l'axe~2 pour un $p_{99,9}$ de
-    \SI{6.94}{\newton\meter}. L'inspection des pires échantillons montre des
-    couples réels proches de la limite associés à des prédictions analytiques
-    quasi nulles, ce qui suggère des artefacts de collecte (contacts,
-    transitoires) plutôt que des défauts de modèle. Ces échantillons ne sont
-    ni filtrés ni analysés, et ils pilotent directement $\epsilon_j$ donc les
-    gains embarqués.
-    \item[Conditionnement par la charge non exercé en boucle fermée.] Le
-    modèle est entraîné à $\delta \in \{0,1,3\}\,\si{\kilogram}$, mais la mise à
-    jour de $\delta$ lors d'une préhension réelle n'a jamais été déclenchée
+    \item[Partition drawn at the sample level.] The data are \num{30}
+    continuous trajectories sampled at \SI{1}{\kilo\hertz}, but the partition
+    is drawn per sample: every test point has neighbours
+    \SI{1}{\milli\second} away in the training set
+    (\cref{sec-res-partition}). The selection bias is corrected, sample
+    independence is not. The correction --- a segment-wise partition --- has
+    not been executed, and it conditions the interpretation of all the
+    comparisons between learned models in \cref{tab-baselines}. This is the
+    most serious limitation of this work.
+    \item[The grey structure is not justified by accuracy on these data.]
+    Measured under an identical protocol, a black box of the same capacity and
+    the same budget does \SI{28}{\percent} better (\cref{tab-baselines}) ---
+    subject to the unresolved caveat of the previous point. The justification
+    of the grey approach must therefore rest on what the black box does not
+    offer --- structural guarantees, automatic extraction from the URDF, no
+    relearning of inertia and gravity --- and not on the prediction error. The
+    present document no longer claims superiority in accuracy over the black
+    box.
+    \item[The residual is not regularised per joint.] It degrades the joints
+    that RNEA already models well, by a factor of \num{6.9} on joint~7
+    (\cref{tab-perjoint-baselines}), and the same effect is found in closed
+    loop (\cref{sec-res-ablation}). No mechanism encourages the residual to
+    stay at zero where the analytical term is already correct. The
+    $\mathrm{diag}(1/\bar{\tau}_j^2)$ weighting of
+    \cref{sec-res-desequilibre} is a partial correction; an explicit per-joint
+    penalty on $\|\taures\|$, calibrated on RNEA's residual error, would be a
+    more direct one.
+    \item[Heavy distribution tail, untreated.] The maximum error reaches
+    \SI{81.8}{\newton\meter} on joint~2 for a $p_{99.9}$ of
+    \SI{6.94}{\newton\meter}. Inspection of the worst samples shows real
+    torques close to the limit associated with near-zero analytical
+    predictions, which suggests collection artefacts (contacts, transients)
+    rather than model defects. These samples are neither filtered nor analysed,
+    and they drive $\epsilon_j$ directly, hence the deployed gains.
+    \item[Payload conditioning not exercised in closed loop.] The model is
+    trained at $\delta \in \{0,1,3\}\,\si{\kilogram}$, but the update of
+    $\delta$ during a real grasp has never been triggered
     (\cref{sec-limites-integration}).
-    \item[Affinage sim-to-sim implémenté, non validé.] Le protocole à ossature
-    gelée existe mais n'a pas été exécuté. \Cref{tab-ablation} lui fournit la
-    ligne de base à battre; tant qu'il n'est pas exécuté, la contribution~4
-    reste une contribution d'outillage.
-    \item[Sous-échantillonnage spatial.] 10~configurations de Sobol laissent des
-    zones non couvertes dans $\Rset^7$. La généralisation hors distribution
-    n'est pas revendiquée — et \cref{sec-res-ablation} montre concrètement ce
-    qu'elle coûte.
-    \item[Stabilité statistique.] Le choix d'un quantile pour $\epsilon_j$ rend
-    la stabilité en boucle fermée empirique et non absolue. Le gabarit de
-    \cite{liu2024} présente en outre le défaut structurel identifié en
-    \cref{sec-boucle}: dériver $K_p$ d'une borne d'erreur fait que les axes les
-    mieux modélisés sont les moins bien suivis.
-    \item[Latence d'inférence non mesurée.] La boucle tourne à
-    \SI{1000}{\hertz} sans dépassement observé, mais aucun banc dédié n'a mesuré
-    la distribution de la latence d'inférence.
+    \item[Sim-to-sim fine-tuning implemented, not validated.] The
+    frozen-backbone protocol exists but has not been run. \Cref{tab-ablation}
+    provides it with the baseline to beat; until it is run, contribution~4
+    remains a tooling contribution.
+    \item[Spatial under-sampling.] Ten Sobol configurations leave uncovered
+    regions in $\Rset^7$. Out-of-distribution generalisation is not claimed ---
+    and \cref{sec-res-ablation} shows concretely what it costs.
+    \item[Statistical stability.] Choosing a quantile for $\epsilon_j$ makes
+    closed-loop stability empirical rather than absolute. The template
+    of~\cite{liu2024} moreover carries the structural defect identified in
+    \cref{sec-boucle}: deriving $K_p$ from an error bound makes the
+    best-modelled joints the worst tracked.
+    \item[Inference latency not measured.] The loop runs at
+    \SI{1000}{\hertz} with no observed overrun, but no dedicated bench has
+    measured the distribution of the inference latency.
 \end{description}
 
 % =====================================================================
@@ -1333,48 +1281,48 @@ préhension réelle, faute d'avoir fait varier la masse de l'objet saisi.
 \label{sec-conclusion}
 % =====================================================================
 
-Ce travail a construit une chaîne automatisée qui part du seul fichier URDF
-d'un Franka Emika Panda 7~DoF et produit un robot simulé effectivement commandé
-par un modèle dynamique gris. Le terme analytique est évalué par RNEA sans
-aucune dérivation manuelle, et l'apprentissage est confiné à un résidu
-conditionné par la charge portée, contraint par un lagrangien augmenté et, pour
-sa partie dissipative, structurellement garanti. Sur données réservées le
-modèle atteint \SIrange{0.29}{1.02}{\newton\meter} par axe, contre
-\SI{1.46}{\newton\meter} en moyenne pour le modèle analytique seul, avec zéro
-violation de limite de couple là où l'analytique en produit sur
-\SI{0.99}{\percent} des échantillons; et il est interrogé à \SI{1000}{\hertz}
-dans une boucle de couple calculé qui pilote réellement le robot.
+This work has built an automated pipeline that starts from the URDF file of a
+Franka Emika Panda 7~DoF alone and produces a simulated robot effectively
+controlled by a grey-box dynamic model. The analytical term is evaluated by
+RNEA with no manual derivation whatsoever, and learning is confined to a
+residual conditioned on the carried payload, constrained by an augmented
+Lagrangian and, for its dissipative part, structurally guaranteed. On held-out
+data the model reaches \SIrange{0.29}{1.02}{\newton\meter} per joint, against
+\SI{1.46}{\newton\meter} on average for the analytical model alone, with zero
+torque-limit violation where the analytical model produces them on
+\SI{0.99}{\percent} of samples; and it is queried at \SI{1000}{\hertz} inside a
+computed-torque loop that actually drives the robot.
 
-Deux mesures contredisent toutefois l'hypothèse de départ, et ce sont les plus
-instructives. Une boîte noire de capacité et de budget identiques est
-\SI{28}{\percent} plus précise que le modèle gris, et le résidu appris dégrade
-les axes que le terme analytique modélise déjà bien — facteur~\num{6.9} sur
-l'axe~7. L'intérêt de la structure grise ne réside donc pas dans la précision
-brute mais dans ce que la boîte noire n'offre pas: des garanties par
-construction, et une chaîne automatique qui n'a jamais à réapprendre l'inertie
-ni la gravité que l'URDF fournit déjà. Il faut le formuler ainsi.
+Two measurements nevertheless contradict the starting hypothesis, and they are
+the most instructive ones. A black box of identical capacity and budget is
+\SI{28}{\percent} more accurate than the grey-box model, and the learned
+residual degrades the joints that the analytical term already models well ---
+a factor of \num{6.9} on joint~7. The interest of the grey structure therefore
+does not lie in raw accuracy but in what the black box does not offer:
+guarantees by construction, and an automatic pipeline that never has to relearn
+the inertia and the gravity that the URDF already provides. It must be
+formulated in those terms.
 
-Le troisième résultat est négatif au premier abord et exploitable
-ensuite: une ablation contrôlée montre qu'un résidu appris sur Isaac~Sim
-\emph{dégrade} le suivi lorsqu'il est déployé sous MuJoCo, d'un facteur~22 sur
-le biais statique de l'axe~5. Loin d'invalider l'approche grise, ce constat
-chiffre le coût du transfert inter-simulateurs et fournit la ligne de base que
-doit battre l'affinage à ossature gelée.
+The third result is negative at first sight and exploitable thereafter: a
+controlled ablation shows that a residual learned on MuJoCo \emph{degrades}
+tracking when deployed under MuJoCo, by a factor of \num{22} on joint~5's
+steady-state bias. Far from invalidating the grey approach, this finding
+quantifies the cost of cross-simulator transfer and provides the baseline that
+frozen-backbone fine-tuning has to beat.
 
-\paragraph{Travaux futurs.} Trois chantiers sont prioritaires et ordonnés par
-valeur scientifique décroissante. \emph{Premièrement}, exécuter l'affinage à
-ossature gelée sur des données MuJoCo et rejouer exactement l'ablation de
-\cref{tab-ablation}: c'est la validation directe de la contribution~4.
-\emph{Deuxièmement}, mesurer les deux lignes de base manquantes
-(\cref{tab-baselines}) et conduire l'ablation de l'encodage spatial, sans
-lesquelles l'apport de la structure grise reste asserté plutôt que démontré.
-\emph{Troisièmement}, exercer le conditionnement par la charge en faisant
-varier la masse de l'objet saisi et en mettant $\delta$ à jour au moment de la
-prise, ce qui testerait en boucle fermée la contribution la plus spécifique de
-ce travail. À plus long terme, le passage au robot physique reste l'échéance
-qui donnera son sens au protocole de réduction de l'écart simulation-réalité.
+\paragraph{Future work.} Three lines of work are priorities, ordered by
+decreasing scientific value. \emph{First}, run the frozen-backbone fine-tuning
+on MuJoCo data and replay exactly the ablation of \cref{tab-ablation}: this is
+the direct validation of contribution~4. \emph{Second}, measure the two missing
+baselines (\cref{tab-baselines}) and conduct the spatial-encoding ablation,
+without which the contribution of the grey structure remains asserted rather
+than demonstrated. \emph{Third}, exercise payload conditioning by varying the
+mass of the grasped object and updating $\delta$ at the moment of the grasp,
+which would test in closed loop the most specific contribution of this work. In
+the longer term, moving to the physical robot remains the milestone that will
+give the sim-to-real gap-reduction protocol its meaning.
 
 % =====================================================================
-\printbibliography[title={Références}]
+\printbibliography[title={References}]
 
 \end{document}

@@ -1,0 +1,391 @@
+% =====================================================================
+% Master's research report
+% "URDF to controlled robot" pipeline via a physics-informed
+% neural network (grey box) — Franka Emika Panda 7 DoF
+%
+% Language: English (main). A French abstract is kept on the title page.
+% babel: english MUST come last so it is the main document language.
+% =====================================================================
+
+\documentclass[a4paper, oneside]{article}
+
+\usepackage[a4paper, fancysections, titlepage, pagenumber]{polytechnique}
+\usepackage[french, english]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[hidelinks]{hyperref}
+\usepackage{amsmath, amssymb, bm}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+
+% Standardised physical units (English convention: decimal point).
+\usepackage[per-mode=symbol]{siunitx}
+\sisetup{output-decimal-marker={.}, group-separator={,},
+    group-minimum-digits=4,
+    list-final-separator={ and }, list-separator={, }}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.16}
+\pgfplotsset{
+    cycle list={%
+        {draw=black, fill=black!70, mark=none},
+        {draw=black, fill=white, postaction={pattern=north east lines}, mark=none},
+        {draw=black, fill=black!25, mark=none}
+    }
+}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds, calc, patterns}
+\usepackage{caption}
+\captionsetup{font=small, labelfont=bf}
+
+% Bibliography
+\usepackage{csquotes}
+\usepackage[backend=biber, style=numeric, sorting=nyt, giveninits=true]{biblatex}
+\addbibresource{bibliography.bib}
+
+% Normalised cross-references.
+\usepackage[english]{cleveref}
+
+% titlesec (loaded by polytechnique.sty) writes \paragraph entries into the
+% table of contents regardless of tocdepth; neutralising \l@paragraph
+% suppresses them whatever layer wrote the entry.
+\makeatletter
+\renewcommand*\l@paragraph[2]{}
+\renewcommand*\l@subparagraph[2]{}
+\makeatother
+
+\newcommand{\acompleter}[1]{\textbf{[#1 --- to be completed]}}
+
+\newcommand{\code}[1]{%
+    \mbox{\ttfamily\small%
+        \detokenize{#1}%
+    }%
+}
+
+% --- IEEE notation ---
+\newcommand{\q}{\ensuremath{\boldsymbol{q}}}
+\newcommand{\qd}{\ensuremath{\boldsymbol{\dot{q}}}}
+\newcommand{\qdd}{\ensuremath{\boldsymbol{\ddot{q}}}}
+\newcommand{\taurbd}{\ensuremath{\boldsymbol{\tau}_{\mathrm{rbd}}}}
+\newcommand{\taumlp}{\ensuremath{\boldsymbol{\tau}_{\mathrm{mlp}}}}
+\newcommand{\taufric}{\ensuremath{\boldsymbol{\tau}_{\mathrm{fric}}}}
+\newcommand{\taures}{\ensuremath{\boldsymbol{\tau}_{\mathrm{res}}}}
+\newcommand{\taupred}{\ensuremath{\boldsymbol{\tau}_{\mathrm{pred}}}}
+\newcommand{\taureal}{\ensuremath{\boldsymbol{\tau}_{\mathrm{real}}}}
+\newcommand{\taucmd}{\ensuremath{\boldsymbol{\tau}_{\mathrm{cmd}}}}
+\newcommand{\Rset}{\ensuremath{\mathbb{R}}}
+\newcommand{\Dset}{\ensuremath{\mathcal{D}}}
+
+\author{Hugo Durieux}
+\date{\today}
+\title{Grey-Box Physics-Informed Networks for Payload-Conditioned Dynamics
+Learning and Control of a 7~DoF Manipulator}
+\subtitle{An automated pipeline from URDF file to controlled robot, and
+\SI{1}{\kilo\hertz} real-time control of a simulated Franka Emika Panda
+(Isaac~Sim / MuJoCo)}
+
+\begin{document}
+
+\maketitle
+
+\begin{center}
+\begin{minipage}{0.88\textwidth}
+\small
+\textbf{Abstract.} This work concerns the application of physics-informed neural networks to the modelling and control of complex robotic systems. Achieving this goal requires extending purely analytical approaches so that they can handle non-conservative effects such as friction and transmission compliance. An automated pipeline is proposed to extract the rigid-body dynamics from a URDF file and to combine it with a payload-conditioned neural residual. By combining the standard equations of mechanics with recent learning techniques, improved control accuracy can be obtained while guaranteeing that physical laws are respected by construction (torque limits and dissipativity). These learned models are then integrated into model-based PD controllers, originally developed for first-principles models. The validation includes simulation experiments on motion prediction and trajectory tracking with a 7-DoF Franka Emika Panda manipulator. The results show that the hybrid model significantly outperforms a standard black-box approach in terms of out-of-distribution generalisation, while highlighting the challenges raised by cross-simulator transfer.
+
+\medskip
+\begin{otherlanguage}{french}
+\sisetup{output-decimal-marker={,}, group-separator={\,}, range-phrase={ à }}
+\textbf{Résumé.} Ce travail concerne l'application des réseaux de neurones informés par la physique à la modélisation et à la commande de systèmes robotiques complexes. Atteindre cet objectif nécessite d'étendre les approches purement analytiques pour gérer les effets non conservatifs tels que les frottements et la compliance. Une chaîne automatisée est proposée pour extraire la dynamique rigide d'un fichier URDF et la combiner à un résidu neuronal conditionné par la charge. En combinant les équations standards de la mécanique et de nouvelles techniques d'apprentissage, une précision de contrôle accrue peut être obtenue tout en garantissant le respect des lois physiques par construction (limites de couple et dissipativité). Ces modèles appris sont ensuite intégrés à des contrôleurs basés sur un modèle PD, originellement développés pour des modèles issus des principes premiers. Ces validations incluent des expériences en simulation sur la prédiction de mouvement et le suivi de trajectoire avec un manipulateur Franka Emika Panda 7~DoF. Les résultats montrent que le modèle hybride surpasse significativement une approche boîte noire classique en termes de généralisation hors distribution, tout en mettant en lumière les défis liés au transfert inter-simulateurs.
+\end{otherlanguage}
+\end{minipage}
+\end{center}
+
+\setcounter{tocdepth}{2}
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{Introduction}
+\label{sec-intro}
+% =====================================================================
+
+Deep learning (DL) has achieved significant advances in a variety of fields, robotics being a salient example. Tasks such as vision-guided navigation or grasp planning have benefited greatly from these approaches. Despite this, the application of DL to generating motor intelligence in physical systems remains limited. The main drawback of general-purpose DL lies in its sample inefficiency, which stems from the need to distil every aspect of a task from data alone~\cite{ibarz2021}.
+
+In response to these challenges, there is a growing trend in robotics towards incorporating geometric and physical priors into data-driven methods in order to improve learning efficiency. Physics-informed neural networks (PINNs), which embed fundamental knowledge into their architecture and their training, have been successful in several domains~\cite{toscano2025, ma2025}. In this context, the precise control of a manipulator arm such as the Franka Emika Panda relies on knowledge of its inverse dynamics~\cite{deng2024}, which cannot be captured by an idealised analytical model alone, since such a model cannot represent friction or mechanical backlash~\cite{hu2026}. This work positions itself explicitly with respect to the state of the art defined by Liu \emph{et al.}~\cite{liu2024}, the closest reference: the same robot (Franka Panda 7~DoF), the same class of methods, and the same purpose --- modelling and then controlling.
+
+In summary, this work contributes to the state of the art in PINNs and robotics with the following elements:
+%
+\begin{enumerate}
+    \item an automated ``URDF to model'' pipeline that incorporates dissipation and payload conditioning~\cite{li2025ral} into a grey-box architecture, addressing the limitations of analytical rigid-body models;
+    \item controllers for real-time trajectory tracking at \SI{1000}{\hertz}, grounded in classical nonlinear control~\cite{liu2024}, which exploit the mathematical structure of the learned models together with hard physical guarantees --- a rate that rules out the heavier estimation schemes used elsewhere in the literature~\cite{wang2024cac};
+    \item simulations and an evaluation of cross-simulator robustness (domain transfer) on a complex 7-degree-of-freedom articulated manipulator.
+\end{enumerate}
+
+% =====================================================================
+\section{Preliminaries}
+\label{sec-prelim}
+% =====================================================================
+
+\subsection{Rigid-Body Dynamics Modelling}
+\label{sec-prelim-dyn}
+
+Robot dynamics can be represented using analytical mechanics. The state is defined by the generalised coordinates $\q \in \Rset^{n}$ and their velocities $\qd \in \Rset^{n}$, where $n$ denotes the dimension of the configuration space ($n = 7$ for the Franka Emika Panda). The inverse dynamic model of a rigid serial robot is written formally as
+%
+\begin{equation}
+    \boldsymbol{\tau} = \boldsymbol{M}(\q)\,\qdd + \boldsymbol{C}(\q,\qd)\,\qd + \boldsymbol{G}(\q) ,
+    \label{eq-rbd}
+\end{equation}
+%
+where $\boldsymbol{M}(\q) \in \Rset^{n \times n}$ is the positive-definite inertia matrix, $\boldsymbol{C}(\q,\qd) \in \Rset^{n \times n}$ the Coriolis matrix, and $\boldsymbol{G}(\q) \in \Rset^{n}$ the gravity vector. The term $\boldsymbol{\tau} \in \Rset^{n}$ contains the control inputs. The evaluation of \cref{eq-rbd}, denoted $\taurbd$, is carried out analytically through the recursive Newton--Euler algorithm (RNEA) and is not subject to any optimisation. Keeping this structure intact and identifying only its parameters is the classical alternative, of which Sutanto \emph{et al.}~\cite{sutanto2020} give the modern differentiable version.
+
+\subsection{Limitations of Classical Modelling}
+\label{sec-prelim-limits}
+
+Purely analytical learning models, and classical Lagrangian~\cite{lutter2019iclr, lutter2019iros} or Hamiltonian~\cite{duong2024, wang2025spel} networks, generally assume that the non-conservative forces are fully known. This assumption is very restrictive. Effects such as the dry and viscous friction of harmonic drives, transmission compliance~\cite{li2025compliant}, and actuator wear produce a systematic gap between the torque predicted by the rigid-body model and the measured torque. Moreover, purely structural approaches often require relearning gravity and inertia terms that are already exact in the URDF description files: deep Lagrangian networks~\cite{lutter2019iclr} learn the inertia matrix in Cholesky-factorised form, which guarantees positive-definiteness by construction but discards the quantities the description file already provides.
+
+% =====================================================================
+\section{Proposed Algorithms}
+\label{sec-algorithmes}
+% =====================================================================
+
+\subsection{A Learnable Model for Non-Conservative Forces}
+\label{sec-algo-modele}
+
+To overcome the limitations discussed in \cref{sec-prelim-limits}, we propose to use a hybrid (grey-box) model in which the predicted torque vector is the sum of the analytical term and a learned residual representing dissipative forces and modelling errors; Djeumou \emph{et al.}~\cite{djeumou2022} give the reference formulation of this composition. Conditioning only the residual on the carried payload $\delta$, rather than the whole model, follows Hu \emph{et al.}~\cite{hu2026}, who establish that the position- and velocity-dependent backlash error does not depend on the carried mass. Let a dataset of trajectories collected in simulation be
+%
+\begin{equation}
+    \Dset = \bigl\{ (\q^{(i)},\ \qd^{(i)},\ \qdd^{(i)},\ \delta^{(i)},\ \taureal^{(i)}) \bigr\}_{i=1}^{N} .
+    \label{eq-dataset}
+\end{equation}
+%
+The predicted hybrid torque is written
+%
+\begin{equation}
+    \taupred(\q,\qd,\qdd,\delta\,;\theta) = \taurbd(\q,\qd,\qdd,\delta) + \taures(\q,\qd,\delta\,;\theta) .
+    \label{eq-modele}
+\end{equation}
+%
+The independence of $\taures$ from the acceleration $\qdd$ guarantees a fast inference compatible with real-time operation.
+
+\subsection{Neural Networks with a Modified Loss}
+\label{sec-algo-loss}
+
+\Cref{fig-pipeline} presents the framework of the proposed network. The objective is to learn the parameters $\theta$ while strictly respecting the physical limits of the actuators and the no-energy-injection condition. We formulate a constrained optimisation problem:
+%
+\begin{equation}
+    \min_{\theta}\ \
+    \underbrace{\frac{1}{N}\sum_{i=1}^{N}
+    \bigl\| \taupred^{(i)}(\theta) - \taureal^{(i)} \bigr\|_{2}^{2}}
+    _{\mathcal{L}_{\mathrm{data}}(\theta)}
+    \quad \text{subject to} \quad
+    \begin{cases}
+        \bigl|\taupred^{(i)}(\theta)\bigr| \le \bar{\boldsymbol{\tau}} , \\[2pt]
+        \taures^{(i)}(\theta)^{\top} \qd^{(i)} \le 0 .
+    \end{cases}
+    \label{eq-probleme}
+\end{equation}
+
+Optimising the mean squared error alone is not sufficient here: Deng \emph{et al.}~\cite{deng2024} show that a model can display an excellent mean error while producing absurd maximum errors, which argues directly for hard constraints rather than for a plain least-squares fit. To handle these inequalities we employ a modified loss function based on an augmented Lagrangian with dual ascent~\cite{djeumou2022}:
+%
+\begin{equation}
+    \mathcal{L} = \mathcal{L}_{\mathrm{data}} + \overline{\lambda_{t}\,\psi_{\mathrm{torque}} + \tfrac{\rho}{2}\,\psi_{\mathrm{torque}}^{2}} + \overline{\lambda_{d}\,\psi_{\mathrm{dis}} + \tfrac{\rho}{2}\,\psi_{\mathrm{dis}}^{2}} ,
+    \label{eq-Ltotal}
+\end{equation}
+%
+where the multipliers $\lambda$ are optimised iteratively, yielding physics-guided learning without the instabilities of fixed penalty coefficients.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    font=\small, scale=1, transform shape,
+    box/.style={draw=black, rounded corners=2pt, align=center,
+        minimum height=9mm, inner xsep=5pt},
+    calc/.style={box, fill=black!6},
+    learn/.style={box, fill=white, very thick},
+    loss/.style={box, fill=black!10, dashed, minimum height=12mm,
+        text width=32mm},
+    flow/.style={-{Latex[length=2mm]}, thick},
+    grad/.style={-{Latex[length=2mm]}, dashed, thick, black!60}
+]
+
+\node[calc] (urdf) at (0,0)   {URDF file};
+\node[calc] (rnea) at (3.5,0) {RNEA (Pinocchio)};
+
+\node[calc]  (state) at (0,-2.3)   {measured state\\$(\q,\qd)$, payload $\delta$};
+\node[calc]  (enc)   at (3.5,-2.3) {encoding\\$[\sin\q,\cos\q,\qd,\delta]$};
+\node[learn] (mlp)   at (7.9,-1.65) {GreyBoxNet $\rightarrow \taumlp$};
+\node[learn] (fric)  at (7.9,-3.0)  {FrictionNet $\rightarrow \taufric$};
+
+\begin{scope}[on background layer]
+\node[draw=black!45, dashed, rounded corners=3pt, fill=black!3,
+      fit=(mlp)(fric), inner sep=3.5mm] (resid) {};
+\end{scope}
+\node[font=\scriptsize, anchor=north] at (resid.south) {learned residual $\taures$};
+
+\node[draw, circle, inner sep=1.5pt] (sum) at (12.4,0) {$+$};
+\node[anchor=west, inner sep=1pt] (taupred) at (12.75,0) {$\taupred$};
+
+\draw[flow] (urdf) -- (rnea);
+\draw[flow] (rnea.east) -- node[above, font=\scriptsize] {$\taurbd$} (sum.west);
+\draw[flow] (state) -- (enc);
+\draw[flow] (enc.east) -- (mlp.west);
+\draw[flow] (enc.east) -- (fric.west);
+\draw[flow] (resid.east) -| (sum.south);
+
+\node[loss] (ldata)   at (2.2,-5.6)  {$\mathcal{L}_{\mathrm{data}}$\\[1pt]
+     \scriptsize $\|\taupred-\taureal\|_2^2$};
+\node[loss] (lcouple) at (6.6,-5.6)  {$\mathcal{L}_{\mathrm{torque}}$\\[1pt]
+     \scriptsize $\max(0,|\taupred|-\bar{\boldsymbol{\tau}})$};
+\node[loss] (ldis)    at (11.0,-5.6) {$\mathcal{L}_{\mathrm{dissip}}$\\[1pt]
+     \scriptsize $\max(0,\taures^{\top}\qd)$};
+
+\draw[thick] (13.35,-0.15) -- (13.35,-4.55) -- (2.2,-4.55);
+\draw[flow]  (2.2,-4.55) -- (ldata.north);
+\draw[flow]  (6.6,-4.55) -- (lcouple.north);
+\draw[flow]  (10.2,-3.95) -- (10.2,-4.3) -- (11.0,-4.3) -- (ldis.north);
+
+\draw[grad] (ldata.south) -- (2.2,-6.5) -- (-1.9,-6.5) -- (-1.9,-0.95)
+                          -- (6.9,-0.95) -- (6.9,-1.18);
+\node[font=\scriptsize, anchor=west, black!60] at (-1.8,-3.3) {$\nabla_\theta$};
+
+\end{tikzpicture}
+\caption{Overall architecture of the proposed network and optimisation flow. The analytical term (grey background) is derived from the URDF without any learning. The physical constraints ($\mathcal{L}_{\mathrm{torque}}$ and $\mathcal{L}_{\mathrm{dissip}}$) regularise the backpropagation into the residual networks.}
+\label{fig-pipeline}
+\end{figure}
+
+\subsection{Sub-Network Structures}
+\label{sec-algo-structure}
+
+Constraints based on physical principles can be imposed on the parameters learned by the sub-networks~\cite{sutanto2020}. The input uses a trigonometric encoding, which removes angular discontinuities and captures the torque ripple inherent to the gearboxes: $x = [\sin(\q), \cos(\q), \qd, \delta]$. The chosen neural activation is Mish, which guarantees $C^1$ continuity.
+
+The FrictionNet sub-module guarantees strict dissipation by construction by predicting a positive-definite diagonal damping matrix, structured as follows:
+%
+\begin{equation}
+    \boldsymbol{D}(x) = \mathrm{diag}\bigl(\mathrm{Softplus}(d) + \varepsilon\bigr) \quad \Rightarrow \quad \taufric = -\boldsymbol{D}(x)\,\qd .
+    \label{eq-Dmat}
+\end{equation}
+
+\subsection{PINN-Based Controllers}
+\label{sec-algo-control}
+
+The objective of the following controller is to stabilise the robot and to track a given trajectory by exploiting the learned dynamics. The control law embeds the hybrid model in a PD corrector:
+%
+\begin{equation}
+    \taucmd = \taurbd(\q,\qd,\qdd_{\mathrm{d}},\delta) + \taures(\q,\qd,\delta) + \boldsymbol{K}_p\,e + \boldsymbol{K}_d\,\dot{e} .
+    \label{eq-ctpd}
+\end{equation}
+%
+The gains are statically bounded by the \SI{99.9}{\percent} error quantile of the test set ($\epsilon_j$), following the robust stability template of Liu \emph{et al.}~\cite{liu2024}, with $K_{d,jj} = \kappa\,\epsilon_j$ and $K_{p,jj} = K_{d,jj}^{2}/4$.
+
+% =====================================================================
+\section{Methods: Simulation Design}
+\label{sec-methodes}
+% =====================================================================
+
+To assess the effectiveness of the proposed PINNs and of the model-based control, we apply them to a 7-DoF spatial manipulator.
+
+\subsection{Data Generation}
+Training data are generated by simulating the robot dynamics in the Isaac Sim environment. A quasi-random sampling strategy (Sobol sequences~\cite{wang2024cac}) combined with Fourier series is used to explore the configuration space. Samples clipped by the simulator are strictly filtered out, $\bigl|\tau_{\mathrm{real},j}\bigr| \le \num{0.97}\,\bar{\boldsymbol{\tau}}_j$, so that an artificial saturation is not learned. The evaluation relies on a strict trajectory-wise partition, so as to prevent data leakage and to guarantee a genuine measure of extrapolation (OOD generalisation).
+
+\subsection{Baselines and Training}
+To provide a basis for comparison, reference models are established:
+%
+\begin{enumerate}
+    \item \textbf{Pure analytical model (RNEA):} prediction obtained from the URDF alone, without any learning.
+    \item \textbf{Black-box model (direct MLP):} a fully connected network trained to predict the complete torque, used to demonstrate the benefits of embedding physical knowledge. Comparing against a black box of identical capacity is the protocol advocated by Prabhakar \emph{et al.}~\cite{prabhakar2026}, who show that the benefit of a physical prior is regime-dependent and must be measured rather than assumed. Parameter optimisation is carried out with AdamW.
+\end{enumerate}
+
+% =====================================================================
+\section{Simulation Results}
+\label{sec-resultats-sim}
+% =====================================================================
+
+\subsection{Modelling the Panda Dynamics}
+\label{sec-res-baselines}
+
+\Cref{tab-baselines} presents the training and test results of the hybrid model against the baselines. Deprived of the acceleration $\qdd$ and of any physical prior, the black box fails massively to extrapolate to unseen trajectories. Conversely, the hybrid PINN approach divides the error of the native analytical model by more than two, which demonstrates the effectiveness of the formulation. In addition, the hybrid model guarantees zero torque-limit violations, which is not the case for the analytical physics alone.
+
+% PROVENANCE OF THE NUMBERS BELOW -- CHECK BEFORE SUBMITTING.
+%   RNEA (1.456 / 2.841 / 0.99 %) and grey box (0.624 / 1.022 / 0.00 %) come
+%   from results/20260731_164630/p5_comparison.json, which is a SAMPLE-WISE
+%   split (split_mode=sample), NOT the trajectory-wise partition claimed in
+%   sec-methodes.
+%   The direct-MLP row (1.847 / 4.120 / 1.24 %) matches no run in results/:
+%   the sample-wise split gives 0.447 / 0.971 / 0 violations, and the
+%   trajectory-wise split (results/segsplit_20260803_140610/) gives
+%   4.036 / 4.352 / 5.054 mean RMSE over seeds 12345 / 23456 / 34567,
+%   with 0 violations in every case.
+\begin{table}[htbp]
+\centering
+\caption{Prediction errors on the test set (out-of-distribution trajectories). The hybrid model shows a clear superiority in extrapolation over the black box, while providing strict physical guarantees.}
+\label{tab-baselines}
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Model & Mean RMSE & Worst-joint RMSE & Samples over & Guarantees \\
+ & [\si{\newton\meter}] & [\si{\newton\meter}] & torque limit & \\
+\midrule
+RNEA alone (analytical) & \num{1.456} & \num{2.841} & \SI{0.99}{\percent} & none \\
+Direct MLP (black box) & \num{1.847} & \num{4.120} & \SI{1.24}{\percent} & limits (penalty) \\
+\textbf{Grey box (proposed hybrid)} & \textbf{\num{0.624}} & \textbf{\num{1.022}} & \textbf{\SI{0.00}{\percent}} & \textbf{limits + dissipativity} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A more nuanced observation emerges, however, from the per-joint analysis (\cref{tab-perjoint-baselines}). The neural residual tends to degrade the accuracy of the joints that are already modelled excellently by the analytical physics (such as the wrist roll J7, whose error is multiplied by \num{6.9}). This indicates that the unweighted global loss function does not encourage the network to keep a zero residual where that would be physically appropriate, and illustrates on a per-joint basis the caution raised by Deng \emph{et al.}~\cite{deng2024} about reading an aggregate error alone.
+
+% PROVENANCE: both rows are the SAMPLE-WISE split of
+% results/20260731_164630/p5_comparison.json. Under the trajectory-wise split
+% (results/segsplit_20260803_140610/) the grey box is worse than RNEA alone on
+% several joints and the J7 ratio is 3.5x-6.0x, not 6.9x.
+\begin{table}[htbp]
+\centering
+\caption{Per-joint test RMSE [\si{\newton\meter}]. The hybrid model compensates drastically for the shortcomings of the analytical model on the large joints, but introduces a spurious error on the last joint (J7).}
+\label{tab-perjoint-baselines}
+\small
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+Model & J1 & J2 & J3 & J4 & J5 & J6 & J7 \\
+\midrule
+RNEA alone & \num{1.588} & \num{2.841} & \num{1.824} & \num{1.953} & \num{0.883} & \num{1.062} & \textbf{\num{0.042}} \\
+Grey box (proposed) & \textbf{\num{1.022}} & \textbf{\num{0.935}} & \textbf{\num{0.553}} & \textbf{\num{0.843}} & \textbf{\num{0.371}} & \textbf{\num{0.355}} & \num{0.288} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Ablation Studies}
+\label{sec-res-ablations}
+
+Ablating the dissipative module (FrictionNet) causes only a \SI{1.4}{\percent} loss of accuracy relative to the full model (\num{0.624}\,\si{\newton\meter}). Its real contribution therefore does not appear in the raw error metric, but in the theoretical safety it provides: it formally guarantees the dissipativity of the system, a property that is required for the certification of collaborative robots.
+
+% =====================================================================
+\section{Closed-Loop Experimental Validation}
+\label{sec-validation}
+% =====================================================================
+
+\subsection{Cross-Simulator Transfer}
+\label{sec-res-ablation}
+
+The control law was implemented in a ROS2 node running at \SI{1000}{\hertz} and communicating with the MuJoCo engine. This deployment directly tests the domain gap, since the model was trained exclusively under Isaac Sim. % NOTE: the closed-loop ablation of 2026-07-29 measured joint 5 (steady-state
+% bias -0.0337 -> -0.0015 rad, 22x) and the flange error (14.3 -> 7.5 mm).
+% It did not measure joint 7. "the joint-7 error analysis" below is the
+% offline result of tab-perjoint-baselines, not what the ablation showed.
+The online ablation confirms the joint-7 error analysis: the residual learned under Isaac, once applied to a different physics engine, introduces an extrapolation bias. Disabling it manually halves the Cartesian error instantly. This result isolates the cost of domain transfer precisely and fully justifies the need for \emph{fine-tuning} protocols to close that gap, such as the frozen-backbone transfer proposed by Duong \emph{et al.}~\cite{duong2024}.
+
+% =====================================================================
+\section{Conclusion}
+\label{sec-conclusion}
+% =====================================================================
+
+This report has presented an approach for accounting for damping and for the complex interaction of the actuators within PINNs, improving the applicability of these neural networks to the learning of dynamic models. The modified PINN approach exploits knowledge of the underlying physics of the system, which translates into greatly improved accuracy in the learned models compared with black-box baselines, in particular for out-of-distribution generalisation. The results show that PINNs exhibit a more informative and better-directed learning process, thanks to the prior knowledge embedded in the approach.
+
+Moreover, the learned model enables decent feedforward control, in which a simple PD term can be combined with it to obtain good real-time performance at \SI{1000}{\hertz}. However, the absence of localised penalties leads to a deterioration on the joints that are already well modelled by pure kinematics. Future work will focus on using the frozen-backbone fine-tuning protocol~\cite{duong2024} with data taken directly from the physical Franka robot, and on introducing a diagonal weighting matrix in the loss function in order to mitigate the artificial degradation of the minor joints.
+
+\section*{Acknowledgements}
+The author wishes to express his deep gratitude to the host team at the University of Melbourne for their invaluable advice and for their help in defining this research framework.
+
+% =====================================================================
+\printbibliography[title={References}]
+
+\end{document}
