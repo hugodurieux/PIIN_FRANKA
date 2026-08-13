@@ -1,0 +1,31 @@
+[MultiPayload] Loaded  49,723 samples from data/isaac_0.0kg.h5
+[MultiPayload] Loaded  49,766 samples from data/isaac_1.0kg.h5
+[MultiPayload] Loaded  48,815 samples from data/isaac_3.0kg.h5
+[MultiPayload] Combined: 148,304 samples from 3 files
+[split] mode=segment, 30 trajectories, 148,304 samples, seed=23456
+  train  118,996 samples    24 segments   ids=[0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 26, 27, 28, 29]
+  val     14,368 samples     3 segments   ids=[7, 13, 25]
+  test    14,940 samples     3 segments   ids=[9, 11, 24]
+  segment overlap between splits: NONE (correct)
+[baseline] --no_rnea: BLACK BOX. tau_pred = network output alone; analytical RNEA term dropped; dissipativity constraint disabled.
+epoch    1 | train 31.0846 (mse 31.0846) | val 62.7382 (mse 62.7382) | dissip_viol 0.0000
+epoch   20 | train 0.6221 (mse 0.6221) | val 47.1756 (mse 47.1756) | dissip_viol 0.0000
+epoch   40 | train 0.4559 (mse 0.4559) | val 52.3559 (mse 52.3559) | dissip_viol 0.0000
+epoch   60 | train 0.3975 (mse 0.3975) | val 58.0363 (mse 58.0363) | dissip_viol 0.0000
+epoch   80 | train 0.3883 (mse 0.3883) | val 62.2515 (mse 62.2515) | dissip_viol 0.0000
+epoch  100 | train 0.3663 (mse 0.3663) | val 67.6042 (mse 67.6042) | dissip_viol 0.0000
+epoch  120 | train 0.3897 (mse 0.3897) | val 66.3585 (mse 66.3585) | dissip_viol 0.0000
+epoch  140 | train 0.3477 (mse 0.3477) | val 69.0004 (mse 69.0004) | dissip_viol 0.0000
+epoch  160 | train 0.3397 (mse 0.3397) | val 76.4030 (mse 76.4030) | dissip_viol 0.0000
+epoch  180 | train 0.3441 (mse 0.3441) | val 78.4286 (mse 78.4286) | dissip_viol 0.0000
+epoch  200 | train 0.3304 (mse 0.3304) | val 82.4756 (mse 82.4756) | dissip_viol 0.0000
+
+[eval] Restored best-validation checkpoint for final metrics.
+
+[eval] Per-joint VAL  RMSE (Nm), in-sample for selection: [4.4418, 8.1244, 12.3882, 7.9016, 1.3458, 2.7815, 0.0493]
+[eval] Per-joint TEST RMSE (Nm), HELD OUT  -> REPORT THIS: [3.0790, 5.6304, 10.2559, 7.7516, 2.0004, 1.6696, 0.0786]
+[eval] Mean test RMSE: 4.3522 Nm
+  Joints 1-4 (87 Nm): 6.6792 Nm  |  Joints 5-7 (12 Nm): 1.2495 Nm
+  -> Scale within tolerance (ratio 0.2x).
+
+Done. Best val loss 45.1900. Saved to models/run_20260803_141750/ (greybox_best.pt)

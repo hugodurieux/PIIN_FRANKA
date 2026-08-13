@@ -1,0 +1,24 @@
+[MultiPayload] Loaded  49,723 samples from data/isaac_0.0kg.h5
+[MultiPayload] Loaded  49,766 samples from data/isaac_1.0kg.h5
+[MultiPayload] Loaded  48,815 samples from data/isaac_3.0kg.h5
+[MultiPayload] Combined: 148,304 samples from 3 files
+[split] mode=segment, 30 trajectories, 148,304 samples, seed=1
+  train  118,400 samples    24 segments   ids=[0, 1, 2, 3, 5, 6, 7, 9, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 24, 25, 26, 27, 28, 29]
+  val     14,962 samples     3 segments   ids=[8, 10, 23]
+  test    14,942 samples     3 segments   ids=[4, 11, 21]
+  segment overlap between splits: NONE (correct)
+[N2] FrictionNet enabled (6087 parameters)
+epoch    1 | train 1.3777 (mse 1.3351) | val 2.4960 (mse 2.4646) | dissip_viol 0.1357
+         D_diag mean/joint: [0.1835, 0.9613, 0.4133, 0.3956, 0.9163, 0.3315, 0.2697]
+epoch    2 | train 1.0283 (mse 0.9940) | val 2.5955 (mse 2.5407) | dissip_viol 0.0845
+         D_diag mean/joint: [0.0447, 0.6324, 0.2693, 0.2168, 0.7344, 0.2465, 0.2004]
+
+[eval] Restored best-validation checkpoint for final metrics.
+
+[eval] Per-joint VAL  RMSE (Nm), in-sample for selection: [1.1920, 2.2843, 2.2260, 1.7791, 1.3219, 0.8407, 0.1568]
+[eval] Per-joint TEST RMSE (Nm), HELD OUT  -> REPORT THIS: [1.0707, 1.5695, 1.1547, 1.9822, 1.1652, 1.3748, 0.1227]
+[eval] Mean test RMSE: 1.2057 Nm
+  Joints 1-4 (87 Nm): 1.4443 Nm  |  Joints 5-7 (12 Nm): 0.8876 Nm
+  -> Scale within tolerance (ratio 0.6x).
+
+Done. Best val loss 2.4960. Saved to models/run_20260803_140259/ (greybox_best.pt + friction_net_best.pt)

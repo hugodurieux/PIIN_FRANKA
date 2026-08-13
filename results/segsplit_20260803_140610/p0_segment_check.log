@@ -1,0 +1,15 @@
+Recovering segment boundaries from |q[i+1] - q[i]| ...
+  3 files -> 30 segments, 148,304 samples total
+  segment lengths: min=4,394 max=4,997 mean=4,943
+  (unequal lengths are expected: the saturation filter removes near-limit timesteps)
+
+Group-wise split (seed=12345, stratified=by file):
+  train  118,425 samples    24 segments   ids=[0, 1, 2, 3, 5, 6, 7, 9, 11, 12, 13, 14, 15, 16, 17, 18, 22, 23, 24, 25, 26, 27, 28, 29]
+  val     14,964 samples     3 segments   ids=[4, 10, 20]
+  test    14,915 samples     3 segments   ids=[8, 19, 21]
+  segment overlap between splits: NONE (correct)
+
+OK: 3 splits, disjoint by segment, covering all 148,304 samples.
+
+NOTE: only a handful of test TRAJECTORIES, however many samples they contain.
+      Run >= 3 seeds and report mean and spread.

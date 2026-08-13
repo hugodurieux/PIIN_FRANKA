@@ -1,0 +1,42 @@
+[MultiPayload] Loaded  49,723 samples from data/isaac_0.0kg.h5
+[MultiPayload] Loaded  49,766 samples from data/isaac_1.0kg.h5
+[MultiPayload] Loaded  48,815 samples from data/isaac_3.0kg.h5
+[MultiPayload] Combined: 148,304 samples from 3 files
+[split] mode=segment, 30 trajectories, 148,304 samples, seed=12345
+  train  118,425 samples    24 segments   ids=[0, 1, 2, 3, 5, 6, 7, 9, 11, 12, 13, 14, 15, 16, 17, 18, 22, 23, 24, 25, 26, 27, 28, 29]
+  val     14,964 samples     3 segments   ids=[4, 10, 20]
+  test    14,915 samples     3 segments   ids=[8, 19, 21]
+  segment overlap between splits: NONE (correct)
+[N2] FrictionNet enabled (6087 parameters)
+epoch    1 | train 1.3730 (mse 1.3278) | val 1.6977 (mse 1.5703) | dissip_viol 0.1172
+         D_diag mean/joint: [0.3524, 0.5882, 0.7413, 0.2101, 0.7942, 0.3753, 0.4059]
+epoch   20 | train 0.6106 (mse 0.5968) | val 2.6207 (mse 2.5633) | dissip_viol 0.0222
+         D_diag mean/joint: [0.0324, 0.1652, 0.5815, 0.0566, 0.8666, 0.4888, 0.8033]
+epoch   40 | train 0.4878 (mse 0.4783) | val 2.6250 (mse 2.2334) | dissip_viol 0.0116
+         D_diag mean/joint: [0.0390, 0.1001, 0.2758, 0.0622, 0.8442, 0.3730, 0.7510]
+epoch   60 | train 0.4781 (mse 0.4706) | val 2.2507 (mse 2.0272) | dissip_viol 0.0090
+         D_diag mean/joint: [0.0688, 0.0617, 0.2207, 0.0606, 0.9159, 0.2818, 0.6761]
+epoch   80 | train 0.4700 (mse 0.4632) | val 2.0210 (mse 1.9205) | dissip_viol 0.0048
+         D_diag mean/joint: [0.0806, 0.0339, 0.2194, 0.0481, 0.9570, 0.2277, 0.6749]
+epoch  100 | train 0.4678 (mse 0.4620) | val 1.9787 (mse 1.8911) | dissip_viol 0.0060
+         D_diag mean/joint: [0.0559, 0.0582, 0.1593, 0.0301, 0.9039, 0.2341, 0.6053]
+epoch  120 | train 0.4688 (mse 0.4627) | val 1.9923 (mse 1.9440) | dissip_viol 0.0075
+         D_diag mean/joint: [0.0768, 0.0507, 0.1544, 0.0192, 0.9193, 0.2865, 0.6870]
+epoch  140 | train 0.4656 (mse 0.4599) | val 1.7801 (mse 1.7494) | dissip_viol 0.0109
+         D_diag mean/joint: [0.0562, 0.1000, 0.1172, 0.0109, 0.8715, 0.2794, 0.7370]
+epoch  160 | train 0.4587 (mse 0.4536) | val 1.8942 (mse 1.8469) | dissip_viol 0.0038
+         D_diag mean/joint: [0.0667, 0.0782, 0.0977, 0.0056, 0.9053, 0.2793, 0.7267]
+epoch  180 | train 0.4631 (mse 0.4570) | val 1.8104 (mse 1.7824) | dissip_viol 0.0003
+         D_diag mean/joint: [0.0488, 0.0470, 0.0639, 0.0032, 0.8371, 0.2890, 0.7675]
+epoch  200 | train 0.4549 (mse 0.4498) | val 1.7969 (mse 1.7641) | dissip_viol 0.0028
+         D_diag mean/joint: [0.0553, 0.0661, 0.0407, 0.0022, 0.7614, 0.3026, 0.9297]
+
+[eval] Restored best-validation checkpoint for final metrics.
+
+[eval] Per-joint VAL  RMSE (Nm), in-sample for selection: [1.1726, 1.7870, 1.1649, 1.3352, 1.3765, 1.1871, 0.2308]
+[eval] Per-joint TEST RMSE (Nm), HELD OUT  -> REPORT THIS: [1.6631, 2.5453, 2.1103, 2.0793, 1.6173, 0.7119, 0.1569]
+[eval] Mean test RMSE: 1.5549 Nm
+  Joints 1-4 (87 Nm): 2.0995 Nm  |  Joints 5-7 (12 Nm): 0.8287 Nm
+  -> Scale within tolerance (ratio 0.4x).
+
+Done. Best val loss 1.6977. Saved to models/run_20260803_140614/ (greybox_best.pt + friction_net_best.pt)

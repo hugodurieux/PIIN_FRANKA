@@ -1,0 +1,88 @@
+[eval] dataset signature ae008bd146 over 3 file(s)
+[eval] every model below is scored on this exact test split.
+[MultiPayload] Loaded  49,723 samples from data/isaac_0.0kg.h5
+[MultiPayload] Loaded  49,766 samples from data/isaac_1.0kg.h5
+[MultiPayload] Loaded  48,815 samples from data/isaac_3.0kg.h5
+[MultiPayload] Combined: 148,304 samples from 3 files
+[eval] mode=segment, 30 trajectories, 148,304 samples, seed=12345
+  train        0 samples     0 segments   ids=[]
+  val          0 samples     0 segments   ids=[]
+  test    14,915 samples     3 segments   ids=[8, 19, 21]
+  segment overlap between splits: NONE (correct)
+
+=== rnea    ((none)) ===
+  test samples          : 14,915
+  per-joint RMSE  [Nm]  : 1.6891, 1.6188, 1.4738, 2.1537, 1.1368, 0.8415, 0.0444
+  mean RMSE       [Nm]  : 1.2797
+  RMSE / limit    [%]   : 1.94, 1.86, 1.69, 2.48, 9.47, 7.01, 0.37
+  p99.9 abs err   [Nm]  : 11.036, 3.658, 4.229, 6.200, 2.162, 1.930, 0.112
+  samples over torque limit: 0 / 14,915
+
+=== greybox  segsplit-greybox-s12345  (models/run_20260803_140614) ===
+  test samples          : 14,915
+  per-joint RMSE  [Nm]  : 1.6631, 2.5453, 2.1103, 2.0793, 1.6173, 0.7119, 0.1569
+  mean RMSE       [Nm]  : 1.5549
+  RMSE / limit    [%]   : 1.91, 2.93, 2.43, 2.39, 13.48, 5.93, 1.31
+  p99.9 abs err   [Nm]  : 10.543, 5.497, 5.168, 6.802, 3.478, 1.629, 0.528
+  samples over torque limit: 0 / 14,915
+
+=== mlp  segsplit-mlp-s12345  (models/run_20260803_141010) ===
+  test samples          : 14,915
+  per-joint RMSE  [Nm]  : 3.2900, 6.1148, 5.9894, 8.6906, 2.0132, 2.0852, 0.0721
+  mean RMSE       [Nm]  : 4.0365
+  RMSE / limit    [%]   : 3.78, 7.03, 6.88, 9.99, 16.78, 17.38, 0.60
+  p99.9 abs err   [Nm]  : 15.041, 13.459, 15.004, 23.675, 4.238, 5.528, 0.194
+  samples over torque limit: 0 / 14,915
+
+====================================================================
+% ---- TABLE 1: résumé des lignes de base ----
+% Généré par: python -m evaluation.eval_baselines --latex
+% Partition: split_mode=segment, split_seed=12345, n_test=14915.
+% ATTENTION: partition PAR TRAJECTOIRE. Ces valeurs ne sont PAS comparables à celles
+% d'une partition par échantillon et ne doivent pas figurer dans le même tableau.
+% Peu de trajectoires de test: ne rien conclure d'une seule graine.
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Modèle & RMSE moyenne & RMSE pire axe & Éch. hors limites & Garanties \\
+ & [\si{\newton\meter}] & [\si{\newton\meter}] & de couple & \\
+\midrule
+RNEA seul (analytique) & \num{1.280} & \num{2.154} & 0 (\SI{0.00}{\percent}) & aucune (non entraîné) \\
+MLP direct (boîte noire) \code{segsplit-mlp-s12345} & \num{4.036} & \num{8.691} & 0 (\SI{0.00}{\percent}) & limites de couple seules \\
+\textbf{Gris (proposé)} \code{segsplit-greybox-s12345} & \num{1.555} & \num{2.545} & 0 (\SI{0.00}{\percent}) & limites + dissipativité \\
+\bottomrule
+\end{tabular}
+
+% ---- TABLE 2: RMSE par axe (montre l'axe 7) ----
+% Généré par: python -m evaluation.eval_baselines --latex
+% Partition: split_mode=segment, split_seed=12345, n_test=14915.
+% ATTENTION: partition PAR TRAJECTOIRE. Ces valeurs ne sont PAS comparables à celles
+% d'une partition par échantillon et ne doivent pas figurer dans le même tableau.
+% Peu de trajectoires de test: ne rien conclure d'une seule graine.
+\begin{tabular}{@{}lccccccc@{}}
+\toprule
+RMSE de test [\si{\newton\meter}] & J1 & J2 & J3 & J4 & J5 & J6 & J7 \\
+\midrule
+RNEA seul (analytique) & \num{1.689} & \num{1.619} & \num{1.474} & \num{2.154} & \num{1.137} & \num{0.842} & \num{0.044} \\
+MLP direct (boîte noire) \code{segsplit-mlp-s12345} & \num{3.290} & \num{6.115} & \num{5.989} & \num{8.691} & \num{2.013} & \num{2.085} & \num{0.072} \\
+\textbf{Gris (proposé)} \code{segsplit-greybox-s12345} & \num{1.663} & \num{2.545} & \num{2.110} & \num{2.079} & \num{1.617} & \num{0.712} & \num{0.157} \\
+\bottomrule
+\end{tabular}
+
+!! greybox (segsplit-greybox-s12345) is WORSE than RNEA alone on:
+     J2: 2.5453 Nm vs RNEA 1.6188 Nm (1.6x worse)
+     J3: 2.1103 Nm vs RNEA 1.4738 Nm (1.4x worse)
+     J5: 1.6173 Nm vs RNEA 1.1368 Nm (1.4x worse)
+     J7: 0.1569 Nm vs RNEA 0.0444 Nm (3.5x worse)
+   The learned residual is adding error on joints the analytical model already gets right.
+
+!! mlp (segsplit-mlp-s12345) is WORSE than RNEA alone on:
+     J1: 3.2900 Nm vs RNEA 1.6891 Nm (1.9x worse)
+     J2: 6.1148 Nm vs RNEA 1.6188 Nm (3.8x worse)
+     J3: 5.9894 Nm vs RNEA 1.4738 Nm (4.1x worse)
+     J4: 8.6906 Nm vs RNEA 2.1537 Nm (4.0x worse)
+     J5: 2.0132 Nm vs RNEA 1.1368 Nm (1.8x worse)
+     J6: 2.0852 Nm vs RNEA 0.8415 Nm (2.5x worse)
+     J7: 0.0721 Nm vs RNEA 0.0444 Nm (1.6x worse)
+   The learned residual is adding error on joints the analytical model already gets right.
+
+[eval] wrote results/segsplit_20260803_140610/s12345_comparison.json
