@@ -1,0 +1,49 @@
+{
+  "data": [
+    "data/isaac_0.0kg.h5",
+    "data/isaac_1.0kg.h5",
+    "data/isaac_3.0kg.h5"
+  ],
+  "synthetic": false,
+  "synthetic_n": 4096,
+  "max_samples": 5000,
+  "epochs": 200,
+  "batch_size": 256,
+  "lr": 0.001,
+  "hidden_dim": 256,
+  "n_hidden_layers": 4,
+  "activation": "mish",
+  "rho": 1.0,
+  "use_friction_net": true,
+  "no_rnea": false,
+  "encoding": "sincos",
+  "tag": "data-efficiency-5000",
+  "out": "models",
+  "best_val_loss": 0.4581093043088913,
+  "run_id": "run_20260731_170204",
+  "split_seed": 12345,
+  "split_fractions": [
+    0.8,
+    0.1,
+    0.1
+  ],
+  "per_joint_val_rmse": [
+    0.8747531175613403,
+    1.0646823644638062,
+    0.6600810289382935,
+    0.6309407353401184,
+    0.401187002658844,
+    0.38531649112701416,
+    0.33482423424720764
+  ],
+  "per_joint_test_rmse": [
+    0.7055336833000183,
+    0.8575679063796997,
+    0.698101818561554,
+    0.7279345989227295,
+    0.46726638078689575,
+    0.4148778021335602,
+    0.33224722743034363
+  ],
+  "mean_test_rmse": 0.6005042195320129
+}

@@ -1,0 +1,3 @@
+epoch,train_loss,train_mse,val_loss,val_mse,max_torque_viol,mean_dissip_viol
+1,1.377748,1.335075,2.495999,2.464621,0.0000,0.1357
+2,1.028255,0.994042,2.595507,2.540700,0.0000,0.0845
