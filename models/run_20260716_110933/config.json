@@ -1,0 +1,30 @@
+{
+  "data": [
+    "data/isaac_0.0kg.h5",
+    "data/isaac_1.0kg.h5",
+    "data/isaac_3.0kg.h5"
+  ],
+  "synthetic": false,
+  "synthetic_n": 4096,
+  "max_samples": null,
+  "epochs": 200,
+  "batch_size": 256,
+  "lr": 0.001,
+  "hidden_dim": 256,
+  "n_hidden_layers": 4,
+  "activation": "mish",
+  "rho": 1.0,
+  "use_friction_net": true,
+  "out": "models",
+  "best_val_loss": 1.476711439631753,
+  "run_id": "run_20260716_110933",
+  "per_joint_val_rmse": [
+    1.5693683624267578,
+    1.4354645013809204,
+    1.1350979804992676,
+    1.76846444606781,
+    0.9680295586585999,
+    0.4884532392024994,
+    0.5180232524871826
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "data": [
+    "data/isaac_0.0kg.h5",
+    "data/isaac_1.0kg.h5",
+    "data/isaac_3.0kg.h5"
+  ],
+  "synthetic": false,
+  "synthetic_n": 4096,
+  "max_samples": null,
+  "epochs": 200,
+  "batch_size": 256,
+  "lr": 0.001,
+  "hidden_dim": 256,
+  "n_hidden_layers": 4,
+  "activation": "mish",
+  "rho": 1.0,
+  "use_friction_net": false,
+  "no_rnea": true,
+  "encoding": "sincos",
+  "tag": "baseline-mlp-direct",
+  "out": "models",
+  "best_val_loss": 0.32069698048370154,
+  "run_id": "run_20260731_165040",
+  "split_seed": 12345,
+  "split_fractions": [
+    0.8,
+    0.1,
+    0.1
+  ],
+  "per_joint_val_rmse": [
+    0.7011385560035706,
+    1.1014213562011719,
+    0.3796692192554474,
+    0.624631941318512,
+    0.05960401892662048,
+    0.05857580155134201,
+    0.03175315633416176
+  ],
+  "per_joint_test_rmse": [
+    0.9710707664489746,
+    0.8446375727653503,
+    0.40461984276771545,
+    0.7420499324798584,
+    0.06564561277627945,
+    0.06766784191131592,
+    0.03108050860464573
+  ],
+  "mean_test_rmse": 0.4466817378997803
+}
